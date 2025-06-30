@@ -22,61 +22,6 @@ def fix_service_path():
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
     
-    # Also        print("\nTesting TaskClientRunner import and creation...")
-        try:
-            from client.client_runner import TaskClientRunner
-            print("✓ TaskClientRunner imported successfully")
-        except ImportError as e:
-            print(f"❌ TaskClientRunner import failed: {e}")
-            print("Attempting alternative import...")
-            import importlib.util
-            runner_path = os.path.join(project_root, 'client', 'client_runner.py')
-            if os.path.exists(runner_path):
-                spec = importlib.util.spec_from_file_location("client.client_runner", runner_path)
-                runner_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(runner_module)
-                TaskClientRunner = runner_module.TaskClientRunner
-                print("✓ TaskClientRunner imported via alternative method")
-            else:
-                print(f"❌ Runner file not found: {runner_path}")
-                return
-        
-        # Test creating runner instance
-        runner_config = {
-            'server_url': config.get('server_url', 'http://localhost:5000') if config else 'http://localhost:5000',
-            'machine_name': config.get('machine_name', 'debug-machine') if config else 'debug-machine',
-            'heartbeat_interval': 30,
-            'config_update_interval': 600,
-            'log_level': 'INFO',
-            'log_dir': os.path.join(os.path.dirname(__file__), 'logs'),
-            'work_dir': os.path.join(os.path.dirname(__file__), 'work')
-        }
-        
-        try:
-            client_runner = TaskClientRunner(runner_config)
-            print("✓ TaskClientRunner instance created successfully")
-        except Exception as e:
-            print(f"❌ TaskClientRunner creation failed: {e}")
-            return
-        
-        print("\n✅ All tests passed! Service should work correctly.")
-        
-    except Exception as e:
-        print(f"❌ Debug failed: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-def fix_service_path():
-    """Fix Python path for Windows service execution"""
-    # Get the directory where this service.py file is located
-    service_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(service_dir)
-    
-    # Add project root to Python path if not already present
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
     # Also add service directory for relative imports
     if service_dir not in sys.path:
         sys.path.insert(0, service_dir)
@@ -364,7 +309,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
     def _load_config(self):
         """Load service configuration"""
         try:
-            # First try to read server address from server.txt
+            # First try to read server address from common.cfg
             server_url = self._read_server_ip()
             
             # Try multiple config file locations
@@ -391,10 +336,10 @@ class TaskClientService(win32serviceutil.ServiceFramework):
                 }
                 self.logger.warning("No config file found, using defaults")
             
-            # Override server_url with value from server.txt if available
+            # Override server_url with value from common.cfg if available
             if server_url:
                 config['server_url'] = server_url
-                self.logger.info(f"Using server URL from server.txt: {server_url}")
+                self.logger.info(f"Using server URL from common.cfg: {server_url}")
             elif 'server_url' not in config:
                 config['server_url'] = 'http://localhost:5000'
                 self.logger.warning("Using default server URL: http://localhost:5000")
@@ -406,47 +351,29 @@ class TaskClientService(win32serviceutil.ServiceFramework):
             return None
     
     def _read_server_ip(self):
-        """Read server address from server.txt file (supports both IP addresses and hostnames)"""
+        """Read server address from common.cfg file"""
         try:
-            server_file = Path(project_root) / "common" / "server.txt"
+            import configparser
             
-            if server_file.exists():
-                # Try different encodings to handle Windows text files
-                content = None
-                for encoding in ['utf-8', 'utf-16', 'cp1252', 'iso-8859-1']:
-                    try:
-                        with open(server_file, 'r', encoding=encoding) as f:
-                            content = f.read().strip()
-                        break
-                    except UnicodeDecodeError:
-                        continue
+            # Try common.cfg first
+            common_cfg_file = Path(project_root) / "common" / "common.cfg"
+            
+            if common_cfg_file.exists():
+                config = configparser.ConfigParser()
+                config.read(common_cfg_file, encoding='utf-8')
                 
-                if content is None:
-                    self.logger.error(f"Could not decode server.txt with any common encoding")
-                    return None
-                    
-                if content:
-                    # Check if it's a full URL
-                    if content.startswith('http://') or content.startswith('https://'):
-                        server_url = content
-                    else:
-                        # Parse IP:PORT format or just IP
-                        if ':' in content:
-                            # IP:PORT format
-                            server_url = f"http://{content}"
-                        else:
-                            # Just IP, add default port
-                            server_url = f"http://{content}:5000"
-                    
-                    self.logger.info(f"Read server address from {server_file}: {server_url}")
-                    return server_url
-                else:
-                    self.logger.warning(f"server.txt file is empty")
+                # Get host and port from common.cfg
+                host = config.get('SERVER', 'host', fallback='127.0.0.1')
+                port = config.get('SERVER', 'port', fallback='5000')
+                
+                server_url = f"http://{host}:{port}"
+                self.logger.info(f"Read server address from {common_cfg_file}: {server_url}")
+                return server_url
             else:
-                self.logger.info(f"server.txt file not found at {server_file}")
+                self.logger.info(f"common.cfg file not found at {common_cfg_file}")
                 
         except Exception as e:
-            self.logger.error(f"Failed to read server address from file: {e}")
+            self.logger.error(f"Failed to read server address from common.cfg: {e}")
         
         return None
 
@@ -487,7 +414,7 @@ def install_service(server_url=None, machine_name=None):
         config_dir = Path("C:/WebGraphicsService")
         config_dir.mkdir(parents=True, exist_ok=True)
         
-        # Try to read server URL from server.txt if not provided
+        # Try to read server URL from common.cfg if not provided
         if not server_url:
             server_url = _read_server_ip_for_install()
         
@@ -547,50 +474,31 @@ def install_service(server_url=None, machine_name=None):
         return False
 
 def _read_server_ip_for_install():
-    """Read server address from server.txt file during installation (supports both IP addresses and hostnames)"""
+    """Read server address from common.cfg file during installation"""
     try:
+        import configparser
+        
         # Get project root directory
         current_dir = Path(__file__).parent.parent
-        server_file = current_dir / "common" / "server.txt"
+        common_cfg_file = current_dir / "common" / "common.cfg"
         
-        if server_file.exists():
-            # Try different encodings to handle Windows text files  
-            content = None
-            for encoding in ['utf-8', 'utf-16', 'cp1252', 'iso-8859-1']:
-                try:
-                    with open(server_file, 'r', encoding=encoding) as f:
-                        content = f.read().strip()
-                    break
-                except UnicodeDecodeError:
-                    continue
+        if common_cfg_file.exists():
+            config = configparser.ConfigParser()
+            config.read(common_cfg_file, encoding='utf-8')
             
-            if content is None:
-                print(f"⚠️  Could not decode server.txt with any common encoding")
-                return None
-                
-            if content:
-                # Check if it's a full URL
-                if content.startswith('http://') or content.startswith('https://'):
-                    server_url = content
-                else:
-                    # Parse IP:PORT format or just IP
-                    if ':' in content:
-                        # IP:PORT format
-                        server_url = f"http://{content}"
-                    else:
-                        # Just IP, add default port
-                        server_url = f"http://{content}:5000"
-                
-                print(f"✓ Read server address from {server_file}: {server_url}")
-                return server_url
-            else:
-                print(f"⚠️  server.txt file is empty")
+            # Get host and port from common.cfg
+            host = config.get('SERVER', 'host', fallback='127.0.0.1')
+            port = config.get('SERVER', 'port', fallback='5000')
+            
+            server_url = f"http://{host}:{port}"
+            print(f"✓ Read server address from {common_cfg_file}: {server_url}")
+            return server_url
         else:
-            print(f"ℹ️  server.txt file not found at {server_file}")
-            print(f"   Create this file with server IP address or hostname to avoid manual configuration")
+            print(f"ℹ️  common.cfg file not found at {common_cfg_file}")
+            print(f"   Using default server configuration")
             
     except Exception as e:
-        print(f"⚠️  Failed to read server IP from file: {e}")
+        print(f"⚠️  Failed to read server address from common.cfg: {e}")
     
     return None
 
