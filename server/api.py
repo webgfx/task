@@ -424,7 +424,7 @@ def create_api_blueprint(database, socketio):
     
     @api.route('/machines/register', methods=['POST'])
     def register_machine():
-        """Register machines with system information (using IP as unique identifier)"""
+        """Register machines with system information (using machine name as primary identifier)"""
         try:
             data = request.get_json()
             
@@ -434,8 +434,19 @@ def create_api_blueprint(database, socketio):
                     'error': 'Machine name and IP address cannot be empty'
                 }), 400
             
-            # 检查是否已存在相同IP的机器
-            existing_machine = database.get_machine_by_ip(data['ip_address'])
+            # 检查是否已存在相同名称或IP的机器
+            existing_machine_by_name = database.get_machine_by_name(data['name'])
+            existing_machine_by_ip = database.get_machine_by_ip(data['ip_address'])
+            
+            # 如果存在同名但不同IP的机器，返回错误
+            if existing_machine_by_name and existing_machine_by_name.ip_address != data['ip_address']:
+                return jsonify({
+                    'success': False,
+                    'error': f'Machine name "{data["name"]}" already exists with different IP address'
+                }), 400
+            
+            # 使用现有机器记录（如果存在）或创建新记录
+            existing_machine = existing_machine_by_name or existing_machine_by_ip
             
             machine = Machine(
                 name=data['name'],
@@ -507,26 +518,34 @@ def create_api_blueprint(database, socketio):
         """Update machine configuration information"""
         try:
             data = request.get_json()
+            machine_name = data.get('name')
             ip_address = data.get('ip_address')
             
-            if not ip_address:
+            # 优先使用机器名，向后兼容IP地址
+            if machine_name:
+                existing_machine = database.get_machine_by_name(machine_name)
+                if not existing_machine:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Machine "{machine_name}" not found'
+                    }), 404
+            elif ip_address:
+                existing_machine = database.get_machine_by_ip(ip_address)
+                if not existing_machine:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Machine not found'
+                    }), 404
+            else:
                 return jsonify({
                     'success': False,
-                    'error': 'IP address cannot be empty'
+                    'error': 'Machine name or IP address is required'
                 }), 400
-            
-            # 获取现有机器信息
-            existing_machine = database.get_machine_by_ip(ip_address)
-            if not existing_machine:
-                return jsonify({
-                    'success': False,
-                    'error': 'Machine not found'
-                }), 404
             
             # 更新机器信息
             machine = Machine(
                 name=data.get('name', existing_machine.name),
-                ip_address=ip_address,
+                ip_address=data.get('ip_address', existing_machine.ip_address),
                 port=data.get('port', existing_machine.port),
                 status=existing_machine.status,  # 保持现有状态
                 capabilities=data.get('capabilities', existing_machine.capabilities),
@@ -563,33 +582,44 @@ def create_api_blueprint(database, socketio):
     
     @api.route('/machines/unregister', methods=['POST'])
     def unregister_machine():
-        """Unregister machine using IP address"""
+        """Unregister machine using machine name as primary identifier"""
         try:
             data = request.get_json()
-            ip_address = data.get('ip_address')
+            machine_name = data.get('name')
+            ip_address = data.get('ip_address')  # 向后兼容
             
-            if not ip_address:
+            # 优先使用机器名，如果没有则使用IP
+            if machine_name:
+                # 通过机器名注销
+                database.update_machine_heartbeat_by_name(machine_name, MachineStatus.OFFLINE)
+                
+                # 获取机器信息用于广播
+                machine = database.get_machine_by_name(machine_name)
+                actual_ip = machine.ip_address if machine else (ip_address or 'unknown')
+            elif ip_address:
+                # 向后兼容：通过IP注销
+                database.update_machine_heartbeat(ip_address, MachineStatus.OFFLINE)
+                actual_ip = ip_address
+                machine_name = data.get('name', 'Unknown')
+            else:
                 return jsonify({
                     'success': False,
-                    'error': 'IP address cannot be empty'
+                    'error': 'Machine name or IP address is required'
                 }), 400
-            
-            # Update machine status to offline
-            database.update_machine_heartbeat(ip_address, MachineStatus.OFFLINE)
             
             # Broadcast machine unregistration event
             socketio.emit('machine_unregistered', {
-                'ip_address': ip_address,
-                'machine_name': data.get('name', 'Unknown'),
+                'ip_address': actual_ip,
+                'machine_name': machine_name,
                 'status': 'offline',
                 'timestamp': datetime.now().isoformat()
             })
             
-            logger.info(f"Machine unregistered: {data.get('name', 'Unknown')} ({ip_address})")
+            logger.info(f"Machine unregistered: {machine_name} ({actual_ip})")
             
             return jsonify({
                 'success': True,
-                'message': f'Machine {ip_address} unregistered successfully'
+                'message': f'Machine {machine_name} unregistered successfully'
             })
             
         except Exception as e:
@@ -598,22 +628,25 @@ def create_api_blueprint(database, socketio):
     
     @api.route('/machines/heartbeat', methods=['POST'])
     def machine_heartbeat():
-        """Machine heartbeat using IP address"""
+        """Machine heartbeat using machine name as primary identifier"""
         try:
             data = request.get_json()
-            ip_address = data.get('machine_ip') or data.get('ip_address')  # 支持两种格式
-            machine_name = data.get('machine_name', 'Unknown')
+            machine_name = data.get('machine_name')
             status = data.get('status', 'online')
             
-            if not ip_address:
+            if not machine_name:
                 return jsonify({
                     'success': False,
-                    'error': 'Machine IP address cannot be empty'
+                    'error': 'Machine name cannot be empty'
                 }), 400
             
-            # Update heartbeat
+            # Update heartbeat using machine name
             machine_status = MachineStatus(status) if status else MachineStatus.ONLINE
-            database.update_machine_heartbeat(ip_address, machine_status)
+            database.update_machine_heartbeat_by_name(machine_name, machine_status)
+            
+            # Get machine info for broadcast (optional)
+            machine = database.get_machine_by_name(machine_name)
+            ip_address = machine.ip_address if machine else 'unknown'
             
             # Broadcast heartbeat event
             socketio.emit('machine_heartbeat', {
@@ -626,7 +659,7 @@ def create_api_blueprint(database, socketio):
             return jsonify({'success': True})
             
         except Exception as e:
-            logger.error(f"Update heartbeatFailed: {e}")
+            logger.error(f"Update heartbeat failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
     
     # Task execution API
@@ -636,13 +669,13 @@ def create_api_blueprint(database, socketio):
         try:
             data = request.get_json()
             task_id = data.get('task_id')
-            machine_ip = data.get('machine_ip')
-            machine_name = data.get('machine_name', 'Unknown')
+            machine_name = data.get('machine_name')  # 使用机器名作为主要标识
+            machine_ip = data.get('machine_ip')  # IP作为辅助信息
             
-            if not task_id or not machine_ip:
+            if not task_id or not machine_name:
                 return jsonify({
                     'success': False,
-                    'error': 'Task ID and machine IP cannot be empty'
+                    'error': 'Task ID and machine name cannot be empty'
                 }), 400
             
             # Get task
@@ -652,6 +685,18 @@ def create_api_blueprint(database, socketio):
                     'success': False,
                     'error': 'Task does not exist'
                 }), 404
+            
+            # Get machine info by name
+            machine = database.get_machine_by_name(machine_name)
+            if not machine:
+                return jsonify({
+                    'success': False,
+                    'error': f'Machine "{machine_name}" not found'
+                }), 404
+            
+            # Use machine's IP if not provided
+            if not machine_ip:
+                machine_ip = machine.ip_address
             
             # Update task status to running
             task.status = TaskStatus.RUNNING
@@ -681,8 +726,8 @@ def create_api_blueprint(database, socketio):
         try:
             data = request.get_json()
             task_id = data.get('task_id')
-            machine_ip = data.get('machine_ip')
-            machine_name = data.get('machine_name', 'Unknown')
+            machine_name = data.get('machine_name')  # 使用机器名作为主要标识
+            machine_ip = data.get('machine_ip', 'Unknown')  # IP作为辅助信息
             
             # Support both old and new result formats
             if 'subtask_results' in data:
@@ -765,8 +810,8 @@ def create_api_blueprint(database, socketio):
         try:
             data = request.get_json()
             task_id = data.get('task_id')
-            machine_ip = data.get('machine_ip')
-            machine_name = data.get('machine_name', 'Unknown')
+            machine_name = data.get('machine_name')  # 使用机器名作为主要标识
+            machine_ip = data.get('machine_ip', 'Unknown')  # IP作为辅助信息
             subtask_result = data.get('subtask_result', {})
             
             if not task_id:

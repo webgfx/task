@@ -75,6 +75,20 @@ function initializeSocket() {
         }
     });
     
+    socket.on('machine_unregistered', function(data) {
+        showNotification('Machine Unregistered', `Machine ${data.machine_name} has been unregistered`, 'warning');
+        if (typeof refreshMachines === 'function') {
+            refreshMachines();
+        }
+    });
+    
+    socket.on('machine_config_updated', function(data) {
+        console.log('Machine config updated:', data);
+        if (typeof refreshMachines === 'function') {
+            refreshMachines();
+        }
+    });
+    
     socket.on('machine_heartbeat', function(data) {
         console.log('Machine heartbeat:', data);
         if (typeof updateMachineStatus === 'function') {
@@ -83,7 +97,7 @@ function initializeSocket() {
     });
     
     socket.on('machine_offline', function(data) {
-        showNotification('MachineOffline', `Machine ${data.machine_name} Offlineed`, 'warning');
+        showNotification('Machine Offline', `Machine ${data.machine_name} went offline`, 'warning');
         if (typeof refreshMachines === 'function') {
             refreshMachines();
         }

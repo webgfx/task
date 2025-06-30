@@ -42,7 +42,7 @@ def get_cpu_info() -> Dict[str, Any]:
 
 
 def get_memory_info() -> Dict[str, Any]:
-    """Get memory information"""
+    """Get memory information (total only, without used info)"""
     try:
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()
@@ -50,33 +50,27 @@ def get_memory_info() -> Dict[str, Any]:
         return {
             'total': memory.total,
             'available': memory.available,
-            'used': memory.used,
             'free': memory.free,
-            'percentage': memory.percent,
             'swap_total': swap.total,
-            'swap_used': swap.used,
-            'swap_free': swap.free,
-            'swap_percentage': swap.percent
+            'swap_free': swap.free
         }
     except Exception as e:
         return {
             'total': 0,
             'available': 0,
-            'used': 0,
             'free': 0,
-            'percentage': 0,
             'error': str(e)
         }
 
 
 def get_gpu_info() -> List[Dict[str, Any]]:
-    """Get GPU information"""
+    """Get GPU information with model and driver version"""
     gpus = []
     
     # Try to get NVIDIA GPU info using nvidia-smi
     try:
         result = subprocess.run([
-            'nvidia-smi', '--query-gpu=name,memory.total,memory.used,memory.free,driver_version',
+            'nvidia-smi', '--query-gpu=name,memory.total,driver_version,uuid',
             '--format=csv,noheader,nounits'
         ], capture_output=True, text=True, timeout=10)
         
@@ -85,37 +79,65 @@ def get_gpu_info() -> List[Dict[str, Any]]:
             for i, line in enumerate(lines):
                 if line.strip():
                     parts = [part.strip() for part in line.split(',')]
-                    if len(parts) >= 5:
+                    if len(parts) >= 3:
                         gpus.append({
                             'index': i,
-                            'name': parts[0],
-                            'memory_total': int(parts[1]) * 1024 * 1024,  # Convert MB to bytes
-                            'memory_used': int(parts[2]) * 1024 * 1024,
-                            'memory_free': int(parts[3]) * 1024 * 1024,
-                            'driver_version': parts[4],
-                            'vendor': 'NVIDIA'
+                            'model': parts[0],  # GPU型号
+                            'name': parts[0],   # 保持兼容性
+                            'memory_total': int(parts[1]) * 1024 * 1024 if parts[1].isdigit() else 0,  # Convert MB to bytes
+                            'driver_version': parts[2],  # Driver版本
+                            'vendor': 'NVIDIA',
+                            'uuid': parts[3] if len(parts) > 3 else None
                         })
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, ValueError):
         pass
     
-    # Try to get AMD GPU info (basic detection)
+    # Try to get AMD GPU info with driver version
     try:
         if platform.system() == 'Windows':
+            # Get GPU name and memory
             result = subprocess.run([
-                'wmic', 'path', 'win32_VideoController', 'get', 'name,AdapterRAM'
+                'wmic', 'path', 'win32_VideoController', 'get', 'name,AdapterRAM,DriverVersion'
             ], capture_output=True, text=True, timeout=10)
             
             if result.returncode == 0:
                 lines = result.stdout.strip().split('\n')[1:]  # Skip header
-                for line in lines:
-                    if line.strip() and 'AMD' in line.upper():
+                for i, line in enumerate(lines):
+                    if line.strip() and ('AMD' in line.upper() or 'ATI' in line.upper()):
+                        # Parse the line more carefully
                         parts = line.strip().split()
                         if len(parts) >= 2:
-                            name = ' '.join(parts[1:])
-                            memory = int(parts[0]) if parts[0].isdigit() else 0
+                            # Try to extract memory, driver version, and name
+                            memory = 0
+                            driver_version = 'Unknown'
+                            name = 'Unknown AMD GPU'
+                            
+                            # Look for numeric memory value
+                            for part in parts:
+                                if part.isdigit() and int(part) > 1000000:  # Likely memory in bytes
+                                    memory = int(part)
+                                    break
+                            
+                            # Look for driver version pattern (usually contains dots)
+                            for part in parts:
+                                if '.' in part and any(c.isdigit() for c in part):
+                                    driver_version = part
+                                    break
+                            
+                            # The rest should be the name
+                            name_parts = []
+                            for part in parts:
+                                if not part.isdigit() and part != driver_version:
+                                    name_parts.append(part)
+                            if name_parts:
+                                name = ' '.join(name_parts)
+                            
                             gpus.append({
+                                'index': len(gpus),
+                                'model': name,
                                 'name': name,
                                 'memory_total': memory,
+                                'driver_version': driver_version,
                                 'vendor': 'AMD'
                             })
     except:
@@ -126,19 +148,35 @@ def get_gpu_info() -> List[Dict[str, Any]]:
         try:
             if platform.system() == 'Windows':
                 result = subprocess.run([
-                    'wmic', 'path', 'win32_VideoController', 'get', 'name'
+                    'wmic', 'path', 'win32_VideoController', 'get', 'name,DriverVersion'
                 ], capture_output=True, text=True, timeout=10)
                 
                 if result.returncode == 0:
                     lines = result.stdout.strip().split('\n')[1:]  # Skip header
                     for i, line in enumerate(lines):
                         if line.strip():
-                            gpus.append({
-                                'index': i,
-                                'name': line.strip(),
-                                'vendor': 'Integrated',
-                                'memory_total': 0
-                            })
+                            parts = line.strip().split()
+                            if len(parts) >= 1:
+                                # Extract name and driver version
+                                driver_version = 'Unknown'
+                                name_parts = []
+                                
+                                for part in parts:
+                                    if '.' in part and any(c.isdigit() for c in part):
+                                        driver_version = part
+                                    else:
+                                        name_parts.append(part)
+                                
+                                name = ' '.join(name_parts) if name_parts else 'Unknown GPU'
+                                
+                                gpus.append({
+                                    'index': i,
+                                    'model': name,
+                                    'name': name,
+                                    'driver_version': driver_version,
+                                    'vendor': 'Integrated',
+                                    'memory_total': 0
+                                })
         except:
             pass
     
@@ -146,7 +184,7 @@ def get_gpu_info() -> List[Dict[str, Any]]:
 
 
 def get_os_info() -> Dict[str, Any]:
-    """Get operating system information"""
+    """Get operating system information with detailed version"""
     try:
         os_info = {
             'system': platform.system(),
@@ -158,7 +196,7 @@ def get_os_info() -> Dict[str, Any]:
             'processor': platform.processor()
         }
         
-        # Get additional Windows info
+        # Get additional Windows info with detailed version
         if platform.system() == 'Windows':
             try:
                 import winreg
@@ -174,11 +212,88 @@ def get_os_info() -> Dict[str, Any]:
                     os_info['windows_build'] = winreg.QueryValueEx(key, "CurrentBuild")[0]
                 except:
                     pass
+                
+                try:
+                    os_info['windows_display_version'] = winreg.QueryValueEx(key, "DisplayVersion")[0]
+                except:
+                    pass
+                
+                try:
+                    os_info['windows_product_name'] = winreg.QueryValueEx(key, "ProductName")[0]
+                except:
+                    pass
                     
                 winreg.CloseKey(key)
                 winreg.CloseKey(reg)
+                
+                # Create a more detailed version string for Windows
+                version_parts = []
+                if 'windows_product_name' in os_info:
+                    version_parts.append(os_info['windows_product_name'])
+                if 'windows_display_version' in os_info:
+                    version_parts.append(f"Version {os_info['windows_display_version']}")
+                if 'windows_build' in os_info:
+                    version_parts.append(f"Build {os_info['windows_build']}")
+                
+                if version_parts:
+                    os_info['detailed_version'] = ' '.join(version_parts)
+                else:
+                    os_info['detailed_version'] = f"{os_info['system']} {os_info['release']}"
+                    
             except:
-                pass
+                os_info['detailed_version'] = f"{os_info['system']} {os_info['release']}"
+        
+        # For Linux systems, try to get distribution info
+        elif platform.system() == 'Linux':
+            try:
+                # Try to read /etc/os-release
+                with open('/etc/os-release', 'r') as f:
+                    lines = f.readlines()
+                    
+                distro_info = {}
+                for line in lines:
+                    if '=' in line:
+                        key, value = line.strip().split('=', 1)
+                        distro_info[key] = value.strip('"')
+                
+                if 'PRETTY_NAME' in distro_info:
+                    os_info['detailed_version'] = distro_info['PRETTY_NAME']
+                elif 'NAME' in distro_info and 'VERSION' in distro_info:
+                    os_info['detailed_version'] = f"{distro_info['NAME']} {distro_info['VERSION']}"
+                else:
+                    os_info['detailed_version'] = f"{os_info['system']} {os_info['release']}"
+                    
+                os_info.update(distro_info)
+                
+            except:
+                os_info['detailed_version'] = f"{os_info['system']} {os_info['release']}"
+        
+        # For macOS
+        elif platform.system() == 'Darwin':
+            try:
+                import plistlib
+                with open('/System/Library/CoreServices/SystemVersion.plist', 'rb') as f:
+                    plist = plistlib.load(f)
+                    
+                product_name = plist.get('ProductName', 'macOS')
+                product_version = plist.get('ProductVersion', os_info['release'])
+                build_version = plist.get('ProductBuildVersion', '')
+                
+                if build_version:
+                    os_info['detailed_version'] = f"{product_name} {product_version} (Build {build_version})"
+                else:
+                    os_info['detailed_version'] = f"{product_name} {product_version}"
+                    
+                os_info['macos_product_name'] = product_name
+                os_info['macos_product_version'] = product_version
+                os_info['macos_build_version'] = build_version
+                
+            except:
+                os_info['detailed_version'] = f"{os_info['system']} {os_info['release']}"
+        
+        else:
+            # For other systems, use basic info
+            os_info['detailed_version'] = f"{os_info['system']} {os_info['release']}"
         
         return os_info
     except Exception as e:
@@ -186,6 +301,7 @@ def get_os_info() -> Dict[str, Any]:
             'system': platform.system() if platform.system() else 'Unknown',
             'release': 'Unknown',
             'version': 'Unknown',
+            'detailed_version': 'Unknown',
             'error': str(e)
         }
 
@@ -301,21 +417,29 @@ def get_system_summary() -> Dict[str, str]:
         cpu = system_info['cpu']
         cpu_summary = f"{cpu.get('processor', 'Unknown')} ({cpu.get('cpu_count_logical', 1)} cores)"
         
-        # Memory summary
+        # Memory summary (total only, no used info)
         memory = system_info['memory']
         memory_total = format_bytes(memory.get('total', 0))
-        memory_summary = f"{memory_total} ({memory.get('percentage', 0):.1f}% used)"
+        memory_summary = f"{memory_total}"
         
-        # GPU summary
+        # GPU summary with model and driver version
         gpus = system_info['gpu']
         if gpus:
-            gpu_summary = ', '.join([gpu.get('name', 'Unknown GPU') for gpu in gpus[:2]])  # First 2 GPUs
+            gpu_summaries = []
+            for gpu in gpus[:2]:  # First 2 GPUs
+                model = gpu.get('model', gpu.get('name', 'Unknown GPU'))
+                driver = gpu.get('driver_version', 'Unknown')
+                if driver != 'Unknown':
+                    gpu_summaries.append(f"{model} (Driver: {driver})")
+                else:
+                    gpu_summaries.append(model)
+            gpu_summary = ', '.join(gpu_summaries)
         else:
             gpu_summary = 'No dedicated GPU detected'
         
-        # OS summary
+        # OS summary with detailed version
         os_info = system_info['os']
-        os_summary = f"{os_info.get('system', 'Unknown')} {os_info.get('release', '')}"
+        os_summary = os_info.get('detailed_version', f"{os_info.get('system', 'Unknown')} {os_info.get('release', '')}")
         
         return {
             'cpu': cpu_summary,

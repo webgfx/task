@@ -183,8 +183,8 @@ class TaskScheduler:
             task.started_at = datetime.now()
             self.database.update_task(task)
             
-            # Update Machine Status
-            self.database.update_machine_heartbeat(machine.name, MachineStatus.BUSY)
+            # Update Machine Status using machine name
+            self.database.update_machine_heartbeat_by_name(machine.name, MachineStatus.BUSY)
             
             # Send task to machine
             task_data = {
@@ -194,7 +194,7 @@ class TaskScheduler:
                 'machine_name': machine.name
             }
             
-            # Send task via WebSocket
+            # Send task via WebSocket (using machine name for room)
             self.socketio.emit('task_dispatch', task_data, room=f"machine_{machine.name}")
             
             logger.info(f"Task {task.name} distributed to machine {machine.name}")

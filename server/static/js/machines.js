@@ -158,11 +158,11 @@ function createMachineCard(machine) {
     // Format detailed system information
     const systemInfo = [];
     
-    // OS Information (basic only)
+    // OS Information (detailed version)
     if (machine.os_info) {
         const os = machine.os_info;
-        let osDisplay = os.system || 'Unknown OS';
-        if (os.release) osDisplay += ` ${os.release}`;
+        let osDisplay = os.detailed_version || os.system || 'Unknown OS';
+        if (!os.detailed_version && os.release) osDisplay += ` ${os.release}`;
         systemInfo.push(`<i class="fas fa-desktop"></i><span>OS: ${osDisplay}</span>`);
     } else if (systemSummary.os) {
         systemInfo.push(`<i class="fas fa-desktop"></i><span>OS: ${systemSummary.os}</span>`);
@@ -193,14 +193,14 @@ function createMachineCard(machine) {
         systemInfo.push(`<i class="fas fa-memory"></i><span>Memory: ${systemSummary.memory}</span>`);
     }
     
-    // GPU Information
+    // GPU Information with model and driver version
     if (machine.gpu_info && machine.gpu_info.length > 0) {
         const gpus = machine.gpu_info;
         if (gpus.length === 1) {
             const gpu = gpus[0];
-            let gpuDisplay = gpu.name || 'Unknown GPU';
-            if (gpu.memory_total) {
-                gpuDisplay += ` (${formatBytes(gpu.memory_total)})`;
+            let gpuDisplay = gpu.model || gpu.name || 'Unknown GPU';
+            if (gpu.driver_version && gpu.driver_version !== 'Unknown') {
+                gpuDisplay += ` (Driver: ${gpu.driver_version})`;
             }
             systemInfo.push(`<i class="fas fa-tv"></i><span>GPU: ${gpuDisplay}</span>`);
         } else {
@@ -344,12 +344,13 @@ function showMachineDetailModal(machine, tasks) {
                     <h5><i class="fas fa-memory"></i> Memory Information</h5>
                     <div class="detail-grid">
                         ${mem.total ? `<div class="detail-item"><label>Total Memory:</label><span>${formatBytes(mem.total)}</span></div>` : ''}
+                        ${mem.available ? `<div class="detail-item"><label>Available Memory:</label><span>${formatBytes(mem.available)}</span></div>` : ''}
                     </div>
                 </div>
             `;
         }
         
-        // GPU Information
+        // GPU Information with model and driver version
         if (machine.gpu_info && machine.gpu_info.length > 0) {
             details += `
                 <div class="detail-subsection">
@@ -358,25 +359,27 @@ function showMachineDetailModal(machine, tasks) {
             machine.gpu_info.forEach((gpu, index) => {
                 details += `
                     <div class="detail-grid">
-                        <div class="detail-item"><label>GPU ${index + 1}:</label><span>${gpu.name || 'Unknown'}</span></div>
+                        <div class="detail-item"><label>GPU ${index + 1} Model:</label><span>${gpu.model || gpu.name || 'Unknown'}</span></div>
                         ${gpu.vendor ? `<div class="detail-item"><label>Vendor:</label><span>${gpu.vendor}</span></div>` : ''}
+                        ${gpu.driver_version && gpu.driver_version !== 'Unknown' ? `<div class="detail-item"><label>Driver Version:</label><span>${gpu.driver_version}</span></div>` : ''}
                         ${gpu.memory_total ? `<div class="detail-item"><label>Memory:</label><span>${formatBytes(gpu.memory_total)}</span></div>` : ''}
-                        ${gpu.driver_version ? `<div class="detail-item"><label>Driver:</label><span>${gpu.driver_version}</span></div>` : ''}
                     </div>
                 `;
             });
             details += '</div>';
         }
         
-        // Operating System (basic only)
+        // Operating System (detailed version)
         if (machine.os_info) {
             const os = machine.os_info;
             details += `
                 <div class="detail-subsection">
                     <h5><i class="fas fa-desktop"></i> Operating System</h5>
                     <div class="detail-grid">
+                        ${os.detailed_version ? `<div class="detail-item"><label>Version:</label><span>${os.detailed_version}</span></div>` : ''}
                         ${os.system ? `<div class="detail-item"><label>System:</label><span>${os.system}</span></div>` : ''}
-                        ${os.release ? `<div class="detail-item"><label>Release:</label><span>${os.release}</span></div>` : ''}
+                        ${os.machine ? `<div class="detail-item"><label>Architecture:</label><span>${os.machine}</span></div>` : ''}
+                        ${os.windows_build ? `<div class="detail-item"><label>Build:</label><span>${os.windows_build}</span></div>` : ''}
                     </div>
                 </div>
             `;

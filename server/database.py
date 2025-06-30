@@ -338,6 +338,22 @@ class Database:
                 ''', (datetime.now().isoformat(), ip_address))
             conn.commit()
     
+    def update_machine_heartbeat_by_name(self, machine_name: str, status: MachineStatus = None):
+        """Update machine heartbeat (using machine name as identifier)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if status:
+                cursor.execute('''
+                    UPDATE machines SET last_heartbeat = ?, status = ?
+                    WHERE name = ?
+                ''', (datetime.now().isoformat(), status.value, machine_name))
+            else:
+                cursor.execute('''
+                    UPDATE machines SET last_heartbeat = ?
+                    WHERE name = ?
+                ''', (datetime.now().isoformat(), machine_name))
+            conn.commit()
+    
     def update_machine_config(self, machine: Machine):
         """Update machine configuration information"""
         with self.get_connection() as conn:
@@ -367,6 +383,16 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM machines WHERE ip_address = ?', (ip_address,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_machine(row)
+            return None
+    
+    def get_machine_by_name(self, machine_name: str) -> Optional[Machine]:
+        """Get machine by name"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM machines WHERE name = ?', (machine_name,))
             row = cursor.fetchone()
             if row:
                 return self._row_to_machine(row)
