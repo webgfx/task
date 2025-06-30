@@ -68,6 +68,9 @@ class ClientInstaller:
             # Copy core files to installation directory
             self._copy_core_files()
             
+            # Create and customize client.cfg
+            self._create_client_cfg(kwargs)
+            
             # Create startup scripts
             self._create_startup_scripts(config)
             
@@ -142,6 +145,8 @@ class ClientInstaller:
             ('client/client_runner.py', 'client_runner.py'),
             ('client/executor.py', 'executor.py'),
             ('client/heartbeat.py', 'heartbeat.py'),
+            ('client/config_manager.py', 'config_manager.py'),
+            ('client/client.cfg', 'client.cfg'),
             ('common/__init__.py', 'common/__init__.py'),
             ('common/config.py', 'common/config.py'),
             ('common/models.py', 'common/models.py'),
@@ -166,11 +171,13 @@ class ClientInstaller:
         """Create startup scripts for different platforms"""
         python_exe = sys.executable
         runner_script = os.path.join(self.install_dir, 'client_runner.py')
+        config_file = os.path.join(self.install_dir, 'config.json')
+        cfg_file = os.path.join(self.install_dir, 'client.cfg')
         
         # Windows batch script
         batch_content = f"""@echo off
 cd /d "{self.install_dir}"
-"{python_exe}" client_runner.py --config config.json
+"{python_exe}" client_runner.py --config config.json --cfg client.cfg
 """
         batch_file = os.path.join(self.install_dir, 'start_client.bat')
         with open(batch_file, 'w', encoding='utf-8') as f:
@@ -188,7 +195,7 @@ echo Task client stopped
         # Unix shell script
         shell_content = f"""#!/bin/bash
 cd "{self.install_dir}"
-"{python_exe}" client_runner.py --config config.json
+"{python_exe}" client_runner.py --config config.json --cfg client.cfg
 """
         shell_file = os.path.join(self.install_dir, 'start_client.sh')
         with open(shell_file, 'w', encoding='utf-8') as f:
@@ -211,6 +218,76 @@ echo "Task client stopped"
             os.chmod(stop_shell_file, 0o755)
         
         logger.info("Startup scripts created")
+    
+    def _create_client_cfg(self, kwargs):
+        """Create customized client.cfg file"""
+        try:
+            # Read template client.cfg
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            template_cfg_path = os.path.join(current_dir, 'client.cfg')
+            
+            import configparser
+            config = configparser.ConfigParser()
+            
+            if os.path.exists(template_cfg_path):
+                config.read(template_cfg_path, encoding='utf-8')
+            else:
+                # Create default configuration if template doesn't exist
+                logger.warning("Template client.cfg not found, creating default configuration")
+                config['DEFAULT'] = {}
+                config['ADVANCED'] = {}
+                config['SECURITY'] = {}
+                config['PERFORMANCE'] = {}
+            
+            # Customize with installation parameters
+            if 'DEFAULT' not in config:
+                config['DEFAULT'] = {}
+            
+            # Set configuration values from installation parameters
+            config['DEFAULT']['heartbeat_interval'] = str(kwargs.get('heartbeat_interval', 30))
+            config['DEFAULT']['config_update_interval'] = str(kwargs.get('config_update_interval', 600))
+            config['DEFAULT']['log_level'] = kwargs.get('log_level', 'INFO')
+            config['DEFAULT']['install_dir'] = self.install_dir
+            config['DEFAULT']['log_dir'] = 'logs'
+            config['DEFAULT']['work_dir'] = 'work'
+            
+            # Save customized client.cfg to installation directory
+            cfg_file_path = os.path.join(self.install_dir, 'client.cfg')
+            with open(cfg_file_path, 'w', encoding='utf-8') as f:
+                config.write(f)
+            
+            logger.info(f"Customized client.cfg created: {cfg_file_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create client.cfg: {e}")
+            # Create a minimal configuration file
+            minimal_cfg_content = f"""# Task Client Configuration File
+[DEFAULT]
+server_url = http://localhost:5000
+machine_name = 
+heartbeat_interval = {kwargs.get('heartbeat_interval', 30)}
+config_update_interval = {kwargs.get('config_update_interval', 600)}
+log_level = {kwargs.get('log_level', 'INFO')}
+install_dir = {self.install_dir}
+log_dir = logs
+work_dir = work
+
+[ADVANCED]
+websocket_ping_interval = 25
+websocket_ping_timeout = 20
+debug_mode = false
+verbose_logging = false
+
+[SECURITY]
+verify_ssl = true
+
+[PERFORMANCE]
+max_concurrent_tasks = 1
+"""
+            cfg_file_path = os.path.join(self.install_dir, 'client.cfg')
+            with open(cfg_file_path, 'w', encoding='utf-8') as f:
+                f.write(minimal_cfg_content)
+            logger.info(f"Minimal client.cfg created: {cfg_file_path}")
     
     def _remove_startup_scripts(self):
         """Remove startup scripts"""

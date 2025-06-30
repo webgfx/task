@@ -24,6 +24,7 @@ try:
     from common.utils import setup_logging, get_local_ip
     from executor import TaskExecutor
     from heartbeat import HeartbeatManager
+    from config_manager import get_config_manager, get_heartbeat_interval, get_config_update_interval
 except ImportError as e:
     print(f"Failed to import required modules: {e}")
     print("Make sure the client is properly installed")
@@ -37,18 +38,34 @@ class TaskClientRunner:
     Installation and configuration management is handled separately
     """
     
-    def __init__(self, config_data):
+    def __init__(self, config_data, cfg_file_path=None):
         """
         Initialize client runner with configuration
         
         Args:
             config_data: Configuration dictionary loaded from config file
+            cfg_file_path: Path to client.cfg file for additional configuration
         """
         self.config = config_data
         self.server_url = config_data['server_url']
         self.machine_name = config_data['machine_name']
         self.local_ip = get_local_ip()
-        self.config_update_interval = config_data.get('config_update_interval', 600)
+        
+        # Initialize configuration manager for client.cfg
+        if cfg_file_path:
+            self.cfg_manager = get_config_manager(cfg_file_path)
+        else:
+            # Try to find client.cfg in the same directory as runner
+            runner_dir = os.path.dirname(os.path.abspath(__file__))
+            cfg_path = os.path.join(runner_dir, 'client.cfg')
+            self.cfg_manager = get_config_manager(cfg_path if os.path.exists(cfg_path) else None)
+        
+        # Use configuration from client.cfg if available, otherwise fall back to config.json
+        self.config_update_interval = self.cfg_manager.get_int('DEFAULT', 'config_update_interval', 
+                                                              config_data.get('config_update_interval', 600))
+        self.heartbeat_interval = self.cfg_manager.get_int('DEFAULT', 'heartbeat_interval',
+                                                          config_data.get('heartbeat_interval', 30))
+        
         self.last_config_update = None
         self.running = False
         self.task_results = {}
@@ -61,19 +78,28 @@ class TaskClientRunner:
         os.makedirs(self.work_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
         
-        # Initialize components
+        # Initialize components with configuration from cfg file
         self.executor = TaskExecutor()
-        self.heartbeat = HeartbeatManager(self.server_url, self.machine_name)
+        self.heartbeat = HeartbeatManager(self.server_url, self.machine_name, self.heartbeat_interval)
         
         # Initialize SocketIO client
-        self.sio = socketio.Client()
+        self.sio = socketio.Client(
+            ping_interval=self.cfg_manager.get_int('ADVANCED', 'websocket_ping_interval', 25),
+            ping_timeout=self.cfg_manager.get_int('ADVANCED', 'websocket_ping_timeout', 20)
+        )
         self._setup_socketio_handlers()
         
         # Configuration update thread
         self.config_update_thread = None
         
         logger.info(f"Client runner initialized: {self.machine_name} ({self.local_ip}) -> {self.server_url}")
+        logger.info(f"Heartbeat interval: {self.heartbeat_interval} seconds")
         logger.info(f"Configuration update interval: {self.config_update_interval} seconds")
+        
+        # Log configuration summary
+        if self.cfg_manager.get_boolean('ADVANCED', 'verbose_logging', False):
+            logger.info("Configuration summary:")
+            logger.info(self.cfg_manager.get_config_summary())
     
     def _setup_socketio_handlers(self):
         """Setup SocketIO event handlers"""
@@ -599,6 +625,8 @@ def main():
     parser = argparse.ArgumentParser(description='Task Client Runtime')
     parser.add_argument('--config', required=True,
                        help='Configuration file path (required)')
+    parser.add_argument('--cfg', 
+                       help='Client configuration file path (client.cfg)')
     parser.add_argument('--log-level', 
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                        help='Override log level from config')
@@ -611,16 +639,34 @@ def main():
         print("Failed to load configuration")
         sys.exit(1)
     
+    # Load client.cfg configuration if specified
+    cfg_manager = None
+    if args.cfg:
+        if os.path.exists(args.cfg):
+            cfg_manager = get_config_manager(args.cfg)
+        else:
+            print(f"Warning: Configuration file {args.cfg} not found, using defaults")
+    
     # Override log level if specified
     if args.log_level:
         config['log_level'] = args.log_level
+    elif cfg_manager:
+        # Use log level from client.cfg if available
+        cfg_log_level = cfg_manager.get('DEFAULT', 'log_level')
+        if cfg_log_level:
+            config['log_level'] = cfg_log_level
     
     # Setup logging
     log_level = config.get('log_level', 'INFO')
     setup_logging(log_level)
     
+    # Validate configuration if cfg_manager is available
+    if cfg_manager and not cfg_manager.validate_config():
+        logger.error("Configuration validation failed")
+        sys.exit(1)
+    
     # Create and start client runner
-    runner = TaskClientRunner(config)
+    runner = TaskClientRunner(config, args.cfg)
     
     try:
         runner.start()
