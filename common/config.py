@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 class Config:
     # Database configuration
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'task_manager.db')
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'server/server.db')
     
     # Web server configuration
     SERVER_HOST = os.getenv('SERVER_HOST', '0.0.0.0')
@@ -24,7 +24,7 @@ class Config:
     
     # Log configuration
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE = os.getenv('LOG_FILE', 'task_manager.log')
+    LOG_FILE = os.getenv('LOG_FILE', 'server/logs/server.log')
     
     @classmethod
     def to_dict(cls) -> Dict[str, Any]:

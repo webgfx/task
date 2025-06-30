@@ -160,9 +160,11 @@ cython_debug/
 
 # Project-specific files
 *.db
-task_manager.db
+server/server.db
+server/server.db-journal
 *.log
 logs/
+server/logs/
 work/
 run/
 temp/

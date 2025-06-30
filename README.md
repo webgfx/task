@@ -31,7 +31,7 @@ task/
 │   ├── __init__.py
 │   ├── models.py          # Data model definitions
 │   ├── config.py          # Configuration management
-│   ├── server.txt         # Server IP and port configuration (format: IP:PORT)
+│   ├── common.cfg         # Common configuration (server settings, database)
 │   ├── predefined_commands.py # Built-in system commands
 │   ├── system_info.py     # System information collection
 │   └── utils.py           # Utility functions
@@ -41,6 +41,9 @@ task/
 │   ├── api.py             # REST API interface
 │   ├── scheduler.py       # Task scheduler
 │   ├── database.py        # Database operations
+│   ├── server.db          # SQLite database file
+│   ├── logs/              # Server log files
+│   ├── requirements.txt   # Server dependencies
 │   ├── templates/         # HTML templates
 │   │   ├── index.html     # Home page
 │   │   ├── tasks.html     # Task management
@@ -51,16 +54,13 @@ task/
 │       └── js/            # JavaScript files
 ├── client/                # Client process
 │   ├── __init__.py
-│   ├── client.py          # Main client process
+│   ├── client_installer.py # Client installation manager
+│   ├── client_runner.py   # Client runtime process
 │   ├── service.py         # Windows service implementation
 │   ├── executor.py        # Task executor
 │   ├── heartbeat.py       # Heartbeat monitoring
+│   ├── client.cfg         # Client configuration
 │   └── requirements.txt   # Client dependencies
-├── server/                # Server components
-│   ├── task_server.py     # Main server
-│   ├── api_routes.py      # REST API routes
-│   ├── websocket_handler.py # WebSocket handling
-│   └── requirements.txt   # Server dependencies
 ├── examples/              # Example code
 ├── demo.py                # Complete demo script
 ├── test_api.py            # API test script
