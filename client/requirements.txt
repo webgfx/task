@@ -1,0 +1,5 @@
+requests==2.32.3
+python-socketio==5.11.4
+pywin32==306
+psutil==5.9.8
+python-dateutil==2.9.0

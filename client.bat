@@ -44,7 +44,7 @@ echo Checking dependencies...
 %PYTHON_EXE% -c "import flask, socketio, requests" >nul 2>&1
 if errorlevel 1 (
     echo Installing dependencies...
-    %PYTHON_EXE% -m pip install -r requirements.txt
+    %PYTHON_EXE% -m pip install -r client\requirements.txt
     if errorlevel 1 (
         echo ERROR: Failed to install dependencies
         echo Please check your internet connection and try again
@@ -58,7 +58,7 @@ if errorlevel 1 (
 REM Test client module
 echo.
 echo Testing client module...
-%PYTHON_EXE% -c "from client.client import TaskClient; print('✓ Client module OK')" 2>nul
+%PYTHON_EXE% -c "from client.client_runner import TaskClientRunner; print('✓ Client module OK')" 2>nul
 if errorlevel 1 (
     echo ERROR: Client module cannot be imported
     echo Please ensure all project files are in place
@@ -327,20 +327,11 @@ goto menu
 
 :run_direct
 echo.
-set /p machine_name=Please enter machine name: 
-if "%machine_name%"=="" (
-    echo Error: Machine name cannot be empty
-    echo.
-    timeout /t 2 /nobreak >nul
-    goto menu
-)
-
-set /p server_url=Please enter server URL [http://localhost:5000]: 
-if "%server_url%"=="" set server_url=http://localhost:5000
-
 echo Starting client process ^(Direct Mode^)...
 echo Press Ctrl+C to stop the client
-%PYTHON_EXE% -m client.client --machine-name "%machine_name%" --server-url "%server_url%"
+echo.
+echo Machine name and server URL will be auto-detected
+%PYTHON_EXE% -m client.client_runner
 echo.
 echo Client process stopped.
 echo.
@@ -364,10 +355,10 @@ echo Step 2: Testing Python dependencies...
 echo.
 
 echo Testing imports:
-%PYTHON_EXE% -c "from client.client import TaskClient; print('✓ TaskClient import: OK')" 2>nul
+%PYTHON_EXE% -c "from client.client_runner import TaskClientRunner; print('✓ TaskClientRunner import: OK')" 2>nul
 if errorlevel 1 (
-    echo ❌ TaskClient import failed
-    %PYTHON_EXE% -c "from client.client import TaskClient" 
+    echo ❌ TaskClientRunner import failed
+    %PYTHON_EXE% -c "from client.client_runner import TaskClientRunner" 
     timeout /t 3 /nobreak >nul
     goto menu
 ) 
@@ -401,4 +392,3 @@ goto menu
 :end
 echo.
 echo Client manager completed.
-pause

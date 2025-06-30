@@ -1,6 +1,7 @@
 """
 System information collection utilities
 """
+import os
 import platform
 import psutil
 import socket
@@ -459,3 +460,42 @@ def get_system_summary() -> Dict[str, str]:
             'ip': '127.0.0.1',
             'error': str(e)
         }
+
+
+def get_machine_name() -> str:
+    """Get machine/hostname for client identification"""
+    try:
+        return socket.gethostname()
+    except Exception:
+        try:
+            return platform.node()
+        except Exception:
+            return 'unknown-machine'
+
+
+def get_server_url(common_cfg_path: str = None) -> str:
+    """Get server URL from common.cfg file"""
+    try:
+        import configparser
+        
+        if common_cfg_path is None:
+            # Default path in common directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            common_cfg_path = os.path.join(current_dir, 'common.cfg')
+        
+        if os.path.exists(common_cfg_path):
+            config = configparser.ConfigParser()
+            config.read(common_cfg_path, encoding='utf-8')
+            
+            # Get host and port from common.cfg
+            host = config.get('SERVER', 'host', fallback='127.0.0.1')
+            port = config.get('SERVER', 'port', fallback='5000')
+            
+            # Construct URL
+            url = f"http://{host}:{port}"
+            return url
+    except Exception as e:
+        print(f"Warning: Failed to read server URL from {common_cfg_path}: {e}")
+    
+    # Default fallback
+    return 'http://localhost:5000'

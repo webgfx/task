@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import local modules (these will be copied to installation directory)
 try:
-    from common.system_info import get_system_info, get_system_summary
+    from common.system_info import get_system_info, get_system_summary, get_machine_name, get_server_url
     from common.config import ClientConfig
     from common.utils import setup_logging, get_local_ip
     from executor import TaskExecutor
@@ -83,10 +83,7 @@ class TaskClientRunner:
         self.heartbeat = HeartbeatManager(self.server_url, self.machine_name, self.heartbeat_interval)
         
         # Initialize SocketIO client
-        self.sio = socketio.Client(
-            ping_interval=self.cfg_manager.get_int('ADVANCED', 'websocket_ping_interval', 25),
-            ping_timeout=self.cfg_manager.get_int('ADVANCED', 'websocket_ping_timeout', 20)
-        )
+        self.sio = socketio.Client()
         self._setup_socketio_handlers()
         
         # Configuration update thread
@@ -623,8 +620,14 @@ def load_config(config_path):
 def main():
     """Main function for client runner"""
     parser = argparse.ArgumentParser(description='Task Client Runtime')
-    parser.add_argument('--config', required=True,
-                       help='Configuration file path (required)')
+    
+    # Optional arguments for override
+    parser.add_argument('--config', 
+                       help='Configuration file path (optional)')
+    parser.add_argument('--machine-name', 
+                       help='Override machine name (optional)')
+    parser.add_argument('--server-url', 
+                       help='Override server URL (optional)')
     parser.add_argument('--cfg', 
                        help='Client configuration file path (client.cfg)')
     parser.add_argument('--log-level', 
@@ -633,19 +636,82 @@ def main():
     
     args = parser.parse_args()
     
-    # Load configuration
-    config = load_config(args.config)
-    if not config:
-        print("Failed to load configuration")
+    # Auto-detect configuration
+    # Auto-detect client.cfg file if not specified
+    cfg_file = args.cfg
+    if not cfg_file:
+        # Look for client.cfg in current directory and parent directories
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        possible_paths = [
+            os.path.join(current_dir, 'client.cfg'),
+            os.path.join(os.path.dirname(current_dir), 'client', 'client.cfg'),
+            'client.cfg'
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                cfg_file = path
+                print(f"Auto-detected client.cfg: {cfg_file}")
+                break
+    
+    # Load client.cfg configuration first
+    cfg_manager = None
+    if cfg_file and os.path.exists(cfg_file):
+        cfg_manager = get_config_manager(cfg_file)
+    
+    try:
+        # Get machine name automatically
+        machine_name = args.machine_name if args.machine_name else get_machine_name()
+        
+        # Get server URL - check client.cfg first, then common.cfg
+        server_url = args.server_url
+        if not server_url:
+            # Try to get from client.cfg first
+            if cfg_manager:
+                server_host = cfg_manager.get('DEFAULT', 'server_host')
+                if server_host:
+                    # Get port from common.cfg
+                    import configparser
+                    try:
+                        # Get path to common.cfg in common directory
+                        client_dir = os.path.dirname(os.path.abspath(__file__))
+                        project_root = os.path.dirname(client_dir)
+                        common_cfg_path = os.path.join(project_root, 'common', 'common.cfg')
+                        if os.path.exists(common_cfg_path):
+                            common_config = configparser.ConfigParser()
+                            common_config.read(common_cfg_path, encoding='utf-8')
+                            port = common_config.get('SERVER', 'port', fallback='5000')
+                            server_url = f"http://{server_host}:{port}"
+                        else:
+                            server_url = f"http://{server_host}:5000"
+                    except Exception:
+                        server_url = f"http://{server_host}:5000"
+            
+            # Fallback to common.cfg only
+            if not server_url:
+                server_url = get_server_url()
+        
+        print(f"Auto-detected machine name: {machine_name}")
+        print(f"Auto-detected server URL: {server_url}")
+        
+        # Create configuration
+        config = {
+            'machine_name': machine_name,
+            'server_url': server_url,
+            'log_level': 'INFO'
+        }
+        
+    except Exception as e:
+        print(f"Failed to auto-detect configuration: {e}")
         sys.exit(1)
     
-    # Load client.cfg configuration if specified
-    cfg_manager = None
-    if args.cfg:
-        if os.path.exists(args.cfg):
-            cfg_manager = get_config_manager(args.cfg)
+    # Load configuration file if provided
+    if args.config:
+        file_config = load_config(args.config)
+        if file_config:
+            # Override auto-detected values with file values
+            config.update(file_config)
         else:
-            print(f"Warning: Configuration file {args.cfg} not found, using defaults")
+            print("Failed to load configuration file, using auto-detected values")
     
     # Override log level if specified
     if args.log_level:

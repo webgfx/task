@@ -44,7 +44,7 @@ echo Checking dependencies...
 %PYTHON_EXE% -c "import flask, socketio, requests" >nul 2>&1
 if errorlevel 1 (
     echo Installing dependencies...
-    %PYTHON_EXE% -m pip install -r requirements.txt
+    %PYTHON_EXE% -m pip install -r server\requirements.txt
     if errorlevel 1 (
         echo ❌ ERROR: Failed to install dependencies
         echo Please check your internet connection and try again

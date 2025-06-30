@@ -54,12 +54,17 @@ task/
 │   ├── client.py          # Main client process
 │   ├── service.py         # Windows service implementation
 │   ├── executor.py        # Task executor
-│   └── heartbeat.py       # Heartbeat monitoring
+│   ├── heartbeat.py       # Heartbeat monitoring
+│   └── requirements.txt   # Client dependencies
+├── server/                # Server components
+│   ├── task_server.py     # Main server
+│   ├── api_routes.py      # REST API routes
+│   ├── websocket_handler.py # WebSocket handling
+│   └── requirements.txt   # Server dependencies
 ├── examples/              # Example code
 ├── demo.py                # Complete demo script
 ├── test_api.py            # API test script
 ├── test_client.py         # Client process test
-├── requirements.txt       # Python dependencies
 ├── .env.example           # Configuration template
 ├── start.sh              # Linux startup script
 ├── start.bat             # Windows startup script
@@ -73,8 +78,8 @@ task/
 
 ### Method 1: One-click Demo (Recommended for beginners)
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install server dependencies
+pip install -r server/requirements.txt
 
 # Run complete demo
 python demo.py
@@ -84,7 +89,11 @@ python demo.py
 
 #### 1. Install Dependencies
 ```bash
-pip install -r requirements.txt
+# For server components
+pip install -r server/requirements.txt
+
+# For client components (if running client separately)
+pip install -r client/requirements.txt
 ```
 
 #### 2. Start Web Server
@@ -284,7 +293,7 @@ scp -r task/ user@target-machine:/opt/task-client/
 
 2. **Install dependencies**
 ```bash
-pip install -r requirements.txt
+pip install -r client/requirements.txt
 ```
 
 3. **Configure server address**
@@ -405,7 +414,7 @@ python demo.py
 # This issue occurs with Python 3.13+ and older Flask-SocketIO versions
 # Solution: Update to compatible versions (already fixed in this project)
 pip install flask==3.0.3 flask-socketio==5.4.1
-# Or reinstall all dependencies: pip install -r requirements.txt
+# Or reinstall all dependencies: pip install -r server/requirements.txt
 ```
 
 **Q: Port 5000 is in use**
