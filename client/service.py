@@ -22,7 +22,62 @@ def fix_service_path():
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
     
-    # Also add the service directory for relative imports
+    # Also        print("\nTesting TaskClientRunner import and creation...")
+        try:
+            from client.client_runner import TaskClientRunner
+            print("✓ TaskClientRunner imported successfully")
+        except ImportError as e:
+            print(f"❌ TaskClientRunner import failed: {e}")
+            print("Attempting alternative import...")
+            import importlib.util
+            runner_path = os.path.join(project_root, 'client', 'client_runner.py')
+            if os.path.exists(runner_path):
+                spec = importlib.util.spec_from_file_location("client.client_runner", runner_path)
+                runner_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(runner_module)
+                TaskClientRunner = runner_module.TaskClientRunner
+                print("✓ TaskClientRunner imported via alternative method")
+            else:
+                print(f"❌ Runner file not found: {runner_path}")
+                return
+        
+        # Test creating runner instance
+        runner_config = {
+            'server_url': config.get('server_url', 'http://localhost:5000') if config else 'http://localhost:5000',
+            'machine_name': config.get('machine_name', 'debug-machine') if config else 'debug-machine',
+            'heartbeat_interval': 30,
+            'config_update_interval': 600,
+            'log_level': 'INFO',
+            'log_dir': os.path.join(os.path.dirname(__file__), 'logs'),
+            'work_dir': os.path.join(os.path.dirname(__file__), 'work')
+        }
+        
+        try:
+            client_runner = TaskClientRunner(runner_config)
+            print("✓ TaskClientRunner instance created successfully")
+        except Exception as e:
+            print(f"❌ TaskClientRunner creation failed: {e}")
+            return
+        
+        print("\n✅ All tests passed! Service should work correctly.")
+        
+    except Exception as e:
+        print(f"❌ Debug failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def fix_service_path():
+    """Fix Python path for Windows service execution"""
+    # Get the directory where this service.py file is located
+    service_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(service_dir)
+    
+    # Add project root to Python path if not already present
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    
+    # Also add service directory for relative imports
     if service_dir not in sys.path:
         sys.path.insert(0, service_dir)
     
@@ -188,26 +243,37 @@ class TaskClientService(win32serviceutil.ServiceFramework):
                 self.logger.info("Importing TaskClient...")
                 # Import TaskClient dynamically to avoid import issues at module level
                 try:
-                    from client.client import TaskClient
-                    self.logger.info("TaskClient imported successfully")
+                    # Use new modular client architecture
+                    from client.client_runner import TaskClientRunner
+                    from client.config_manager import get_config_manager
+                    self.logger.info("TaskClientRunner imported successfully")
                 except ImportError as e:
-                    self.logger.error(f"Failed to import TaskClient: {e}")
+                    self.logger.error(f"Failed to import TaskClientRunner: {e}")
                     self.logger.info("Attempting alternative import...")
                     # Try absolute import
                     import importlib.util
-                    client_path = os.path.join(project_root, 'client', 'client.py')
-                    spec = importlib.util.spec_from_file_location("client.client", client_path)
-                    client_module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(client_module)
-                    TaskClient = client_module.TaskClient
-                    self.logger.info("TaskClient imported via alternative method")
+                    runner_path = os.path.join(project_root, 'client', 'client_runner.py')
+                    spec = importlib.util.spec_from_file_location("client.client_runner", runner_path)
+                    runner_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(runner_module)
+                    TaskClientRunner = runner_module.TaskClientRunner
+                    self.logger.info("TaskClientRunner imported via alternative method")
                 
-                self.logger.info("Creating TaskClient instance...")
-                self.client = TaskClient(
-                    config.get('server_url', 'http://localhost:5000'),
-                    config.get('machine_name', 'default-machine')
-                )
-                self.logger.info("TaskClient instance created successfully")
+                self.logger.info("Creating TaskClientRunner instance...")
+                
+                # Create a configuration data structure for the runner
+                runner_config = {
+                    'server_url': config.get('server_url', 'http://localhost:5000'),
+                    'machine_name': config.get('machine_name', 'default-machine'),
+                    'heartbeat_interval': config.get('heartbeat_interval', 30),
+                    'config_update_interval': config.get('config_update_interval', 600),
+                    'log_level': config.get('log_level', 'INFO'),
+                    'log_dir': os.path.join(os.path.dirname(__file__), 'logs'),
+                    'work_dir': os.path.join(os.path.dirname(__file__), 'work')
+                }
+                
+                self.client = TaskClientRunner(runner_config)
+                self.logger.info("TaskClientRunner instance created successfully")
                 
                 # Start client in separate thread with delay
                 import threading
@@ -640,8 +706,11 @@ def debug_service():
         print(f"✓ Python path (first 5): {sys.path[:5]}")
         
         # Test if key files exist
-        client_file = os.path.join(project_root, 'client', 'client.py')
-        print(f"✓ Client file exists: {os.path.exists(client_file)} ({client_file})")
+        runner_file = os.path.join(project_root, 'client', 'client_runner.py')
+        print(f"✓ Client runner file exists: {os.path.exists(runner_file)} ({runner_file})")
+        
+        installer_file = os.path.join(project_root, 'client', 'client_installer.py')
+        print(f"✓ Client installer file exists: {os.path.exists(installer_file)} ({installer_file})")
         
         print("\nTesting service class initialization...")
         service = TaskClientService()
@@ -654,35 +723,61 @@ def debug_service():
         else:
             print("❌ Configuration loading failed")
         
-        print("\nTesting TaskClient import and creation...")
+        print("\nTesting TaskClientRunner import and creation...")
         try:
-            from client.client import TaskClient
-            print("✓ TaskClient imported successfully")
+            from client.client_runner import TaskClientRunner
+            print("✓ TaskClientRunner imported successfully")
         except ImportError as e:
             print(f"❌ Direct import failed: {e}")
             print("Trying alternative import method...")
             import importlib.util
-            client_path = os.path.join(project_root, 'client', 'client.py')
-            if os.path.exists(client_path):
-                spec = importlib.util.spec_from_file_location("client.client", client_path)
-                client_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(client_module)
-                TaskClient = client_module.TaskClient
-                print("✓ TaskClient imported via alternative method")
+            runner_path = os.path.join(project_root, 'client', 'client_runner.py')
+            if os.path.exists(runner_path):
+                spec = importlib.util.spec_from_file_location("client.client_runner", runner_path)
+                runner_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(runner_module)
+                TaskClientRunner = runner_module.TaskClientRunner
+                print("✓ TaskClientRunner imported via alternative method")
             else:
-                print(f"❌ Client file not found: {client_path}")
-                raise
+                print(f"❌ Runner file not found: {runner_path}")
+                return
         
-        # Test basic client creation
-        client = TaskClient('http://localhost:5000', 'test-machine')
-        print("✓ TaskClient created successfully")
+        # Test creating runner instance
+        if config:
+            runner_config = {
+                'server_url': config.get('server_url', 'http://localhost:5000'),
+                'machine_name': config.get('machine_name', 'debug-machine'),
+                'heartbeat_interval': config.get('heartbeat_interval', 30),
+                'config_update_interval': config.get('config_update_interval', 600),
+                'log_level': config.get('log_level', 'INFO'),
+                'log_dir': os.path.join(os.path.dirname(__file__), 'logs'),
+                'work_dir': os.path.join(os.path.dirname(__file__), 'work')
+            }
+        else:
+            runner_config = {
+                'server_url': 'http://localhost:5000',
+                'machine_name': 'debug-machine',
+                'heartbeat_interval': 30,
+                'config_update_interval': 600,
+                'log_level': 'INFO',
+                'log_dir': os.path.join(os.path.dirname(__file__), 'logs'),
+                'work_dir': os.path.join(os.path.dirname(__file__), 'work')
+            }
         
-        print("\n=== Debug completed successfully ===")
+        try:
+            client_runner = TaskClientRunner(runner_config)
+            print("✓ TaskClientRunner instance created successfully")
+        except Exception as e:
+            print(f"❌ TaskClientRunner creation failed: {e}")
+            return
+        
+        print("\n✅ All tests passed! Service should work correctly.")
         
     except Exception as e:
         print(f"❌ Debug failed: {e}")
         import traceback
         traceback.print_exc()
+
 
 def check_config():
     """Check configuration"""

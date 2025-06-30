@@ -12,7 +12,6 @@
 client/
 ├── client_installer.py    # 安装/卸载/更新管理器
 ├── client_runner.py       # 运行时执行器
-├── client.py             # 兼容性包装器 (已弃用)
 ├── client.cfg            # 客户端配置文件模板
 ├── config_manager.py     # 配置管理模块
 ├── config_tool.py        # 配置管理工具
@@ -52,10 +51,6 @@ client/
    - 交互式配置编辑
    - 配置验证和保存
    - 配置重置功能
-
-6. **client.py** - 兼容性包装器（已弃用）
-   - 提供向后兼容
-   - 引导用户迁移到新架构
 
 ## � 配置管理
 
@@ -379,7 +374,7 @@ python client_installer.py info
 ### 常见问题
 
 1. **模块导入错误**
-   - 确保使用 `client_runner.py` 而不是旧的 `client.py`
+   - 确保使用 `client_runner.py` 进行运行时执行
    - 检查安装目录中的文件是否完整
 
 2. **权限问题**
@@ -392,7 +387,7 @@ python client_installer.py info
 
 ## 🔄 从旧版本迁移
 
-如果你使用的是旧版本的单文件客户端：
+如果你使用的是旧版本的单文件客户端（client.py）：
 
 1. **停止旧客户端**
 2. **安装新模块化客户端**:
@@ -403,7 +398,7 @@ python client_installer.py info
    ```
 3. **使用新的启动方式**
 
-旧的 `client.py` 仍然可用但会显示迁移提示。
+旧的单文件客户端已被完全替换为模块化架构。
 
 ## 🎯 最佳实践
 
