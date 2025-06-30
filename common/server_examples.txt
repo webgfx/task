@@ -1,0 +1,20 @@
+# Example server configurations for common/server.txt
+# You can use any of these formats:
+
+# 1. IP:PORT format (Recommended)
+192.168.1.100:5000
+
+# 2. IP:PORT with custom port
+192.168.1.100:8080
+
+# 3. IP address only (will automatically add :5000)
+192.168.1.100
+
+# 4. Full URL with custom port (if needed)
+http://192.168.1.100:8080
+
+# 5. Secure URL (if needed)
+https://secure-server.com:443
+
+# The client service will automatically detect the format and use it appropriately.
+# Currently configured: 10.94.200.134:5000

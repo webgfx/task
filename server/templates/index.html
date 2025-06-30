@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Task Management System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-tasks"></i>
+                <h2>Web Graphics Service</h2>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/tasks" class="nav-link">
+                        <i class="fas fa-list-check"></i>
+                        <span>Task Management</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/machines" class="nav-link">
+                        <i class="fas fa-server"></i>
+                        <span>Client Management</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-content">
+                    <h1>System Overview</h1>
+                    <div class="header-actions">
+                        <span class="connection-status" id="connectionStatus">
+                            <i class="fas fa-circle text-success"></i>
+                            Connected
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard -->
+            <div class="dashboard">
+                <!-- Statistics Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-tasks text-primary"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalTasks">0</h3>
+                            <p>Total Tasks</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-play text-success"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="runningTasks">0</h3>
+                            <p>Running</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-server text-info"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="onlineMachines">0</h3>
+                            <p>Online Machines</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle text-success"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="completedTasks">0</h3>
+                            <p>Completed</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Tasks -->
+                <div class="dashboard-section">
+                    <div class="section-header">
+                        <h2>Recent Tasks</h2>
+                        <a href="/tasks" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Create Task
+                        </a>
+                    </div>
+                    <div class="task-list" id="recentTasks">
+                        <!-- Task list will be dynamically loaded via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Machine Status -->
+                <div class="dashboard-section">
+                    <div class="section-header">
+                        <h2>Machine Status</h2>
+                        <a href="/machines" class="btn btn-secondary">View All</a>
+                    </div>
+                    <div class="machine-grid" id="machineStatus">
+                        <!-- Machine status will be dynamically loaded via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- System Logs -->
+                <div class="dashboard-section">
+                    <div class="section-header">
+                        <h2>System Logs</h2>
+                        <button class="btn btn-outline" onclick="clearLogs()">
+                            <i class="fas fa-trash"></i>
+                            Clear
+                        </button>
+                    </div>
+                    <div class="log-container" id="systemLogs">
+                        <!-- System logs will be dynamically updated via JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notifications" class="notifications"></div>
+
+    <!-- JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

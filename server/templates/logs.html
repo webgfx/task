@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Management - Task Management System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Logs specific styling */
+        .logs-table {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        
+        .logs-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .logs-table th {
+            background: #007bff;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .logs-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+        }
+        
+        .logs-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .log-level {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        .log-level.INFO {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .log-level.WARN {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .log-level.ERROR {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .log-action {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .log-action.CONNECT {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .log-action.DISCONNECT {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .log-action.MACHINE_REGISTER {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .log-action.MACHINE_UPDATE {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .log-data {
+            max-width: 300px;
+            word-wrap: break-word;
+            font-family: monospace;
+            font-size: 0.85em;
+            background: #f8f9fa;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        
+        .timestamp {
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        
+        .controls-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .form-control {
+            padding: 6px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .no-logs {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-tasks"></i>
+                <h2>Web Graphics Service</h2>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/tasks" class="nav-link">
+                        <i class="fas fa-list-check"></i>
+                        <span>Task Management</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/machines" class="nav-link">
+                        <i class="fas fa-server"></i>
+                        <span>Client Management</span>
+                    </a>
+                </li>
+                <li class="nav-item active">
+                    <a href="/logs" class="nav-link">
+                        <i class="fas fa-file-lines"></i>
+                        <span>Log Management</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main content area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-content">
+                    <h1>Log Management</h1>
+                    <div class="header-actions">
+                        <button id="refreshBtn" class="btn btn-primary">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                        <button id="clearBtn" class="btn btn-secondary">
+                            <i class="fas fa-trash"></i>
+                            Clear Old Logs
+                        </button>
+                        <button id="autoRefreshBtn" class="btn btn-outline">
+                            <i class="fas fa-clock"></i>
+                            Auto Refresh: OFF
+                        </button>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Filters -->
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Limit:</label>
+                    <select id="limitSelect">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Client IP:</label>
+                    <input type="text" id="clientIpFilter" placeholder="Filter by IP address">
+                </div>
+            </div>
+
+            <!-- Log table container -->
+            <div id="logsContent">
+            <div class="loading">Loading logs...</div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        let autoRefreshInterval = null;
+        let socket = null;
+        
+        // Initialize socket connection
+        function initSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+            });
+            
+            socket.on('machine_registered', function(data) {
+                // Auto refresh when new machine registers
+                loadLogs();
+            });
+        }
+        
+        // Load logs from server
+        function loadLogs() {
+            const limit = document.getElementById('limitSelect').value;
+            const clientIp = document.getElementById('clientIpFilter').value.trim();
+            
+            let url = `/api/logs?limit=${limit}`;
+            if (clientIp) {
+                url += `&client_ip=${encodeURIComponent(clientIp)}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayLogs(data.data);
+                    } else {
+                        document.getElementById('logsContent').innerHTML = 
+                            '<div class="no-logs">Error loading logs: ' + data.error + '</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading logs:', error);
+                    document.getElementById('logsContent').innerHTML = 
+                        '<div class="no-logs">Error loading logs</div>';
+                });
+        }
+        
+        // Display logs in table
+        function displayLogs(logs) {
+            const container = document.getElementById('logsContent');
+            
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="no-logs">No logs found</div>';
+                return;
+            }
+            
+            let html = `
+                <div class="logs-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Client</th>
+                                <th>Action</th>
+                                <th>Message</th>
+                                <th>Level</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            logs.forEach(log => {
+                const timestamp = new Date(log.timestamp).toLocaleString();
+                const clientInfo = log.client_name ? `${log.client_name} (${log.client_ip})` : log.client_ip;
+                const dataText = log.data ? JSON.stringify(log.data, null, 2) : '';
+                
+                html += `
+                    <tr>
+                        <td class="timestamp">${timestamp}</td>
+                        <td>${clientInfo}</td>
+                        <td><span class="log-action ${log.action}">${log.action}</span></td>
+                        <td>${log.message || ''}</td>
+                        <td><span class="log-level ${log.level}">${log.level}</span></td>
+                        <td><div class="log-data">${dataText}</div></td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // Clear old logs
+        function clearOldLogs() {
+            if (!confirm('Are you sure you want to clear logs older than 30 days?')) {
+                return;
+            }
+            
+            fetch('/api/logs/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ older_than_days: 30 })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    loadLogs();
+                } else {
+                    alert('Error clearing logs: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error clearing logs:', error);
+                alert('Error clearing logs');
+            });
+        }
+        
+        // Toggle auto refresh
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('autoRefreshBtn');
+            
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                btn.innerHTML = '<i class="fas fa-clock"></i> Auto Refresh: OFF';
+                btn.className = 'btn btn-outline';
+            } else {
+                autoRefreshInterval = setInterval(loadLogs, 5000); // Refresh every 5 seconds
+                btn.innerHTML = '<i class="fas fa-clock"></i> Auto Refresh: ON';
+                btn.className = 'btn btn-primary';
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', loadLogs);
+        document.getElementById('clearBtn').addEventListener('click', clearOldLogs);
+        document.getElementById('autoRefreshBtn').addEventListener('click', toggleAutoRefresh);
+        document.getElementById('limitSelect').addEventListener('change', loadLogs);
+        document.getElementById('clientIpFilter').addEventListener('input', function() {
+            // Debounce the input
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = setTimeout(loadLogs, 500);
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initSocket();
+            loadLogs();
+        });
+    </script>
+        </main>
+    </div>
+</body>
+</html>
