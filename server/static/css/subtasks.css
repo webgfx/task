@@ -1,0 +1,415 @@
+/* Enhanced styles for subtask management */
+
+/* Task type selection */
+.task-type-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.task-type-section label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.task-type-section select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: white;
+}
+
+/* Subtask section styling */
+.subtask-section {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+}
+
+.subtask-section h4 {
+    margin-bottom: 15px;
+    color: #495057;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 8px;
+}
+
+.subtasks-list {
+    margin-bottom: 15px;
+}
+
+.subtask-row {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    background-color: #f8f9fa;
+    transition: box-shadow 0.2s ease;
+}
+
+.subtask-row:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.subtask-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 6px 6px 0 0;
+}
+
+.subtask-header h5 {
+    margin: 0;
+    color: #495057;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.subtask-content {
+    padding: 15px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    align-items: flex-end;
+}
+
+.form-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.form-group select,
+.form-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s ease;
+}
+
+.form-group select:focus,
+.form-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+
+.subtask-description {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #e7f3ff;
+    border-left: 4px solid #007bff;
+    border-radius: 0 4px 4px 0;
+}
+
+.help-text {
+    color: #6c757d;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.required {
+    color: #dc3545;
+}
+
+/* Add subtask button */
+.add-subtask-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s ease;
+}
+
+.add-subtask-btn:hover {
+    background-color: #218838;
+}
+
+.add-subtask-btn i {
+    margin-right: 5px;
+}
+
+/* Remove button styling */
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background-color 0.2s ease;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+/* Legacy section styling */
+.legacy-section {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+}
+
+.legacy-section h4 {
+    margin-bottom: 15px;
+    color: #495057;
+    border-bottom: 2px solid #6c757d;
+    padding-bottom: 8px;
+}
+
+/* Schedule section styling */
+.schedule-section {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+}
+
+.schedule-section h4 {
+    margin-bottom: 15px;
+    color: #495057;
+    border-bottom: 2px solid #ffc107;
+    padding-bottom: 8px;
+}
+
+.schedule-group {
+    margin-bottom: 15px;
+}
+
+.schedule-group.hidden {
+    display: none;
+}
+
+/* Task table enhancements */
+.task-type-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.task-type-badge.subtask-based {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.task-type-badge.legacy {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.pending {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-badge.running {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.status-badge.completed {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-badge.failed {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-badge.cancelled {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+/* Task detail modal enhancements */
+.task-detail-section {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e1e8ed;
+}
+
+.task-detail-section:last-child {
+    border-bottom: none;
+}
+
+.task-detail-section h4 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.detail-item label {
+    font-weight: 600;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.detail-item span {
+    color: #2c3e50;
+}
+
+.subtasks-detail {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.subtask-detail-item {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.subtask-detail-header {
+    background-color: #e9ecef;
+    padding: 12px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.subtask-detail-header h5 {
+    margin: 0;
+    color: #495057;
+    font-size: 1rem;
+}
+
+.subtask-order {
+    background-color: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.subtask-detail-content {
+    padding: 15px;
+}
+
+.command-detail {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    border-left: 4px solid #667eea;
+    margin-bottom: 15px;
+}
+
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 500;
+    z-index: 9999;
+    min-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notification.success {
+    background-color: #28a745;
+}
+
+.notification.error {
+    background-color: #dc3545;
+}
+
+.notification.info {
+    background-color: #17a2b8;
+}
+
+.close-notification {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 10px;
+}
+
+.close-notification:hover {
+    opacity: 0.8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .form-group {
+        min-width: auto;
+    }
+    
+    .subtask-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+    
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+}

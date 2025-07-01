@@ -48,8 +48,17 @@ class TaskClientRunner:
         """
         self.config = config_data
         self.server_url = config_data['server_url']
-        self.machine_name = config_data['machine_name']
+        
+        # 获取机器名：优先级 config_data > client.cfg > 系统hostname
+        self.machine_name = self._get_machine_name(config_data, cfg_file_path)
         self.local_ip = get_local_ip()
+        
+        # 验证机器名有效性
+        if not self.machine_name or self.machine_name.strip() == '':
+            raise ValueError("Machine name cannot be empty. Please configure machine_name in client.cfg or config.json")
+        
+        # 记录机器名来源
+        logger.info(f"Using machine name: {self.machine_name}")
         
         # Initialize configuration manager for client.cfg
         if cfg_file_path:
@@ -78,8 +87,19 @@ class TaskClientRunner:
         os.makedirs(self.work_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
         
+        # Initialize executors
+        self.task_executor = TaskExecutor()
+        
+        # Initialize subtask executor
+        try:
+            from subtask_executor import TaskSubtaskAdapter
+            self.subtask_adapter = TaskSubtaskAdapter(self.server_url, self.machine_name)
+            logger.info("Subtask executor initialized successfully")
+        except ImportError as e:
+            logger.warning(f"Failed to import subtask executor: {e}")
+            self.subtask_adapter = None
+        
         # Initialize components with configuration from cfg file
-        self.executor = TaskExecutor()
         self.heartbeat = HeartbeatManager(self.server_url, self.machine_name, self.heartbeat_interval)
         
         # Initialize SocketIO client
@@ -98,6 +118,55 @@ class TaskClientRunner:
             logger.info("Configuration summary:")
             logger.info(self.cfg_manager.get_config_summary())
     
+    def _get_machine_name(self, config_data, cfg_file_path=None) -> str:
+        """
+        获取机器名，按优先级顺序：
+        1. config_data 中的 machine_name
+        2. client.cfg 中的 machine_name  
+        3. 系统 hostname
+        
+        Args:
+            config_data: 配置数据字典
+            cfg_file_path: client.cfg 文件路径
+            
+        Returns:
+            机器名字符串
+        """
+        # 首先尝试从 config_data 获取
+        machine_name = config_data.get('machine_name', '').strip()
+        if machine_name:
+            logger.debug(f"Machine name from config_data: {machine_name}")
+            return machine_name
+        
+        # 然后尝试从 client.cfg 获取
+        try:
+            if cfg_file_path:
+                cfg_manager = get_config_manager(cfg_file_path)
+            else:
+                runner_dir = os.path.dirname(os.path.abspath(__file__))
+                cfg_path = os.path.join(runner_dir, 'client.cfg')
+                cfg_manager = get_config_manager(cfg_path if os.path.exists(cfg_path) else None)
+            
+            machine_name = cfg_manager.get('DEFAULT', 'machine_name', '').strip()
+            if machine_name:
+                logger.debug(f"Machine name from client.cfg: {machine_name}")
+                return machine_name
+        except Exception as e:
+            logger.warning(f"Failed to read machine name from client.cfg: {e}")
+        
+        # 最后使用系统 hostname
+        try:
+            machine_name = get_machine_name().strip()
+            if machine_name:
+                logger.debug(f"Machine name from system hostname: {machine_name}")
+                return machine_name
+        except Exception as e:
+            logger.error(f"Failed to get system hostname: {e}")
+        
+        # 如果都失败了，返回默认值
+        logger.warning("Could not determine machine name, using default")
+        return f"unknown-{self.local_ip.replace('.', '-')}" if hasattr(self, 'local_ip') else "unknown-machine"
+    
     def _setup_socketio_handlers(self):
         """Setup SocketIO event handlers"""
         
@@ -113,34 +182,45 @@ class TaskClientRunner:
         
         @self.sio.event
         def task_dispatch(data):
-            """Receive task distribution"""
+            """Receive task distribution (supports both legacy and subtask format)"""
             try:
                 task_id = data.get('task_id')
                 task_name = data.get('name', f'Task-{task_id}')
                 
-                # 支持新的指令格式
-                commands = data.get('commands', [])
-                execution_order = data.get('execution_order', [])
-                
-                # 向后兼容旧的单指令格式
-                if not commands and data.get('command'):
-                    commands = [{
-                        'id': 1,
-                        'name': 'Default Command',
-                        'command': data.get('command'),
-                        'timeout': 300,
-                        'retry_count': 0
-                    }]
-                    execution_order = [1]
-                
-                logger.info(f"Received task: {task_name} (ID: {task_id}) with {len(commands)} commands")
-                
-                # Execute task in new thread
-                threading.Thread(
-                    target=self._execute_task,
-                    args=(task_id, task_name, commands, execution_order),
-                    daemon=True
-                ).start()
+                # Check if this is a subtask-based task
+                if 'subtasks' in data and data['subtasks']:
+                    logger.info(f"Received subtask-based task: {task_name} (ID: {task_id}) with {len(data['subtasks'])} subtasks")
+                    
+                    # Execute subtask-based task in new thread
+                    threading.Thread(
+                        target=self._execute_subtask_task,
+                        args=(task_id, task_name, data),
+                        daemon=True
+                    ).start()
+                else:
+                    # Legacy command-based task
+                    commands = data.get('commands', [])
+                    execution_order = data.get('execution_order', [])
+                    
+                    # 向后兼容旧的单指令格式
+                    if not commands and data.get('command'):
+                        commands = [{
+                            'id': 1,
+                            'name': 'Default Command',
+                            'command': data.get('command'),
+                            'timeout': 300,
+                            'retry_count': 0
+                        }]
+                        execution_order = [1]
+                    
+                    logger.info(f"Received legacy task: {task_name} (ID: {task_id}) with {len(commands)} commands")
+                    
+                    # Execute task in new thread
+                    threading.Thread(
+                        target=self._execute_task,
+                        args=(task_id, task_name, commands, execution_order),
+                        daemon=True
+                    ).start()
                 
             except Exception as e:
                 logger.error(f"Failed to handle task distribution: {e}")
@@ -386,6 +466,42 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Failed to update machine configuration: {e}")
     
+    def _execute_subtask_task(self, task_id, task_name, task_data):
+        """Execute subtask-based task"""
+        try:
+            # Set current executing task ID
+            self.current_task_id = task_id
+            
+            logger.info(f"Start executing subtask-based task: {task_name}")
+            
+            # Notify server task execution started
+            self._notify_task_start(task_id)
+            
+            # Check if subtask adapter is available
+            if not self.subtask_adapter:
+                error_msg = "Subtask adapter not available"
+                logger.error(error_msg)
+                self._notify_task_completion(task_id, False, error_msg)
+                return
+            
+            # Execute task using subtask adapter
+            result = self.subtask_adapter.execute_task(task_data)
+            
+            if result['success']:
+                logger.info(f"Subtask-based task {task_name} completed successfully")
+                logger.info(f"Executed {result['executed_count']}/{result['total_count']} subtasks")
+                self._notify_task_completion(task_id, True, result['message'])
+            else:
+                logger.error(f"Subtask-based task {task_name} failed: {result.get('message', 'Unknown error')}")
+                self._notify_task_completion(task_id, False, result.get('message', 'Task execution failed'))
+            
+        except Exception as e:
+            logger.error(f"Failed to execute subtask-based task {task_name}: {e}")
+            self._notify_task_completion(task_id, False, str(e))
+        finally:
+            # Clear current task ID
+            self.current_task_id = None
+    
     def _execute_task(self, task_id, task_name, commands, execution_order):
         """Execute task with multiple commands in specified order"""
         try:
@@ -422,7 +538,7 @@ class TaskClientRunner:
                 
                 try:
                     # Execute individual command
-                    result = self.executor.execute(cmd_command, timeout=cmd_timeout)
+                    result = self.task_executor.execute(cmd_command, timeout=cmd_timeout)
                     
                     # 记录subtask结果
                     subtask_result = {

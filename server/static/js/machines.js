@@ -539,7 +539,7 @@ async function pingMachine(machineName) {
         setTimeout(() => {
             const machine = machines.find(m => m.name === machineName);
             if (machine && machine.status === 'online') {
-                showNotification('Ping Success', `Machine ${machineName} connection normal`, 'success');
+                // Don't show ping success notification
             } else {
                 showNotification('Ping Failed', `Machine ${machineName} unreachable`, 'error');
             }

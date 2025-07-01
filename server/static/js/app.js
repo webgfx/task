@@ -22,7 +22,7 @@ function initializeSocket() {
     socket.on('connect', function() {
         console.log('WebSocket connection successful');
         updateConnectionStatus(true);
-        showNotification('Connection Successful', 'Connected to server', 'success');
+        // Don't show connection successful notification
     });
     
     socket.on('disconnect', function() {

@@ -24,7 +24,7 @@ class Config:
     
     # Log configuration
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE = os.getenv('LOG_FILE', 'server/logs/server.log')
+    LOG_FILE = os.getenv('LOG_FILE', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'server', 'logs', 'server.log'))
     
     @classmethod
     def to_dict(cls) -> Dict[str, Any]:

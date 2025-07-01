@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management - Distributed Task Management System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/subtasks.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
@@ -88,7 +89,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Task Name</th>
-                            <th>Command</th>
+                            <th>Subtasks</th>
                             <th>Target Machine</th>
                             <th>Status</th>
                             <th>Scheduled Time</th>
@@ -111,7 +112,7 @@
 
     <!-- Task creation/edit modal -->
     <div id="taskModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content modal-large">
             <div class="modal-header">
                 <h3 id="modalTitle">Create Task</h3>
                 <button class="close-btn" onclick="closeTaskModal()">
@@ -121,53 +122,66 @@
             <div class="modal-body">
                 <form id="taskForm">
                     <input type="hidden" id="taskId">
-                    
-                    <div class="form-group">
-                        <label for="taskName">Task Name <span class="required">*</span></label>
-                        <input type="text" id="taskName" required>
+
+                    <!-- Basic task information -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-info-circle"></i> Basic Information</h4>
+
+                        <div class="form-group">
+                            <label for="taskName">Task Name <span class="required">*</span></label>
+                            <input type="text" id="taskName" required placeholder="Enter task name">
+                        </div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="taskCommand">Command <span class="required">*</span></label>
-                        <textarea id="taskCommand" rows="3" required placeholder="e.g.: python script.py or echo 'Hello World'"></textarea>
+
+                    <!-- Subtask configuration (always shown, no task type switch) -->
+                    <div class="form-section" id="subtaskSection">
+                        <h4><i class="fas fa-list"></i> Subtasks Configuration</h4>
+                        <div class="subtasks-container">
+                            <div class="subtasks-header">
+                                <button type="button" class="btn btn-small btn-primary" onclick="addSubtask()">
+                                    <i class="fas fa-plus"></i> Add Subtask
+                                </button>
+                                <button type="button" class="btn btn-small btn-secondary" onclick="loadAvailableSubtasks()">
+                                    <i class="fas fa-refresh"></i> Refresh Available Subtasks
+                                </button>
+                            </div>
+                            <div id="subtasksList" class="subtasks-list">
+                                <!-- Subtasks will be added here dynamically -->
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="targetMachine">Target Machine</label>
-                        <select id="targetMachine">
-                            <option value="">Any available machine</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="scheduleType">Schedule Type</label>
-                        <select id="scheduleType" onchange="toggleScheduleOptions()">
-                            <option value="immediate">Execute Now</option>
-                            <option value="scheduled">Scheduled Time</option>
-                            <option value="cron">Recurring Task (Cron)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" id="scheduleTimeGroup" style="display: none;">
-                        <label for="scheduleTime">Execution Time</label>
-                        <input type="datetime-local" id="scheduleTime">
-                    </div>
-                    
-                    <div class="form-group" id="cronGroup" style="display: none;">
-                        <label for="cronExpression">Cron Expression</label>
-                        <input type="text" id="cronExpression" placeholder="e.g.: 0 */1 * * * (execute every hour)">
-                        <small class="help-text">Format: minute hour day month weekday</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="maxRetries">Maximum Retry Count</label>
-                        <input type="number" id="maxRetries" value="3" min="0" max="10">
+
+                    <!-- Legacy command configuration removed for simplified UI -->
+
+                    <!-- Schedule configuration -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-clock"></i> Schedule Configuration</h4>
+
+                        <div class="form-group">
+                            <label for="scheduleType">Schedule Type</label>
+                            <select id="scheduleType" onchange="toggleScheduleOptions()">
+                                <option value="immediate">Execute Now</option>
+                                <option value="scheduled">Scheduled Time</option>
+                                <option value="cron">Recurring Task (Cron)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="scheduleTimeGroup" style="display: none;">
+                            <label for="scheduleTime">Execution Time</label>
+                            <input type="datetime-local" id="scheduleTime">
+                        </div>
+
+                        <div class="form-group" id="cronGroup" style="display: none;">
+                            <label for="cronExpression">Cron Expression</label>
+                            <input type="text" id="cronExpression" placeholder="e.g.: 0 */1 * * * (execute every hour)">
+                            <small class="help-text">Format: minute hour day month weekday</small>
+                        </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveTask()">Save</button>
+                <button type="button" class="btn btn-primary" onclick="saveTask()">Save Task</button>
             </div>
         </div>
     </div>

@@ -252,7 +252,7 @@
             socket = io();
             
             socket.on('connect', function() {
-                console.log('Connected to server');
+                // Don't log connection message to avoid clutter
             });
             
             socket.on('machine_registered', function(data) {

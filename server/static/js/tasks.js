@@ -1,12 +1,17 @@
 /**
- * Task Management page JavaScript
+ * Task Management page JavaScript with Subtask Support
  */
 
-let tasks = [];
-let machines = [];
+console.log('Loading tasks.js...');
+
+let tasksList = [];
+let machinesList = [];
+let availableSubtasks = [];
 let filteredTasks = [];
-let currentPage = 1;
-const itemsPerPage = 10;
+let tasksCurrentPage = 1;
+const tasksItemsPerPage = 10;
+
+console.log('Tasks.js variables initialized');
 
 // Initialize after page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -16,24 +21,25 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialize task page
 async function initializeTasksPage() {
     await loadMachines();
+    await loadAvailableSubtasks();
     await refreshTasks();
     populateMachineFilter();
     setupEventListeners();
 }
 
-// settings[TRANSLATED] [TRANSLATED]server
+// Setup event listeners
 function setupEventListeners() {
-    // tablesingleSubmit
+    // Form submission
     document.getElementById('taskForm').addEventListener('submit', function(e) {
         e.preventDefault();
         saveTask();
     });
-    
-    // [TRANSLATED] [TRANSLATED]close
+
+    // Modal close on outside click
     window.addEventListener('click', function(e) {
         const taskModal = document.getElementById('taskModal');
         const detailModal = document.getElementById('taskDetailModal');
-        
+
         if (e.target === taskModal) {
             closeTaskModal();
         }
@@ -43,556 +49,730 @@ function setupEventListeners() {
     });
 }
 
-// loadMachine [TRANSLATED]table
+// Load machines from server
 async function loadMachines() {
     try {
         const response = await apiGet('/api/machines');
-        machines = response.data || [];
+        machinesList = response.data || [];
     } catch (error) {
-        console.error('loadMachine[TRANSLATED]tableFailed:', error);
-        machines = [];
+        console.error('Failed to load machines:', error);
+        showNotification('Failed to load machines', 'error');
     }
 }
 
-// [TRANSLATED] [TRANSLATED]MachineFilter
-function populateMachineFilter() {
-    const machineFilter = document.getElementById('machineFilter');
-    const targetMachineSelect = document.getElementById('targetMachine');
-    
-    // Clear[TRANSLATED] [TRANSLATED]options
-    machineFilter.innerHTML = '<option value=>allMachine</option>';
-    targetMachineSelect.innerHTML = '<option value=>[TRANSLATED]availableMachine</option>';
-    
-    // [TRANSLATED] [TRANSLATED]Machineoptions
-    machines.forEach(machine => {
-        const option1 = document.createElement('option');
-        option1.value = machine.name;
-        option1.textContent = `${machine.name} (${machine.status})`;
-        machineFilter.appendChild(option1);
-        
-        const option2 = document.createElement('option');
-        option2.value = machine.name;
-        option2.textContent = `${machine.name} (${machine.ip_address})`;
-        targetMachineSelect.appendChild(option2);
-    });
-}
-
-// RefreshTask [TRANSLATED]table
-async function refreshTasks() {
+// Load available subtasks from server
+async function loadAvailableSubtasks() {
     try {
-        showLoading(document.querySelector('.task-table-container'));
-        const response = await apiGet('/api/tasks');
-        tasks = response.data || [];
-        filterTasks();
+        const response = await apiGet('/api/subtasks');
+        availableSubtasks = response.data || [];
+        console.log('Loaded available subtasks:', availableSubtasks);
     } catch (error) {
-        console.error('RefreshTask[TRANSLATED]tableFailed:', error);
-        showNotification('RefreshFailed', error.message, 'error');
-    } finally {
-        hideLoading(document.querySelector('.task-table-container'));
+        console.error('Failed to load available subtasks:', error);
+        showNotification('Failed to load available subtasks', 'error');
     }
 }
 
-// [TRANSLATED] [TRANSLATED]Task
-function filterTasks() {
-    const statusFilter = document.getElementById('statusFilter').value;
-    const machineFilter = document.getElementById('machineFilter').value;
-    const searchInput = document.getElementById('searchInput').value.toLowerCase();
-    
-    filteredTasks = tasks.filter(task => {
-        const statusMatch = !statusFilter || task.status === statusFilter;
-        const machineMatch = !machineFilter || task.target_machine === machineFilter;
-        const searchMatch = !searchInput || 
-            task.name.toLowerCase().includes(searchInput) ||
-            task.command.toLowerCase().includes(searchInput);
-        
-        return statusMatch && machineMatch && searchMatch;
-    });
-    
-    currentPage = 1;
-    displayTasks();
-    updatePagination();
-}
-
-// showTask [TRANSLATED]table
-function displayTasks() {
-    const tbody = document.getElementById('taskTableBody');
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentTasks = filteredTasks.slice(startIndex, endIndex);
-    
-    if (currentTasks.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan=8 style=text-align: center; padding: 40px; color: #6c757d;>
-                    ${filteredTasks.length === 0 ? 'NoTask' : 'current[TRANSLATED]data'}
-                </td>
-            </tr>
-        `;
+// Add a new subtask row
+function addSubtask() {
+    const subtasksList = document.getElementById('subtasksList');
+    if (!subtasksList) {
+        console.error('Could not find subtasksList element');
         return;
     }
     
-    const html = currentTasks.map(task => `
-        <tr>
-            <td>${task.id}</td>
-            <td>${escapeHtml(task.name)}</td>
-            <td class=command-cell title=${escapeHtml(task.command)}>${escapeHtml(task.command)}</td>
-            <td>${task.target_machine || '[TRANSLATED]Machine'}</td>
-            <td>${getStatusBadge(task.status)}</td>
-            <td>${formatDateTime(task.schedule_time) || (task.cron_expression ? `Cron: ${task.cron_expression}` : 'Execute Now')}</td>
-            <td>${formatDateTime(task.created_at)}</td>
-            <td>
-                <div class=action-buttons>
-                    <button class=btn btn-sm btn-outline onclick=viewTaskDetail(${task.id}) title=viewdetails>
-                        <i class=fas fa-eye></i>
-                    </button>
-                    <button class=btn btn-sm btn-secondary onclick=editTask(${task.id}) title=Edit>
-                        <i class=fas fa-edit></i>
-                    </button>
-                    ${task.status === 'running' || task.status === 'pending' ? `
-                    <button class=btn btn-sm btn-warning onclick=cancelTask(${task.id}) title=Cancel>
-                        <i class=fas fa-stop></i>
-                    </button>
-                    ` : ''}
-                    <button class=btn btn-sm btn-danger onclick=deleteTask(${task.id}) title=Delete>
-                        <i class=fas fa-trash></i>
-                    </button>
+    const subtaskIndex = subtasksList.children.length;
+
+    const subtaskRow = document.createElement('div');
+    subtaskRow.className = 'subtask-row';
+    subtaskRow.innerHTML = `
+        <div class="subtask-header">
+            <h5>Subtask ${subtaskIndex + 1}</h5>
+            <button type="button" class="btn btn-small btn-danger" onclick="removeSubtask(this)">
+                <i class="fas fa-trash"></i> Remove
+            </button>
+        </div>
+        <div class="subtask-content">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Subtask Type <span class="required">*</span></label>
+                    <select class="subtask-name" onchange="updateSubtaskDescription(this)" required>
+                        <option value="">Select subtask...</option>
+                        ${availableSubtasks.map(subtask =>
+                            `<option value="${subtask.name}">${subtask.name}</option>`
+                        ).join('')}
+                    </select>
                 </div>
-            </td>
-        </tr>
-    `).join('');
-    
-    tbody.innerHTML = html;
+                <div class="form-group">
+                    <label>Target Machines <span class="required">*</span></label>
+                    <div class="machine-selection">
+                        <div class="machine-option">
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="all-machines-checkbox" onchange="toggleAllMachines(this)">
+                                <span>All Machines</span>
+                            </label>
+                        </div>
+                        ${machinesList.map(machine =>
+                            `<div class="machine-option">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" class="machine-checkbox" value="${machine.name}" onchange="updateMachineSelection(this)">
+                                    <span>${machine.name} (${machine.ip_address})</span>
+                                </label>
+                            </div>`
+                        ).join('')}
+                    </div>
+                </div>
+            </div>
+            <div class="subtask-description">
+                <small class="description-text">Select a subtask to see its description</small>
+            </div>
+        </div>
+    `;
+
+    subtasksList.appendChild(subtaskRow);
+    updateSubtaskNumbers();
 }
 
-// Update Pagination
-function updatePagination() {
-    const paginationContainer = document.getElementById('pagination');
-    const totalItems = filteredTasks.length;
+// Toggle all machines selection
+function toggleAllMachines(checkbox) {
+    if (!checkbox) return;
     
-    createPagination(totalItems, currentPage, itemsPerPage, paginationContainer, 'goToPage');
+    const subtaskRow = checkbox.closest('.subtask-row');
+    if (!subtaskRow) return;
+    
+    const machineCheckboxes = subtaskRow.querySelectorAll('.machine-checkbox');
+
+    machineCheckboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
 }
 
-// [TRANSLATED]to[TRANSLATED] [TRANSLATED]
-function goToPage(page) {
-    currentPage = page;
-    displayTasks();
-    updatePagination();
-}
+// Update machine selection when individual checkboxes change
+function updateMachineSelection(checkbox) {
+    if (!checkbox) return;
+    
+    const subtaskRow = checkbox.closest('.subtask-row');
+    if (!subtaskRow) return;
+    
+    const allMachinesCheckbox = subtaskRow.querySelector('.all-machines-checkbox');
+    const machineCheckboxes = subtaskRow.querySelectorAll('.machine-checkbox');
+    const checkedBoxes = subtaskRow.querySelectorAll('.machine-checkbox:checked');
 
-// openTask[TRANSLATED] [TRANSLATED]
-function openTaskModal(taskData = null) {
-    const modal = document.getElementById('taskModal');
-    const form = document.getElementById('taskForm');
-    const title = document.getElementById('modalTitle');
-    
-    clearForm(form);
-    
-    if (taskData) {
-        title.textContent = 'EditTask';
-        setFormData(form, taskData);
-        
-        // set schedule type
-        if (taskData.cron_expression) {
-            document.getElementById('scheduleType').value = 'cron';
-        } else if (taskData.schedule_time) {
-            document.getElementById('scheduleType').value = 'scheduled';
-        } else {
-            document.getElementById('scheduleType').value = 'immediate';
-        }
-        
-        toggleScheduleOptions();
+    if (!allMachinesCheckbox) return;
+
+    // Update "All Machines" checkbox state
+    if (checkedBoxes.length === machineCheckboxes.length) {
+        allMachinesCheckbox.checked = true;
+        allMachinesCheckbox.indeterminate = false;
+    } else if (checkedBoxes.length === 0) {
+        allMachinesCheckbox.checked = false;
+        allMachinesCheckbox.indeterminate = false;
     } else {
-        title.textContent = 'Create Task';
+        allMachinesCheckbox.checked = false;
+        allMachinesCheckbox.indeterminate = true;
     }
+}
+
+// Remove a subtask row
+function removeSubtask(button) {
+    if (!button) return;
     
+    const subtaskRow = button.closest('.subtask-row');
+    if (subtaskRow) {
+        subtaskRow.remove();
+        updateSubtaskNumbers();
+    }
+}
+
+// Update subtask numbers after add/remove
+function updateSubtaskNumbers() {
+    const subtaskRows = document.querySelectorAll('.subtask-row');
+    subtaskRows.forEach((row, index) => {
+        const header = row.querySelector('.subtask-header h5');
+        if (header) {
+            header.textContent = `Subtask ${index + 1}`;
+        }
+
+        // Only try to update order input if it exists
+        const orderInput = row.querySelector('.subtask-order');
+        if (orderInput) {
+            if (orderInput.value == index + 1 || orderInput.value == index) {
+                orderInput.value = index;
+            }
+        }
+    });
+}
+
+// Update subtask description when type is selected
+function updateSubtaskDescription(selectElement) {
+    if (!selectElement) return;
+    
+    const subtaskName = selectElement.value;
+    const subtaskRow = selectElement.closest('.subtask-row');
+    
+    if (!subtaskRow) return;
+    
+    const descriptionDiv = subtaskRow.querySelector('.subtask-description');
+    
+    if (!descriptionDiv) return;
+
+    if (subtaskName) {
+        const subtask = availableSubtasks.find(s => s.name === subtaskName);
+        if (subtask) {
+            descriptionDiv.innerHTML = `
+                <small class="help-text">
+                    <strong>${subtask.name}:</strong> ${subtask.description}
+                </small>
+            `;
+        }
+    } else {
+        descriptionDiv.innerHTML = '<small class="help-text">Select a subtask to see its description</small>';
+    }
+}
+
+// Open task creation modal
+function openTaskModal(taskId = null) {
+    console.log('openTaskModal called with taskId:', taskId);
+
+    const modal = document.getElementById('taskModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const form = document.getElementById('taskForm');
+
+    // Reset form
+    form.reset();
+    document.getElementById('taskId').value = '';
+
+    // Clear subtasks
+    const subtasksList = document.getElementById('subtasksList');
+    subtasksList.innerHTML = '';
+
+    if (taskId) {
+        modalTitle.textContent = 'Edit Task';
+        loadTaskForEdit(taskId);
+    } else {
+        modalTitle.textContent = 'Create Task';
+        // Add initial subtask for new tasks
+        addSubtask();
+    }
+
     modal.style.display = 'block';
 }
 
-// closeTask[TRANSLATED] [TRANSLATED]
+// Close task modal
 function closeTaskModal() {
-    const modal = document.getElementById('taskModal');
-    modal.style.display = 'none';
+    document.getElementById('taskModal').style.display = 'none';
 }
 
-// toggle[TRANSLATED] [TRANSLATED]options
+// Toggle schedule options
 function toggleScheduleOptions() {
     const scheduleType = document.getElementById('scheduleType').value;
     const scheduleTimeGroup = document.getElementById('scheduleTimeGroup');
     const cronGroup = document.getElementById('cronGroup');
-    
+
     scheduleTimeGroup.style.display = scheduleType === 'scheduled' ? 'block' : 'none';
     cronGroup.style.display = scheduleType === 'cron' ? 'block' : 'none';
 }
 
-// SaveTask
+// Save task (create or update)
 async function saveTask() {
-    const form = document.getElementById('taskForm');
-    
-    if (!validateForm(form)) {
-        showNotification('validateFailed', 'please[TRANSLATED]Required field', 'error');
-        return;
-    }
-    
     try {
-        const formData = getFormData(form);
         const taskData = {
-            name: formData.taskName,
-            command: formData.taskCommand,
-            target_machine: formData.targetMachine || null,
-            max_retries: parseInt(formData.maxRetries) || 3
+            name: document.getElementById('taskName').value.trim()
         };
-        
-        // Process[TRANSLATED] [TRANSLATED]settings
-        switch (formData.scheduleType) {
-            case 'scheduled':
-                if (formData.scheduleTime) {
-                    taskData.schedule_time = formData.scheduleTime;
-                }
-                break;
-            case 'cron':
-                if (formData.cronExpression) {
-                    taskData.cron_expression = formData.cronExpression;
-                }
-                break;
+
+        if (!taskData.name) {
+            showNotification('Task name is required', 'error');
+            return;
         }
-        
-        const taskId = formData.taskId;
+
+        // Handle schedule
+        const scheduleType = document.getElementById('scheduleType').value;
+        if (scheduleType === 'scheduled') {
+            const scheduleTime = document.getElementById('scheduleTime').value;
+            if (scheduleTime) {
+                taskData.schedule_time = scheduleTime;
+            }
+        } else if (scheduleType === 'cron') {
+            const cronExpression = document.getElementById('cronExpression').value.trim();
+            if (cronExpression) {
+                taskData.cron_expression = cronExpression;
+            }
+        }
+
+        // Collect subtasks
+        const subtasks = collectSubtasks();
+        if (subtasks.length === 0) {
+            showNotification('At least one subtask is required', 'error');
+            return;
+        }
+        taskData.subtasks = subtasks;
+
+        // Submit to server
+        const taskId = document.getElementById('taskId').value;
         let response;
-        
+
         if (taskId) {
-            // Update task
             response = await apiPut(`/api/tasks/${taskId}`, taskData);
         } else {
-            // Create Task
             response = await apiPost('/api/tasks', taskData);
         }
-        
-        showNotification(
-            taskId ? 'Task Updated' : 'Task Created', 
-            `Task ${taskData.name} ${taskId ? 'update' : 'create'}Success`, 
-            'success'
-        );
-        
-        closeTaskModal();
-        refreshTasks();
-        
+
+        if (response.success) {
+            showNotification(taskId ? 'Task updated successfully' : 'Task created successfully', 'success');
+            closeTaskModal();
+            await refreshTasks();
+        } else {
+            showNotification(response.error || 'Failed to save task', 'error');
+        }
+
     } catch (error) {
-        console.error('SaveTaskFailed:', error);
-        showNotification('SaveFailed', error.message, 'error');
+        console.error('Failed to save task:', error);
+        showNotification('Failed to save task', 'error');
     }
 }
 
-// EditTask
-function editTask(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-        openTaskModal(task);
+// Collect subtasks from form
+function collectSubtasks() {
+    const subtaskRows = document.querySelectorAll('.subtask-row');
+    const subtasks = [];
+
+    subtaskRows.forEach((row, index) => {
+        const name = row.querySelector('.subtask-name').value;
+        const checkedMachines = Array.from(row.querySelectorAll('.machine-checkbox:checked')).map(cb => cb.value);
+
+        if (name && checkedMachines.length > 0) {
+            // Create a subtask for each selected machine
+            checkedMachines.forEach((machineName, machineIndex) => {
+                subtasks.push({
+                    name: name,
+                    target_machine: machineName,
+                    order: index,
+                    args: [],
+                    kwargs: {},
+                    timeout: 300
+                });
+            });
+        }
+    });
+
+    return subtasks;
+}
+
+// Load tasks from server
+async function refreshTasks() {
+    try {
+        const response = await apiGet('/api/tasks');
+        tasksList = response.data || [];
+        filterTasks();
+        renderTasks();
+    } catch (error) {
+        console.error('Failed to load tasks:', error);
+        showNotification('Failed to load tasks', 'error');
     }
+}
+
+// Filter tasks based on current filters
+function filterTasks() {
+    filteredTasks = tasksList;
+    // Add filtering logic here if needed
+    tasksCurrentPage = 1;
+}
+
+// Render tasks table
+function renderTasks() {
+    const tasksTableBody = document.getElementById('taskTableBody');
+    if (!tasksTableBody) {
+        console.error('Could not find taskTableBody element');
+        return;
+    }
+
+    const start = (tasksCurrentPage - 1) * tasksItemsPerPage;
+    const end = start + tasksItemsPerPage;
+    const paginatedTasks = filteredTasks.slice(start, end);
+
+    tasksTableBody.innerHTML = '';
+
+    if (paginatedTasks.length === 0) {
+        tasksTableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center">No tasks found</td>
+            </tr>
+        `;
+        return;
+    }
+
+    paginatedTasks.forEach(task => {
+        const row = document.createElement('tr');
+
+        // Get subtask details
+        const subtaskCount = task.subtasks ? task.subtasks.length : 0;
+        const subtaskDetails = subtaskCount > 0
+            ? `${subtaskCount} subtask${subtaskCount > 1 ? 's' : ''}`
+            : 'No subtasks';
+
+        // Get target machines
+        const targetMachines = task.subtasks && task.subtasks.length > 0
+            ? [...new Set(task.subtasks.map(st => st.target_machine))].join(', ')
+            : task.target_machine || 'Not specified';
+
+        row.innerHTML = `
+            <td>${task.id}</td>
+            <td>${task.name}</td>
+            <td>${subtaskDetails}</td>
+            <td>${targetMachines}</td>
+            <td><span class="status-badge ${task.status}">${task.status}</span></td>
+            <td>${task.schedule_time ? new Date(task.schedule_time).toLocaleString() : task.cron_expression || 'Immediate'}</td>
+            <td>${task.created_at ? new Date(task.created_at).toLocaleString() : '-'}</td>
+            <td class="task-actions">
+                <button class="btn btn-small btn-primary" onclick="viewTaskDetails(${task.id})" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-small btn-secondary" onclick="openTaskModal(${task.id})" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-small btn-danger" onclick="deleteTask(${task.id})" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+
+        tasksTableBody.appendChild(row);
+    });
+
+    updatePagination();
+}
+
+// Update pagination
+function updatePagination() {
+    const totalPages = Math.ceil(filteredTasks.length / tasksItemsPerPage);
+    const pagination = document.getElementById('pagination');
+
+    pagination.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    // Previous button
+    const prevButton = document.createElement('button');
+    prevButton.textContent = 'Previous';
+    prevButton.disabled = tasksCurrentPage === 1;
+    prevButton.onclick = () => {
+        if (tasksCurrentPage > 1) {
+            tasksCurrentPage--;
+            renderTasks();
+        }
+    };
+    pagination.appendChild(prevButton);
+
+    // Page numbers
+    for (let i = 1; i <= totalPages; i++) {
+        const pageButton = document.createElement('button');
+        pageButton.textContent = i;
+        pageButton.className = i === tasksCurrentPage ? 'active' : '';
+        pageButton.onclick = () => {
+            tasksCurrentPage = i;
+            renderTasks();
+        };
+        pagination.appendChild(pageButton);
+    }
+
+    // Next button
+    const nextButton = document.createElement('button');
+    nextButton.textContent = 'Next';
+    nextButton.disabled = tasksCurrentPage === totalPages;
+    nextButton.onclick = () => {
+        if (tasksCurrentPage < totalPages) {
+            tasksCurrentPage++;
+            renderTasks();
+        }
+    };
+    pagination.appendChild(nextButton);
 }
 
 // Delete task
-function deleteTask(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    confirmAction(`确认删除任务 ${task.name} 吗？`, async () => {
-        try {
-            await apiDelete(`/api/tasks/${taskId}`);
-            showNotification('Task Deleted', `Task ${task.name} deleted`, 'success');
-            refreshTasks();
-        } catch (error) {
-            console.error('Delete taskFailed:', error);
-            showNotification('DeleteFailed', error.message, 'error');
-        }
-    });
-}
+async function deleteTask(taskId) {
+    if (!confirm('Are you sure you want to delete this task?')) return;
 
-// Cancel task
-function cancelTask(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    confirmAction(`确认取消任务 ${task.name} 吗？`, async () => {
-        try {
-            await apiPost(`/api/tasks/${taskId}/cancel`, {});
-            showNotification('Task Cancelled', `Task ${task.name} cancelled`, 'success');
-            refreshTasks();
-        } catch (error) {
-            console.error('Cancel taskFailed:', error);
-            showNotification('CancelFailed', error.message, 'error');
-        }
-    });
-}
-
-// viewTaskdetails
-async function viewTaskDetail(taskId) {
     try {
-        const response = await apiGet(`/api/tasks/${taskId}`);
-        const task = response.data;
-        
-        // Get execute[TRANSLATED]
-        const execResponse = await apiGet(`/api/tasks/${taskId}/executions`);
-        const executions = execResponse.data || [];
-        
-        showTaskDetailModal(task, executions);
-        
+        const response = await apiDelete(`/api/tasks/${taskId}`);
+
+        if (response.success) {
+            showNotification('Task deleted successfully', 'success');
+            await refreshTasks();
+        } else {
+            showNotification(response.error || 'Failed to delete task', 'error');
+        }
     } catch (error) {
-        console.error('Get taskdetailsFailed:', error);
-        showNotification('Get detailsFailed', error.message, 'error');
+        console.error('Failed to delete task:', error);
+        showNotification('Failed to delete task', 'error');
     }
 }
 
-// showTaskdetails[TRANSLATED] [TRANSLATED]
-function showTaskDetailModal(task, executions) {
+// View task details
+async function viewTaskDetails(taskId) {
+    try {
+        const response = await apiGet(`/api/tasks/${taskId}`);
+
+        if (response.success) {
+            const task = response.data;
+            displayTaskDetails(task);
+        } else {
+            showNotification(response.error || 'Failed to load task details', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to load task details:', error);
+        showNotification('Failed to load task details', 'error');
+    }
+}
+
+// Display task details in modal
+function displayTaskDetails(task) {
     const modal = document.getElementById('taskDetailModal');
     const content = document.getElementById('taskDetailContent');
-    
-    const html = `
-        <div class=task-detail>
-            <div class=detail-section>
-                <h4>basicInfo</h4>
-                <div class=detail-grid>
-                    <div class=detail-item>
-                        <label>TaskID:</label>
-                        <span>${task.id}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>Task Name:</label>
-                        <span>${escapeHtml(task.name)}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>Status:</label>
-                        <span>${getStatusBadge(task.status)}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>Target Machine:</label>
-                        <span>${task.target_machine || '[TRANSLATED]availableMachine'}</span>
-                    </div>
+
+    let detailsHtml = `
+        <div class="task-detail-section">
+            <h4>Basic Information</h4>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <label>Task ID:</label>
+                    <span>${task.id}</span>
                 </div>
-            </div>
-            
-            <div class=detail-section>
-                <h4>Command</h4>
-                <div class=command-display>${escapeHtml(task.command)}</div>
-            </div>
-            
-            <div class=detail-section>
-                <h4>[TRANSLATED]settings</h4>
-                <div class=detail-grid>
-                    <div class=detail-item>
-                        <label>schedule time:</label>
-                        <span>${formatDateTime(task.schedule_time) || '-'}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>Crontable[TRANSLATED]:</label>
-                        <span>${task.cron_expression || '-'}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>maximumRetry Count:</label>
-                        <span>${task.max_retries}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>currentRetry Count:</label>
-                        <span>${task.retry_count}</span>
-                    </div>
+                <div class="detail-item">
+                    <label>Name:</label>
+                    <span>${task.name}</span>
                 </div>
-            </div>
-            
-            <div class=detail-section>
-                <h4>timeInfo</h4>
-                <div class=detail-grid>
-                    <div class=detail-item>
-                        <label>Created time:</label>
-                        <span>${formatDateTime(task.created_at)}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>Start time:</label>
-                        <span>${formatDateTime(task.started_at)}</span>
-                    </div>
-                    <div class=detail-item>
-                        <label>complete time:</label>
-                        <span>${formatDateTime(task.completed_at)}</span>
-                    </div>
+                <div class="detail-item">
+                    <label>Status:</label>
+                    <span class="status-badge ${task.status}">${task.status}</span>
                 </div>
-            </div>
-            
-            ${task.result ? `
-            <div class=detail-section>
-                <h4>executeresult</h4>
-                <div class=result-display success>${escapeHtml(task.result)}</div>
-            </div>
-            ` : ''}
-            
-            ${task.error_message ? `
-            <div class=detail-section>
-                <h4>ErrorInfo</h4>
-                <div class=result-display error>${escapeHtml(task.error_message)}</div>
-            </div>
-            ` : ''}
-            
-            <div class=detail-section>
-                <h4>execute[TRANSLATED]</h4>
-                ${executions.length > 0 ? `
-                    <div class=execution-list>
-                        ${executions.map(exec => `
-                            <div class=execution-item>
-                                <div class=execution-header>
-                                    <span class=execution-machine>${exec.machine_name}</span>
-                                    <span class=execution-status>${getStatusBadge(exec.status)}</span>
-                                    <span class=execution-time>${formatDateTime(exec.started_at)}</span>
-                                </div>
-                                ${exec.output ? `<div class=execution-output>${escapeHtml(exec.output)}</div>` : ''}
-                                ${exec.error_output ? `<div class=execution-error>${escapeHtml(exec.error_output)}</div>` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '<p style=color: #6c757d;>Noexecute[TRANSLATED]</p>'}
+                <div class="detail-item">
+                    <label>Created:</label>
+                    <span>${task.created_at ? new Date(task.created_at).toLocaleString() : '-'}</span>
+                </div>
             </div>
         </div>
     `;
-    
-    content.innerHTML = html;
+
+    if (task.subtasks && task.subtasks.length > 0) {
+        detailsHtml += `
+            <div class="task-detail-section">
+                <h4>Subtasks (${task.subtasks.length})</h4>
+                <div class="subtasks-detail">
+        `;
+
+        task.subtasks.forEach((subtask, index) => {
+            detailsHtml += `
+                <div class="subtask-detail-item">
+                    <div class="subtask-detail-header">
+                        <h5>Subtask ${index + 1}: ${subtask.name}</h5>
+                        <span class="subtask-order">Order: ${subtask.order}</span>
+                    </div>
+                    <div class="subtask-detail-content">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>Target Machine:</label>
+                                <span>${subtask.target_machine}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Timeout:</label>
+                                <span>${subtask.timeout || 300}s</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Arguments:</label>
+                                <span><code>${JSON.stringify(subtask.args || [])}</code></span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Keyword Arguments:</label>
+                                <span><code>${JSON.stringify(subtask.kwargs || {})}</code></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        detailsHtml += `
+                </div>
+            </div>
+        `;
+    } else if (task.command) {
+        detailsHtml += `
+            <div class="task-detail-section">
+                <h4>Command</h4>
+                <div class="command-detail">
+                    <code>${task.command}</code>
+                </div>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <label>Target Machine:</label>
+                        <span>${task.target_machine || 'Any available'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (task.schedule_time || task.cron_expression) {
+        detailsHtml += `
+            <div class="task-detail-section">
+                <h4>Schedule</h4>
+                <div class="detail-grid">
+                    ${task.schedule_time ? `
+                        <div class="detail-item">
+                            <label>Scheduled Time:</label>
+                            <span>${new Date(task.schedule_time).toLocaleString()}</span>
+                        </div>
+                    ` : ''}
+                    ${task.cron_expression ? `
+                        <div class="detail-item">
+                            <label>Cron Expression:</label>
+                            <span><code>${task.cron_expression}</code></span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    content.innerHTML = detailsHtml;
     modal.style.display = 'block';
 }
 
-// closeTaskdetails[TRANSLATED] [TRANSLATED]
+// Close task detail modal
 function closeTaskDetailModal() {
-    const modal = document.getElementById('taskDetailModal');
-    modal.style.display = 'none';
+    document.getElementById('taskDetailModal').style.display = 'none';
 }
 
-// HTMLescape[TRANSLATED] [TRANSLATED]
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// Load task data for editing
+async function loadTaskForEdit(taskId) {
+    try {
+        const response = await apiGet(`/api/tasks/${taskId}`);
+        if (response.success) {
+            const task = response.data;
+
+            // Set task ID for update
+            document.getElementById('taskId').value = task.id;
+
+            // Set basic fields
+            document.getElementById('taskName').value = task.name;
+
+            // Load subtasks (always subtask-based now)
+            if (task.subtasks && task.subtasks.length > 0) {
+                // Group subtasks by name and order to handle multiple machines per subtask
+                const subtaskGroups = {};
+                task.subtasks.forEach(subtask => {
+                    const key = `${subtask.name}_${subtask.order}`;
+                    if (!subtaskGroups[key]) {
+                        subtaskGroups[key] = {
+                            name: subtask.name,
+                            order: subtask.order,
+                            machines: []
+                        };
+                    }
+                    subtaskGroups[key].machines.push(subtask.target_machine);
+                });
+
+                // Create subtask rows for each group
+                Object.values(subtaskGroups).forEach(group => {
+                    addSubtask();
+                    const subtaskRows = document.querySelectorAll('.subtask-row');
+                    const subtaskRow = subtaskRows[subtaskRows.length - 1];
+
+                    // Set subtask name
+                    subtaskRow.querySelector('.subtask-name').value = group.name;
+
+                    // Select the appropriate machines
+                    group.machines.forEach(machineName => {
+                        const machineCheckbox = subtaskRow.querySelector(`.machine-checkbox[value="${machineName}"]`);
+                        if (machineCheckbox) {
+                            machineCheckbox.checked = true;
+                        }
+                    });
+
+                    // Update machine selection state
+                    updateMachineSelection(subtaskRow.querySelector('.machine-checkbox'));
+
+                    // Update description
+                    updateSubtaskDescription(subtaskRow.querySelector('.subtask-name'));
+                });
+            }
+
+            // Set schedule information
+            if (task.cron_expression) {
+                document.getElementById('scheduleType').value = 'cron';
+                document.getElementById('cronExpression').value = task.cron_expression;
+            } else if (task.schedule_time) {
+                document.getElementById('scheduleType').value = 'scheduled';
+                document.getElementById('scheduleTime').value = task.schedule_time;
+            } else {
+                document.getElementById('scheduleType').value = 'immediate';
+            }
+
+            toggleScheduleOptions();
+        } else {
+            showNotification(response.error || 'Failed to load task data', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to load task for edit:', error);
+        showNotification('Failed to load task data', 'error');
+    }
 }
 
-// [TRANSLATED]CSS[TRANSLATED] [TRANSLATED]
-const style = document.createElement('style');
-style.textContent = `
-    .btn-sm {
-        padding: 5px 10px;
-        font-size: 0.8rem;
-    }
-    
-    .action-buttons {
-        display: flex;
-        gap: 5px;
-    }
-    
-    .detail-section {
-        margin-bottom: 25px;
-        padding-bottom: 20px;
-        border-bottom: 1px solid #e1e8ed;
-    }
-    
-    .detail-section:last-child {
-        border-bottom: none;
-    }
-    
-    .detail-section h4 {
-        margin-bottom: 15px;
-        color: #2c3e50;
-        font-weight: 600;
-    }
-    
-    .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 15px;
-    }
-    
-    .detail-item {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
-    
-    .detail-item label {
-        font-weight: 600;
-        color: #6c757d;
-        font-size: 0.9rem;
-    }
-    
-    .detail-item span {
-        color: #2c3e50;
-    }
-    
-    .command-display {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 6px;
-        font-family: 'Courier New', monospace;
-        border-left: 4px solid #667eea;
-    }
-    
-    .result-display {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 6px;
-        font-family: 'Courier New', monospace;
-        white-space: pre-wrap;
-        max-height: 200px;
-        overflow-y: auto;
-    }
-    
-    .result-display.success {
-        border-left: 4px solid #28a745;
-    }
-    
-    .result-display.error {
-        border-left: 4px solid #dc3545;
-    }
-    
-    .execution-list {
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    
-    .execution-item {
-        background-color: #f8f9fa;
-        border-radius: 6px;
-        padding: 15px;
-        margin-bottom: 10px;
-    }
-    
-    .execution-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-    
-    .execution-machine {
-        font-weight: 600;
-        color: #2c3e50;
-    }
-    
-    .execution-time {
-        font-size: 0.9rem;
-        color: #6c757d;
-    }
-    
-    .execution-output,
-    .execution-error {
-        font-family: 'Courier New', monospace;
-        font-size: 0.85rem;
-        white-space: pre-wrap;
-        padding: 10px;
-        border-radius: 4px;
-        margin-top: 10px;
-    }
-    
-    .execution-output {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    
-    .execution-error {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-`;
-document.head.appendChild(style);
+// Populate machine filter dropdown
+function populateMachineFilter() {
+    // Implementation for machine filter if needed
+}
+
+// Utility functions for API calls
+async function apiGet(url) {
+    const response = await fetch(url);
+    return await response.json();
+}
+
+async function apiPost(url, data) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+}
+
+async function apiPut(url, data) {
+    const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+}
+
+async function apiDelete(url) {
+    const response = await fetch(url, {
+        method: 'DELETE'
+    });
+    return await response.json();
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    const notifications = document.getElementById('notifications');
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <span>${message}</span>
+        <button class="close-notification" onclick="this.parentElement.remove()">×</button>
+    `;
+
+    notifications.appendChild(notification);
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.remove();
+        }
+    }, 5000);
+}

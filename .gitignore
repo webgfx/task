@@ -170,11 +170,8 @@ run/
 temp/
 tmp/
 
-# Test files and folders
-tests/
-test/
-**/tests/
-**/test/
+# Ignore temporary and intermediate files
+ignore/
 
 # VS Code
 .vscode/settings.json

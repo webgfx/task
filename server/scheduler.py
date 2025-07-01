@@ -101,7 +101,7 @@ class TaskScheduler:
             logger.error(f"Cancel task scheduleFailed {task_id}: {e}")
     
     def _execute_scheduled_task(self, task_id):
-        """Execute scheduled task"""
+        """Execute scheduled task (supports subtasks)"""
         try:
             task = self.database.get_task(task_id)
             if not task:
@@ -112,17 +112,77 @@ class TaskScheduler:
                 logger.warning(f"Task status is not pending execution: {task.name} ({task.status})")
                 return
             
-            # Find available machines
-            available_machine = self._find_available_machine(task.target_machine)
-            if not available_machine:
-                logger.warning(f"No available machine to execute task: {task.name}")
-                return
-            
-            # Distribute task to machine
-            self._dispatch_task_to_machine(task, available_machine)
+            # Check if this is a subtask-based task
+            if task.subtasks:
+                self._execute_subtask_task(task)
+            else:
+                # Legacy single-machine task
+                available_machine = self._find_available_machine(task.target_machine)
+                if not available_machine:
+                    logger.warning(f"No available machine to execute task: {task.name}")
+                    return
+                
+                self._dispatch_task_to_machine(task, available_machine)
             
         except Exception as e:
             logger.error(f"Failed to execute scheduled task {task_id}: {e}")
+    
+    def _execute_subtask_task(self, task):
+        """Execute a subtask-based task on multiple machines"""
+        try:
+            # Get all unique target machines from subtasks
+            target_machines = task.get_all_target_machines()
+            
+            if not target_machines:
+                logger.warning(f"No target machines found for task: {task.name}")
+                return
+            
+            # Check if all required machines are available
+            available_machines = {}
+            for machine_name in target_machines:
+                machine = self._find_available_machine(machine_name)
+                if not machine:
+                    logger.warning(f"Machine {machine_name} not available for task {task.name}")
+                    return
+                available_machines[machine_name] = machine
+            
+            # All required machines are available, start the task
+            logger.info(f"Starting subtask-based task {task.name} on {len(available_machines)} machines")
+            
+            # Update task status
+            task.status = TaskStatus.RUNNING
+            task.started_at = datetime.now()
+            self.database.update_task(task)
+            
+            # Dispatch to each machine
+            for machine_name, machine in available_machines.items():
+                # Get subtasks for this machine
+                machine_subtasks = task.get_subtasks_for_machine(machine_name)
+                
+                if machine_subtasks:
+                    # Update machine status
+                    self.database.update_machine_heartbeat_by_name(machine.name, MachineStatus.BUSY)
+                    
+                    # Prepare task data with only relevant subtasks
+                    task_data = {
+                        'task_id': task.id,
+                        'id': task.id,
+                        'name': task.name,
+                        'machine_name': machine.name,
+                        'subtasks': [subtask.to_dict() for subtask in machine_subtasks]
+                    }
+                    
+                    # Send task via WebSocket
+                    self.socketio.emit('task_dispatch', task_data, room=f"machine_{machine.name}")
+                    
+                    logger.info(f"Dispatched {len(machine_subtasks)} subtasks to machine {machine.name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to execute subtask task {task.name}: {e}")
+            # Reset task status
+            task.status = TaskStatus.PENDING
+            task.started_at = None
+            self.database.update_task(task)
     
     def _check_pending_tasks(self):
         """Check tasks pending execution"""
@@ -143,12 +203,16 @@ class TaskScheduler:
                     should_execute = True
                 
                 if should_execute:
-                    # Find available machines
-                    available_machine = self._find_available_machine(task.target_machine)
-                    if available_machine:
-                        self._dispatch_task_to_machine(task, available_machine)
+                    if task.subtasks:
+                        # Subtask-based task
+                        self._execute_subtask_task(task)
                     else:
-                        logger.debug(f"No available machine to execute task: {task.name}")
+                        # Legacy single-machine task
+                        available_machine = self._find_available_machine(task.target_machine)
+                        if available_machine:
+                            self._dispatch_task_to_machine(task, available_machine)
+                        else:
+                            logger.debug(f"No available machine to execute task: {task.name}")
                         
         except Exception as e:
             logger.error(f"Failed to check pending execution tasks: {e}")
@@ -176,9 +240,9 @@ class TaskScheduler:
             return None
     
     def _dispatch_task_to_machine(self, task, machine):
-        """Distribute task to specified machine"""
+        """Distribute task to specified machine (supports both legacy and subtask format)"""
         try:
-            # Update taskStatus
+            # Update task status
             task.status = TaskStatus.RUNNING
             task.started_at = datetime.now()
             self.database.update_task(task)
@@ -186,13 +250,24 @@ class TaskScheduler:
             # Update Machine Status using machine name
             self.database.update_machine_heartbeat_by_name(machine.name, MachineStatus.BUSY)
             
-            # Send task to machine
+            # Prepare task data for client
             task_data = {
                 'task_id': task.id,
+                'id': task.id,  # Add id field for compatibility
                 'name': task.name,
-                'command': task.command,
+                'command': task.command,  # Legacy support
                 'machine_name': machine.name
             }
+            
+            # Add subtasks if available
+            if task.subtasks:
+                task_data['subtasks'] = [subtask.to_dict() for subtask in task.subtasks]
+                logger.info(f"Dispatching task {task.name} with {len(task.subtasks)} subtasks to machine {machine.name}")
+            else:
+                # Legacy command-based task
+                task_data['commands'] = task.commands
+                task_data['execution_order'] = task.execution_order
+                logger.info(f"Dispatching legacy task {task.name} to machine {machine.name}")
             
             # Send task via WebSocket (using machine name for room)
             self.socketio.emit('task_dispatch', task_data, room=f"machine_{machine.name}")

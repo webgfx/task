@@ -85,7 +85,8 @@ def create_app():
             message=f"SocketIO connection established with session {request.sid}"
         )
         
-        emit('connected', {'data': 'Connection successful'})
+        # Don't emit connection successful message to avoid UI notification
+        emit('connected', {'data': ''})
     
     @socketio.on('disconnect')
     def handle_disconnect():
