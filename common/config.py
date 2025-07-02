@@ -15,8 +15,8 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     
     # Heartbeat configuration
-    HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 30))  # seconds
-    MACHINE_TIMEOUT = int(os.getenv('MACHINE_TIMEOUT', 90))  # seconds
+    HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 60))  # seconds
+    MACHINE_TIMEOUT = int(os.getenv('MACHINE_TIMEOUT', 180))  # seconds
     
     # Task execution configuration
     TASK_TIMEOUT = int(os.getenv('TASK_TIMEOUT', 3600))  # seconds
@@ -41,7 +41,7 @@ class ClientConfig:
     MACHINE_NAME = os.getenv('MACHINE_NAME', 'default-machine')
     
     # Client process configuration
-    HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 30))
+    HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 60))
     TASK_CHECK_INTERVAL = int(os.getenv('TASK_CHECK_INTERVAL', 10))
     
     # Task execution configuration

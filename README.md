@@ -1,6 +1,6 @@
 # Distributed Task Management System
 
-A distributed task management and execution system based on Flask and SQLite, supporting web interface management, multi-machine distributed execution, and real-time monitoring.
+A distributed task management and execution system based on Flask and SQLite, supporting web interface management, multi-machine distributed execution, and real-time status updates.
 
 ## ✨ Features
 
@@ -8,11 +8,10 @@ A distributed task management and execution system based on Flask and SQLite, su
 - 📋 **Task Scheduling** - Support for scheduled tasks, instant tasks, and recurring tasks
 - 🖥️ **Distributed Execution** - Multi-machine parallel task execution
 - 💾 **Data Persistence** - SQLite database storage, no additional configuration required
-- 🔄 **Real-time Monitoring** - WebSocket real-time status updates and log viewing
+- 🔄 **Real-time Status Updates** - WebSocket real-time status updates and log viewing
 - 📡 **API Interface** - Complete RESTful API support
 - 🤖 **Client Process** - Automatic registration, heartbeat, and task execution
 - 🏷️ **Tag Management** - Support for task and machine tag classification
-- 📊 **Statistics Dashboard** - System runtime status and performance monitoring
 
 ## 🛠️ Technology Stack
 
@@ -48,7 +47,7 @@ task/
 │   │   ├── index.html     # Home page
 │   │   ├── tasks.html     # Task management
 │   │   ├── machines.html  # Machine management
-│   │   └── monitor.html   # System monitoring
+│   │   └── logs.html      # Log management
 │   └── static/            # Static resources
 │       ├── css/style.css  # Style files
 │       └── js/            # JavaScript files
@@ -124,7 +123,7 @@ Open browser and visit: http://localhost:5000
 - **Home** (`/`) - System overview and quick operations
 - **Task Management** (`/tasks`) - Create, edit, and monitor tasks
 - **Machine Management** (`/machines`) - View machine status and management
-- **System Monitoring** (`/monitor`) - Real-time monitoring and performance metrics
+- **Log Management** (`/logs`) - View system logs and communication history
 
 ### Core Functions
 1. **Task Management**
@@ -138,12 +137,6 @@ Open browser and visit: http://localhost:5000
    - 💗 Real-time heartbeat monitoring
    - 📈 Machine performance and status display
    - 🏷️ Machine tag classification management
-
-3. **Monitoring Dashboard**
-   - 📊 System runtime statistics
-   - 🔄 Real-time status updates
-   - 📈 Performance metric charts
-   - 📋 Operation log recording
 
 ## 📡 API Documentation
 
@@ -182,7 +175,7 @@ DEBUG=True                   # Debug mode
 DATABASE_URL=sqlite:///tasks.db  # SQLite database file
 
 # Time interval configuration (seconds)
-HEARTBEAT_INTERVAL=30        # Heartbeat interval
+HEARTBEAT_INTERVAL=60        # Heartbeat interval
 TASK_POLL_INTERVAL=10        # Task polling interval
 TASK_TIMEOUT=300             # Task execution timeout
 

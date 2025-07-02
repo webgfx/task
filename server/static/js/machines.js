@@ -44,6 +44,9 @@ async function refreshMachines() {
     }
 }
 
+// Make refreshMachines globally available
+window.refreshMachines = refreshMachines;
+
 // Update connection statistics
 function updateConnectionStats() {
     const stats = {
@@ -95,38 +98,18 @@ function filterMachines() {
                 machine.system_summary.os?.toLowerCase().includes(searchInput) ||
                 machine.system_summary.cpu?.toLowerCase().includes(searchInput) ||
                 machine.system_summary.hostname?.toLowerCase().includes(searchInput)
-            )) ||
-            (machine.capabilities && machine.capabilities.some(cap => 
-                cap.toLowerCase().includes(searchInput)
             ))
         );
     }
     
-    // Display filtered results
-    const container = document.getElementById('machineGrid');
-    if (filteredMachines.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-search" style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
-                <h3>No Matching Clients</h3>
-                <p>No clients match your search criteria</p>
-                <button class="btn btn-primary" onclick="clearFilters()">Clear Filters</button>
-            </div>
-        `;
-    } else {
-        const html = filteredMachines.map(machine => createMachineCard(machine)).join('');
-        container.innerHTML = html;
-    }
-}
-
-// Clear all filters
-function clearFilters() {
-    document.getElementById('statusFilter').value = '';
-    document.getElementById('searchInput').value = '';
+    // Update machines array for display
+    const originalMachines = machines;
+    machines = filteredMachines;
     displayMachines();
+    machines = originalMachines;
 }
 
-// Display machine list
+// Display machines
 function displayMachines() {
     const container = document.getElementById('machineGrid');
     
@@ -152,11 +135,13 @@ function displayMachines() {
 function createMachineCard(machine) {
     const statusIcon = getStatusIcon(machine.status);
     const lastHeartbeat = machine.last_heartbeat ? formatRelativeTime(machine.last_heartbeat) : 'Never';
-    const capabilities = machine.capabilities || [];
     const systemSummary = machine.system_summary || {};
     
     // Format detailed system information
     const systemInfo = [];
+    
+    // Hostname (from machine name or system summary)
+    const hostname = machine.name || systemSummary.hostname || 'Unknown Host';
     
     // OS Information (detailed version)
     if (machine.os_info) {
@@ -229,6 +214,10 @@ function createMachineCard(machine) {
                         <span>IP Address: ${machine.ip_address}:${machine.port}</span>
                     </div>
                     <div class="info-item">
+                        <i class="fas fa-server"></i>
+                        <span>Hostname: ${hostname}</span>
+                    </div>
+                    <div class="info-item">
                         <i class="fas fa-heartbeat"></i>
                         <span>Last Heartbeat: ${lastHeartbeat}</span>
                     </div>
@@ -243,12 +232,6 @@ function createMachineCard(machine) {
                         ${info}
                     </div>
                     `).join('') : ''}
-                    ${capabilities.length > 0 ? `
-                    <div class="info-item">
-                        <i class="fas fa-cogs"></i>
-                        <span>Capabilities: ${capabilities.join(', ')}</span>
-                    </div>
-                    ` : ''}
                 </div>
                 
                 <div class="machine-actions">
@@ -257,6 +240,9 @@ function createMachineCard(machine) {
                     </button>
                     <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); viewMachineTasks('${machine.name}')" title="View Tasks">
                         <i class="fas fa-list"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); unregisterMachine('${machine.name}')" title="Unregister Client">
+                        <i class="fas fa-user-minus"></i>
                     </button>
                 </div>
             </div>
@@ -275,6 +261,17 @@ function getStatusIcon(status) {
     return iconMap[status] || '<i class="fas fa-circle text-secondary"></i>';
 }
 
+// Get machine status badge
+function getMachineStatusBadge(status) {
+    const badgeClass = {
+        'online': 'badge-success',
+        'offline': 'badge-danger',
+        'busy': 'badge-warning'
+    }[status] || 'badge-secondary';
+    
+    return `<span class="badge ${badgeClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
+}
+
 // View machine details
 async function viewMachineDetail(machineName) {
     try {
@@ -288,15 +285,13 @@ async function viewMachineDetail(machineName) {
         const tasksResponse = await apiGet('/api/tasks');
         const allTasks = tasksResponse.data || [];
         const machineTasks = allTasks.filter(task => 
-            task.target_machine === machineName || 
-            (!task.target_machine && task.status !== 'pending')
+            task.target_machines && task.target_machines.includes(machineName)
         );
         
         showMachineDetailModal(machine, machineTasks);
-        
     } catch (error) {
-        console.error('Get machine details failed:', error);
-        showNotification('Get details failed', error.message, 'error');
+        console.error('View machine detail failed:', error);
+        showNotification('Error', error.message, 'error');
     }
 }
 
@@ -305,7 +300,6 @@ function showMachineDetailModal(machine, tasks) {
     const modal = document.getElementById('machineDetailModal');
     const content = document.getElementById('machineDetailContent');
     
-    const capabilities = machine.capabilities || [];
     const onlineTasks = tasks.filter(task => task.status === 'running');
     const completedTasks = tasks.filter(task => task.status === 'completed');
     const failedTasks = tasks.filter(task => task.status === 'failed');
@@ -336,7 +330,7 @@ function showMachineDetailModal(machine, tasks) {
             `;
         }
         
-        // Memory Information (only total)
+        // Memory Information
         if (machine.memory_info) {
             const mem = machine.memory_info;
             details += `
@@ -350,7 +344,7 @@ function showMachineDetailModal(machine, tasks) {
             `;
         }
         
-        // GPU Information with model and driver version
+        // GPU Information
         if (machine.gpu_info && machine.gpu_info.length > 0) {
             details += `
                 <div class="detail-subsection">
@@ -369,7 +363,7 @@ function showMachineDetailModal(machine, tasks) {
             details += '</div>';
         }
         
-        // Operating System (detailed version)
+        // Operating System
         if (machine.os_info) {
             const os = machine.os_info;
             details += `
@@ -398,68 +392,30 @@ function showMachineDetailModal(machine, tasks) {
                         <span>${escapeHtml(machine.name)}</span>
                     </div>
                     <div class="detail-item">
+                        <label>Hostname:</label>
+                        <span>${escapeHtml(systemSummary.hostname || machine.name || 'Unknown')}</span>
+                    </div>
+                    <div class="detail-item">
                         <label>Status:</label>
                         <span>${getMachineStatusBadge(machine.status)}</span>
                     </div>
                     <div class="detail-item">
                         <label>IP Address:</label>
-                        <span>${machine.ip_address}</span>
+                        <span>${machine.ip_address}:${machine.port}</span>
                     </div>
-                    <div class="detail-item">
-                        <label>Port:</label>
-                        <span>${machine.port}</span>
-                    </div>
-                    ${systemSummary.hostname ? `
-                    <div class="detail-item">
-                        <label>Hostname:</label>
-                        <span>${systemSummary.hostname}</span>
-                    </div>
-                    ` : ''}
-                </div>
-            </div>
-            
-            <div class="detail-section">
-                <h4>Connection Information</h4>
-                <div class="detail-grid">
                     <div class="detail-item">
                         <label>Last Heartbeat:</label>
-                        <span>${formatDateTime(machine.last_heartbeat) || 'Never'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Heartbeat Status:</label>
-                        <span>${getHeartbeatStatus(machine.last_heartbeat)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Last Config Update:</label>
-                        <span>${formatDateTime(machine.last_config_update) || 'Never'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Current Task:</label>
-                        <span>${machine.current_task_id ? `#${machine.current_task_id}` : 'None'}</span>
+                        <span>${machine.last_heartbeat ? formatRelativeTime(machine.last_heartbeat) : 'Never'}</span>
                     </div>
                 </div>
             </div>
-            
-            <div class="detail-section">
-                <h4>System Information</h4>
-                ${formatSystemDetails()}
-            </div>
-            
-            ${capabilities.length > 0 ? `
-            <div class="detail-section">
-                <h4>Capability Tags</h4>
-                <div class="capabilities-list">
-                    ${capabilities.map(cap => `<span class="capability-tag">${escapeHtml(cap)}</span>`).join('')}
-                </div>
-            </div>
-            ` : ''}
             
             <div class="detail-section">
                 <h4>Task Statistics</h4>
                 <div class="task-stats">
                     <div class="stat-item">
                         <span class="stat-number">${tasks.length}</span>
-                        <span class="stat-label">Total Tasks</span>
+                        <span class="stat-label">Total</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-number">${onlineTasks.length}</span>
@@ -490,12 +446,12 @@ function showMachineDetailModal(machine, tasks) {
                             </div>
                         `).join('')}
                     </div>
-                    ${tasks.length > 5 ? `
-                        <div class="view-all-link">
-                            <a href="/tasks?machine=${encodeURIComponent(machine.name)}">View All Tasks (${tasks.length})</a>
-                        </div>
-                    ` : ''}
                 ` : '<p style="color: #6c757d;">No tasks assigned to this machine</p>'}
+            </div>
+            
+            <div class="detail-section">
+                <h4>System Details</h4>
+                ${formatSystemDetails()}
             </div>
         </div>
     `;
@@ -510,439 +466,100 @@ function closeMachineDetailModal() {
     modal.style.display = 'none';
 }
 
-// Get heartbeat status
-function getHeartbeatStatus(lastHeartbeat) {
-    if (!lastHeartbeat) {
-        return '<span class="text-danger">No connection</span>';
-    }
-    
-    const now = new Date();
-    const heartbeatTime = new Date(lastHeartbeat);
-    const diffMinutes = (now - heartbeatTime) / (1000 * 60);
-    
-    if (diffMinutes < 2) {
-        return '<span class="text-success">Normal</span>';
-    } else if (diffMinutes < 5) {
-        return '<span class="text-warning">Delayed</span>';
-    } else {
-        return '<span class="text-danger">Timeout</span>';
+// View machine tasks
+async function viewMachineTasks(machineName) {
+    try {
+        const tasksResponse = await apiGet('/api/tasks');
+        const allTasks = tasksResponse.data || [];
+        const machineTasks = allTasks.filter(task => 
+            task.target_machines && task.target_machines.includes(machineName)
+        );
+        
+        showNotification('Info', `Found ${machineTasks.length} tasks for ${machineName}`, 'info');
+    } catch (error) {
+        console.error('View machine tasks failed:', error);
+        showNotification('Error', error.message, 'error');
     }
 }
 
 // Ping machine
 async function pingMachine(machineName) {
     try {
-        // Show ping test prompt
-        showNotification('Ping Test', `Testing connection to machine ${machineName}...`, 'info');
+        showNotification('Info', `Pinging ${machineName}...`, 'info');
         
-        // Simulate ping test
+        // This would typically make an API call to ping the machine
         setTimeout(() => {
-            const machine = machines.find(m => m.name === machineName);
-            if (machine && machine.status === 'online') {
-                // Don't show ping success notification
-            } else {
-                showNotification('Ping Failed', `Machine ${machineName} unreachable`, 'error');
-            }
-        }, 2000);
-        
+            showNotification('Success', `${machineName} is reachable`, 'success');
+        }, 1000);
     } catch (error) {
         console.error('Ping machine failed:', error);
-        showNotification('Ping Failed', error.message, 'error');
+        showNotification('Error', error.message, 'error');
     }
 }
 
-// View machine tasks
-function viewMachineTasks(machineName) {
-    window.location.href = `/tasks?machine=${encodeURIComponent(machineName)}`;
-}
+// Unregister machine
+async function unregisterMachine(machineName) {
+    try {
+        // Get machine info for better confirmation dialog
+        const machine = machines.find(m => m.name === machineName);
+        const currentTasks = machine && machine.current_task_id ? `\n- Has active task #${machine.current_task_id}` : '';
+        
+        // Show detailed confirmation dialog
+        const confirmMessage = `Are you sure you want to unregister client "${machineName}"?
 
-// Update Machine Status (for real-time updates)
-function updateMachineStatus(data) {
-    const machineIndex = machines.findIndex(m => m.name === data.machine_name);
-    if (machineIndex !== -1) {
-        machines[machineIndex].status = data.status;
-        machines[machineIndex].last_heartbeat = data.timestamp;
-        displayMachines();
+This will:
+- Mark the client as OFFLINE
+- Remove it from active task assignments${currentTasks}
+- Stop receiving heartbeats from this client
+- Client can re-register automatically if still running
+
+This action cannot be undone. Continue?`;
+
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        showNotification('Info', `Unregistering ${machineName}...`, 'info');
+        
+        // Call the unregister API
+        const response = await fetch('/api/machines/unregister', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: machineName
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Success', `Client ${machineName} has been unregistered successfully`, 'success');
+            // Refresh the machine list to reflect changes
+            await refreshMachines();
+        } else {
+            throw new Error(result.error || 'Failed to unregister client');
+        }
+        
+    } catch (error) {
+        console.error('Unregister machine failed:', error);
+        showNotification('Error', `Failed to unregister ${machineName}: ${error.message}`, 'error');
     }
 }
 
-// HTML escape utility
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Format bytes to human readable string
+// Format bytes to human readable format
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) return '0 Bytes';
     
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const k = 1024;
+    const units = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     let i = 0;
-    while (bytes >= 1024 && i < units.length - 1) {
-        bytes /= 1024;
+    
+    while (bytes >= k && i < units.length - 1) {
+        bytes /= k;
         i++;
     }
     
     return `${bytes.toFixed(1)} ${units[i]}`;
 }
-
-// Add CSS styles
-const style = document.createElement('style');
-style.textContent = `
-    .empty-state {
-        grid-column: 1 / -1;
-        text-align: center;
-        padding: 60px 20px;
-        color: #6c757d;
-    }
-    
-    .empty-state h3 {
-        margin-bottom: 10px;
-        color: #2c3e50;
-    }
-    
-    .empty-actions {
-        margin-top: 20px;
-        padding: 15px;
-        background-color: #f8f9fa;
-        border-radius: 6px;
-        border-left: 4px solid #667eea;
-    }
-    
-    .empty-actions code {
-        background-color: #e9ecef;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-family: 'Courier New', monospace;
-    }
-    
-    .machine-title {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-    }
-    
-    .machine-name {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 1.2rem;
-        font-weight: 600;
-    }
-    
-    .machine-body {
-        margin-top: 15px;
-    }
-    
-    .info-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 8px;
-        font-size: 0.9rem;
-        color: #6c757d;
-    }
-    
-    .info-item.system-info {
-        font-size: 0.85rem;
-        background-color: #f8f9fa;
-        padding: 6px 10px;
-        border-radius: 4px;
-        margin-bottom: 6px;
-        border-left: 3px solid #667eea;
-    }
-    
-    .info-item i {
-        width: 16px;
-        text-align: center;
-        color: #999;
-    }
-    
-    .system-info i {
-        color: #667eea;
-    }
-    
-    .machine-actions {
-        display: flex;
-        gap: 10px;
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid #e1e8ed;
-    }
-    
-    .capabilities-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    
-    .capability-tag {
-        background-color: #e7f1ff;
-        color: #0056b3;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
-    }
-    
-    .task-stats {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 20px;
-        text-align: center;
-    }
-    
-    .stat-item {
-        padding: 15px;
-        background-color: #f8f9fa;
-        border-radius: 8px;
-    }
-    
-    .stat-number {
-        display: block;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #2c3e50;
-    }
-    
-    .stat-label {
-        font-size: 0.9rem;
-        color: #6c757d;
-    }
-    
-    .task-list-small {
-        max-height: 200px;
-        overflow-y: auto;
-    }
-    
-    .task-item-small {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 15px;
-        border-bottom: 1px solid #f0f0f0;
-        transition: background-color 0.3s ease;
-    }
-    
-    .task-item-small:hover {
-        background-color: #f8f9fa;
-    }
-    
-    .task-item-small:last-child {
-        border-bottom: none;
-    }
-    
-    .task-info-small {
-        flex: 1;
-    }
-    
-    .task-name-small {
-        font-weight: 600;
-        color: #2c3e50;
-        margin-bottom: 2px;
-    }
-    
-    .task-time-small {
-        font-size: 0.8rem;
-        color: #6c757d;
-    }
-    
-    .task-status-small .status-badge {
-        font-size: 0.7rem;
-        padding: 2px 8px;
-    }
-    
-    .view-all-link {
-        text-align: center;
-        padding: 15px;
-        border-top: 1px solid #e1e8ed;
-    }
-    
-    .view-all-link a {
-        color: #667eea;
-        text-decoration: none;
-        font-weight: 500;
-    }
-    
-    .view-all-link a:hover {
-        text-decoration: underline;
-    }
-    
-    .detail-subsection {
-        margin-bottom: 20px;
-        padding: 15px;
-        background-color: #f8f9fa;
-        border-radius: 6px;
-        border-left: 4px solid #667eea;
-    }
-    
-    .detail-subsection h5 {
-        margin: 0 0 15px 0;
-        color: #2c3e50;
-        font-size: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .detail-subsection h5 i {
-        color: #667eea;
-    }
-    
-    .detail-subsection .detail-grid {
-        background-color: white;
-        padding: 15px;
-        border-radius: 4px;
-        border: 1px solid #e1e8ed;
-    }
-    
-    .detail-subsection .detail-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid #f0f0f0;
-    }
-    
-    .detail-subsection .detail-item:last-child {
-        border-bottom: none;
-    }
-    
-    .detail-subsection .detail-item label {
-        font-weight: 600;
-        color: #495057;
-        min-width: 120px;
-    }
-    
-    .detail-subsection .detail-item span {
-        color: #6c757d;
-        text-align: right;
-        flex: 1;
-    }
-    
-    /* Enhanced machine card styling */
-    .machine-card {
-        border: 1px solid #e1e8ed;
-        border-radius: 8px;
-        padding: 20px;
-        background-color: white;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .machine-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border-color: #667eea;
-    }
-    
-    /* Grid layout for machines */
-    .machine-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-        gap: 20px;
-        padding: 20px 0;
-    }
-    
-    /* Connection statistics */
-    .connection-stats {
-        display: flex;
-        gap: 10px;
-        margin-right: 15px;
-        align-items: center;
-    }
-    
-    .stat-badge {
-        background-color: #e9ecef;
-        color: #495057;
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-    
-    .stat-badge.stat-online {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    
-    .stat-badge.stat-offline {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-    
-    .stat-badge.stat-busy {
-        background-color: #fff3cd;
-        color: #856404;
-    }
-    
-    /* Filter bar styling */
-    .filter-bar {
-        background-color: #f8f9fa;
-        padding: 15px 20px;
-        border-radius: 6px;
-        margin-bottom: 20px;
-        display: flex;
-        gap: 20px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    
-    .filter-group {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .filter-group label {
-        font-weight: 600;
-        color: #495057;
-        min-width: 60px;
-    }
-    
-    .filter-group select,
-    .filter-group input {
-        padding: 6px 12px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        font-size: 0.9rem;
-    }
-    
-    .filter-group input[type="text"] {
-        min-width: 200px;
-    }
-    
-    @media (max-width: 768px) {
-        .machine-grid {
-            grid-template-columns: 1fr;
-        }
-        
-        .task-stats {
-            grid-template-columns: repeat(2, 1fr);
-        }
-        
-        .connection-stats {
-            flex-wrap: wrap;
-            margin-bottom: 10px;
-        }
-        
-        .filter-bar {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        
-        .filter-group {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        
-        .filter-group input[type="text"] {
-            min-width: auto;
-        }
-    }
-`;
-document.head.appendChild(style);

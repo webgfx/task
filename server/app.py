@@ -5,7 +5,7 @@ import os
 import sys
 import logging
 from flask import Flask, render_template, jsonify, request
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 
 # Add project root directory to path
@@ -38,8 +38,54 @@ def create_app():
         engineio_logger=False
     )
     
+    # Define WebSocket handlers inside create_app so they have access to socketio
+    @socketio.on('connect')
+    def handle_connect():
+        """Client connection handler"""
+        client_ip = request.environ.get('REMOTE_ADDR', 'unknown')
+        print(f"DEBUG: Client connected: {request.sid} from {client_ip}")
+        logger.info(f"Client connected: {request.sid} from {client_ip}")
+        
+        # Don't emit connection successful message to avoid UI notification
+        emit('connected', {'data': ''})
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Client disconnection handler"""
+        client_ip = request.environ.get('REMOTE_ADDR', 'unknown')
+        print(f"DEBUG: Client disconnected: {request.sid} from {client_ip}")
+        logger.info(f"Client disconnected: {request.sid} from {client_ip}")
+
+    @socketio.on('join_room')
+    def handle_join_room(data):
+        """Handle client joining a room"""
+        print(f"DEBUG: join_room called with data: {data}")
+        room_name = data.get('room')
+        if room_name:
+            join_room(room_name)
+            print(f"DEBUG: Client {request.sid} joined room: {room_name}")
+            logger.info(f"Client {request.sid} joined room: {room_name}")
+            emit('room_joined', {'room': room_name})
+        else:
+            print(f"DEBUG: Client {request.sid} tried to join room without room name")
+            logger.warning(f"Client {request.sid} tried to join room without room name")
+
+    @socketio.on('leave_room')
+    def handle_leave_room(data):
+        """Handle client leaving a room"""
+        print(f"DEBUG: leave_room called with data: {data}")
+        room_name = data.get('room')
+        if room_name:
+            leave_room(room_name)
+            print(f"DEBUG: Client {request.sid} left room: {room_name}")
+            logger.info(f"Client {request.sid} left room: {room_name}")
+            emit('room_left', {'room': room_name})
+        else:
+            print(f"DEBUG: Client {request.sid} tried to leave room without room name")
+            logger.warning(f"Client {request.sid} tried to leave room without room name")
+    
     # Initialize database
-    database = Database(Config.DATABASE_PATH)
+    database = Database(Config.DATABASE_PATH, socketio)
     app.database = database
     
     # Register API blueprint
@@ -70,37 +116,6 @@ def create_app():
     def logs_page():
         """Client communication logs page"""
         return render_template('logs.html')
-    
-    @socketio.on('connect')
-    def handle_connect():
-        """Client connection handler"""
-        client_ip = request.environ.get('REMOTE_ADDR', 'unknown')
-        logger.info(f"Client connected: {request.sid} from {client_ip}")
-        
-        # Log the connection
-        database.log_client_action(
-            client_ip=client_ip,
-            client_name='Unknown',
-            action='CONNECT',
-            message=f"SocketIO connection established with session {request.sid}"
-        )
-        
-        # Don't emit connection successful message to avoid UI notification
-        emit('connected', {'data': ''})
-    
-    @socketio.on('disconnect')
-    def handle_disconnect():
-        """Client disconnection handler"""
-        client_ip = request.environ.get('REMOTE_ADDR', 'unknown')
-        logger.info(f"Client disconnected: {request.sid} from {client_ip}")
-        
-        # Log the disconnection
-        database.log_client_action(
-            client_ip=client_ip,
-            client_name='Unknown',
-            action='DISCONNECT',
-            message=f"SocketIO connection closed for session {request.sid}"
-        )
     
     return app, socketio
 

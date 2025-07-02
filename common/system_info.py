@@ -223,6 +223,12 @@ def get_os_info() -> Dict[str, Any]:
                     os_info['windows_product_name'] = winreg.QueryValueEx(key, "ProductName")[0]
                 except:
                     pass
+                
+                # Get UBR (Update Build Revision) for the full build number
+                try:
+                    os_info['windows_ubr'] = winreg.QueryValueEx(key, "UBR")[0]
+                except:
+                    pass
                     
                 winreg.CloseKey(key)
                 winreg.CloseKey(reg)
@@ -234,7 +240,11 @@ def get_os_info() -> Dict[str, Any]:
                 if 'windows_display_version' in os_info:
                     version_parts.append(f"Version {os_info['windows_display_version']}")
                 if 'windows_build' in os_info:
-                    version_parts.append(f"Build {os_info['windows_build']}")
+                    build_str = f"Build {os_info['windows_build']}"
+                    # Add UBR if available for full build number like 26100.4349
+                    if 'windows_ubr' in os_info:
+                        build_str += f".{os_info['windows_ubr']}"
+                    version_parts.append(build_str)
                 
                 if version_parts:
                     os_info['detailed_version'] = ' '.join(version_parts)
@@ -311,6 +321,8 @@ def get_network_info() -> Dict[str, Any]:
     """Get network information"""
     try:
         hostname = socket.gethostname()
+        # Clean hostname - remove any domain suffix and numbers that might be appended
+        clean_hostname = hostname.split('.')[0]  # Remove domain suffix
         
         # Get local IP
         local_ip = None
@@ -324,21 +336,29 @@ def get_network_info() -> Dict[str, Any]:
         
         # Get network interfaces
         interfaces = []
+        ip_addresses = []
         try:
             for interface, addrs in psutil.net_if_addrs().items():
                 interface_info = {'name': interface, 'addresses': []}
                 for addr in addrs:
                     if addr.family == socket.AF_INET:  # IPv4
+                        # Clean IP address - remove any port numbers
+                        clean_ip = addr.address.split(':')[0]
                         interface_info['addresses'].append({
                             'type': 'IPv4',
-                            'address': addr.address,
-                            'netmask': addr.netmask
+                            'address': clean_ip,
+                            'netmask': addr.netmask if hasattr(addr, 'netmask') else None
                         })
+                        # Collect non-loopback IPs
+                        if not clean_ip.startswith('127.'):
+                            ip_addresses.append(clean_ip)
                     elif addr.family == socket.AF_INET6:  # IPv6
+                        # Clean IPv6 address - remove zone identifier and port
+                        clean_ip = addr.address.split('%')[0].split(']')[0].lstrip('[')
                         interface_info['addresses'].append({
                             'type': 'IPv6',
-                            'address': addr.address,
-                            'netmask': addr.netmask
+                            'address': clean_ip,
+                            'netmask': addr.netmask if hasattr(addr, 'netmask') else None
                         })
                 interfaces.append(interface_info)
         except:
@@ -346,13 +366,17 @@ def get_network_info() -> Dict[str, Any]:
         
         return {
             'hostname': hostname,
+            'clean_hostname': clean_hostname,
             'local_ip': local_ip,
+            'ip_addresses': ip_addresses,
             'interfaces': interfaces[:5]  # Limit to first 5 interfaces
         }
     except Exception as e:
         return {
             'hostname': 'unknown',
+            'clean_hostname': 'unknown',
             'local_ip': '127.0.0.1',
+            'ip_addresses': [],
             'error': str(e)
         }
 
@@ -438,17 +462,23 @@ def get_system_summary() -> Dict[str, str]:
         else:
             gpu_summary = 'No dedicated GPU detected'
         
-        # OS summary with detailed version
+        # OS summary with detailed version including UBR
         os_info = system_info['os']
         os_summary = os_info.get('detailed_version', f"{os_info.get('system', 'Unknown')} {os_info.get('release', '')}")
+        
+        # Network info with clean hostname
+        network_info = system_info['network']
+        clean_hostname = network_info.get('clean_hostname', network_info.get('hostname', 'unknown'))
+        clean_ip = network_info.get('local_ip', '127.0.0.1')
         
         return {
             'cpu': cpu_summary,
             'memory': memory_summary,
             'gpu': gpu_summary,
             'os': os_summary,
-            'hostname': system_info['network'].get('hostname', 'unknown'),
-            'ip': system_info['network'].get('local_ip', '127.0.0.1')
+            'hostname': clean_hostname,
+            'ip': clean_ip,
+            'full_hostname': network_info.get('hostname', 'unknown')  # Keep original for reference
         }
     except Exception as e:
         return {
@@ -458,6 +488,7 @@ def get_system_summary() -> Dict[str, str]:
             'os': 'Unknown',
             'hostname': 'unknown',
             'ip': '127.0.0.1',
+            'full_hostname': 'unknown',
             'error': str(e)
         }
 

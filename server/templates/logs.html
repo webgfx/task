@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Management - Task Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
         /* Logs specific styling */
@@ -164,6 +165,24 @@
             background: #f8f9fa;
             border-radius: 8px;
         }
+        
+        .clear-logs-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-right: 20px;
+        }
+        
+        .clear-logs-group label {
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        
+
+        
+        #clearDate {
+            width: 150px;
+        }
     </style>
 </head>
 <body>
@@ -203,18 +222,14 @@
                 <div class="header-content">
                     <h1>Log Management</h1>
                     <div class="header-actions">
-                        <button id="refreshBtn" class="btn btn-primary">
-                            <i class="fas fa-sync-alt"></i>
-                            Refresh
-                        </button>
-                        <button id="clearBtn" class="btn btn-secondary">
-                            <i class="fas fa-trash"></i>
-                            Clear Old Logs
-                        </button>
-                        <button id="autoRefreshBtn" class="btn btn-outline">
-                            <i class="fas fa-clock"></i>
-                            Auto Refresh: OFF
-                        </button>
+                        <div class="clear-logs-group">
+                            <label for="clearDate">Clear logs before:</label>
+                            <input type="date" id="clearDate" class="form-control">
+                            <button id="clearBtn" class="btn btn-danger">
+                                <i class="fas fa-trash"></i>
+                                Clear Logs
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -244,7 +259,6 @@
     
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
-        let autoRefreshInterval = null;
         let socket = null;
         
         // Initialize socket connection
@@ -259,6 +273,61 @@
                 // Auto refresh when new machine registers
                 loadLogs();
             });
+            
+            // Listen for real-time log updates
+            socket.on('new_log_entry', function(logEntry) {
+                addLogEntryToTable(logEntry);
+            });
+        }
+        
+        // Add new log entry to existing table in real-time
+        function addLogEntryToTable(logEntry) {
+            const container = document.getElementById('logsContent');
+            const existingTable = container.querySelector('.logs-table table tbody');
+            
+            if (!existingTable) {
+                // If no table exists, reload all logs
+                loadLogs();
+                return;
+            }
+            
+            // Create new row
+            const timestamp = new Date(logEntry.timestamp).toLocaleString();
+            const clientInfo = logEntry.client_name ? `${logEntry.client_name} (${logEntry.client_ip})` : logEntry.client_ip;
+            const dataText = logEntry.data ? JSON.stringify(logEntry.data, null, 2) : '';
+            
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td class="timestamp">${timestamp}</td>
+                <td>${escapeHtml(clientInfo)}</td>
+                <td><span class="log-action ${logEntry.action}">${escapeHtml(logEntry.action)}</span></td>
+                <td>${escapeHtml(logEntry.message || '')}</td>
+                <td><span class="log-level ${logEntry.level}">${escapeHtml(logEntry.level)}</span></td>
+                <td><div class="log-data">${escapeHtml(dataText)}</div></td>
+            `;
+            
+            // Add new row at the top (newest first)
+            existingTable.insertBefore(newRow, existingTable.firstChild);
+            
+            // Apply filters if active
+            const clientIpFilter = document.getElementById('clientIpFilter').value.trim();
+            if (clientIpFilter && !logEntry.client_ip.includes(clientIpFilter)) {
+                newRow.style.display = 'none';
+            }
+            
+            // Enforce row limit (remove excess rows)
+            const limit = parseInt(document.getElementById('limitSelect').value);
+            const allRows = existingTable.querySelectorAll('tr');
+            if (allRows.length > limit) {
+                for (let i = limit; i < allRows.length; i++) {
+                    allRows[i].remove();
+                }
+            }
+        }
+        
+        // Start auto-refresh (removed - now using real-time WebSocket updates)
+        function startAutoRefresh() {
+            // This function is no longer needed - logs update in real-time via WebSocket
         }
         
         // Load logs from server
@@ -321,11 +390,11 @@
                 html += `
                     <tr>
                         <td class="timestamp">${timestamp}</td>
-                        <td>${clientInfo}</td>
-                        <td><span class="log-action ${log.action}">${log.action}</span></td>
-                        <td>${log.message || ''}</td>
-                        <td><span class="log-level ${log.level}">${log.level}</span></td>
-                        <td><div class="log-data">${dataText}</div></td>
+                        <td>${escapeHtml(clientInfo)}</td>
+                        <td><span class="log-action ${log.action}">${escapeHtml(log.action)}</span></td>
+                        <td>${escapeHtml(log.message || '')}</td>
+                        <td><span class="log-level ${log.level}">${escapeHtml(log.level)}</span></td>
+                        <td><div class="log-data">${escapeHtml(dataText)}</div></td>
                     </tr>
                 `;
             });
@@ -339,9 +408,24 @@
             container.innerHTML = html;
         }
         
-        // Clear old logs
-        function clearOldLogs() {
-            if (!confirm('Are you sure you want to clear logs older than 30 days?')) {
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Clear logs based on selected date
+        function clearLogsByDate() {
+            const selectedDate = document.getElementById('clearDate').value;
+            
+            if (!selectedDate) {
+                alert('Please select a date before which to clear logs.');
+                return;
+            }
+            
+            const confirmMessage = `Are you sure you want to clear all logs before ${selectedDate}? This action cannot be undone.`;
+            if (!confirm(confirmMessage)) {
                 return;
             }
             
@@ -350,13 +434,13 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ older_than_days: 30 })
+                body: JSON.stringify({ clear_before_date: selectedDate })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(data.message);
-                    loadLogs();
+                    alert(data.message || 'Logs cleared successfully');
+                    loadLogs(); // Reload logs to reflect changes
                 } else {
                     alert('Error clearing logs: ' + data.error);
                 }
@@ -367,26 +451,8 @@
             });
         }
         
-        // Toggle auto refresh
-        function toggleAutoRefresh() {
-            const btn = document.getElementById('autoRefreshBtn');
-            
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-                btn.innerHTML = '<i class="fas fa-clock"></i> Auto Refresh: OFF';
-                btn.className = 'btn btn-outline';
-            } else {
-                autoRefreshInterval = setInterval(loadLogs, 5000); // Refresh every 5 seconds
-                btn.innerHTML = '<i class="fas fa-clock"></i> Auto Refresh: ON';
-                btn.className = 'btn btn-primary';
-            }
-        }
-        
         // Event listeners
-        document.getElementById('refreshBtn').addEventListener('click', loadLogs);
-        document.getElementById('clearBtn').addEventListener('click', clearOldLogs);
-        document.getElementById('autoRefreshBtn').addEventListener('click', toggleAutoRefresh);
+        document.getElementById('clearBtn').addEventListener('click', clearLogsByDate);
         document.getElementById('limitSelect').addEventListener('change', loadLogs);
         document.getElementById('clientIpFilter').addEventListener('input', function() {
             // Debounce the input
@@ -398,6 +464,16 @@
         document.addEventListener('DOMContentLoaded', function() {
             initSocket();
             loadLogs();
+            
+            // Set default date to 30 days ago
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            document.getElementById('clearDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+        });
+        
+        // Clean up when page is unloaded
+        window.addEventListener('beforeunload', function() {
+            // Real-time updates - no cleanup needed
         });
     </script>
         </main>

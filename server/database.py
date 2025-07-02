@@ -4,7 +4,7 @@ Database operations module
 import sqlite3
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
 
@@ -14,8 +14,9 @@ from common.utils import parse_datetime
 logger = logging.getLogger(__name__)
 
 class Database:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, socketio=None):
         self.db_path = db_path
+        self.socketio = socketio
         self.init_database()
 
     def init_database(self):
@@ -56,7 +57,6 @@ class Database:
                     last_heartbeat TEXT,
                     last_config_update TEXT,
                     current_task_id INTEGER,
-                    capabilities TEXT DEFAULT '[]',
                     cpu_info TEXT,
                     memory_info TEXT,
                     gpu_info TEXT,
@@ -202,7 +202,6 @@ class Database:
                         last_heartbeat TEXT,
                         last_config_update TEXT,
                         current_task_id INTEGER,
-                        capabilities TEXT DEFAULT '[]',
                         cpu_info TEXT,
                         memory_info TEXT,
                         gpu_info TEXT,
@@ -216,7 +215,7 @@ class Database:
                 cursor.execute('''
                     INSERT OR REPLACE INTO machines_new
                     SELECT name, ip_address, port, status, last_heartbeat,
-                           last_config_update, current_task_id, capabilities,
+                           last_config_update, current_task_id,
                            cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary
                     FROM machines
                     WHERE name IS NOT NULL AND name != ''
@@ -352,13 +351,12 @@ class Database:
             
             cursor.execute('''
                 INSERT OR REPLACE INTO machines
-                (name, ip_address, port, status, last_heartbeat, last_config_update, capabilities,
+                (name, ip_address, port, status, last_heartbeat, last_config_update,
                  cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 machine.name, machine.ip_address, machine.port,
                 machine.status.value, datetime.now().isoformat(), datetime.now().isoformat(),
-                json.dumps(machine.capabilities) if machine.capabilities else '[]',
                 json.dumps(machine.cpu_info) if machine.cpu_info else None,
                 json.dumps(machine.memory_info) if machine.memory_info else None,
                 json.dumps(machine.gpu_info) if machine.gpu_info else None,
@@ -481,13 +479,12 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 UPDATE machines SET
-                    ip_address=?, port=?, last_config_update=?, capabilities=?,
+                    ip_address=?, port=?, last_config_update=?,
                     cpu_info=?, memory_info=?, gpu_info=?, os_info=?,
                     disk_info=?, system_summary=?
                 WHERE name=?
             ''', (
                 machine.ip_address, machine.port, datetime.now().isoformat(),
-                json.dumps(machine.capabilities) if machine.capabilities else '[]',
                 json.dumps(machine.cpu_info) if machine.cpu_info else None,
                 json.dumps(machine.memory_info) if machine.memory_info else None,
                 json.dumps(machine.gpu_info) if machine.gpu_info else None,
@@ -520,12 +517,31 @@ class Database:
             return None
 
     def get_all_machines(self) -> List[Machine]:
-        """Get all machines"""
+        """Get all machines with computed status"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM machines')
             rows = cursor.fetchall()
-            return [self._row_to_machine(row) for row in rows]
+            machines = [self._row_to_machine(row) for row in rows]
+            
+            # Update status based on heartbeat timing
+            current_time = datetime.now()
+            from common.config import Config
+            offline_threshold = timedelta(seconds=Config.MACHINE_TIMEOUT)  # Use configured timeout for offline detection
+            
+            for machine in machines:
+                if machine.last_heartbeat is None:
+                    # Never sent heartbeat, mark as offline
+                    machine.status = MachineStatus.OFFLINE
+                else:
+                    time_since_heartbeat = current_time - machine.last_heartbeat
+                    if time_since_heartbeat > offline_threshold:
+                        machine.status = MachineStatus.OFFLINE
+                    elif machine.status == MachineStatus.OFFLINE:
+                        # If previously offline but within threshold, mark as online
+                        machine.status = MachineStatus.ONLINE
+            
+            return machines
 
     def get_online_machines(self) -> List[Machine]:
         """Get Online Machines"""
@@ -703,13 +719,7 @@ class Database:
         return task
 
     def _row_to_machine(self, row) -> Machine:
-        """Convert database row to Machine object"""
-        try:
-            capabilities = json.loads(row['capabilities']) if row['capabilities'] else []
-        except:
-            capabilities = []
-
-        # Parse system information JSON fields
+        """Convert database row to Machine object"""# Parse system information JSON fields
         def safe_json_parse(field_value):
             try:
                 return json.loads(field_value) if field_value else None
@@ -731,7 +741,6 @@ class Database:
             last_heartbeat=parse_datetime(row['last_heartbeat']),
             last_config_update=parse_datetime(safe_get('last_config_update')),
             current_task_id=safe_get('current_task_id'),
-            capabilities=capabilities,
             cpu_info=safe_json_parse(safe_get('cpu_info')),
             memory_info=safe_json_parse(safe_get('memory_info')),
             gpu_info=safe_json_parse(safe_get('gpu_info')),
@@ -760,6 +769,19 @@ class Database:
             ))
             conn.commit()
             logger.debug(f"Logged client action: {client_ip} - {action}")
+            
+            # Emit real-time log update via WebSocket
+            if self.socketio:
+                log_entry = {
+                    'timestamp': datetime.now().isoformat(),
+                    'client_ip': client_ip,
+                    'client_name': client_name,
+                    'action': action,
+                    'message': message,
+                    'level': level,
+                    'data': json.loads(json.dumps(data)) if data else None
+                }
+                self.socketio.emit('new_log_entry', log_entry)
 
     def get_client_logs(self, limit: int = 100, client_ip: str = None) -> List[Dict[str, Any]]:
         """Get client communication logs"""
@@ -1049,13 +1071,7 @@ class Database:
         return task
 
     def _row_to_machine(self, row) -> Machine:
-        """Convert database row to Machine object"""
-        try:
-            capabilities = json.loads(row['capabilities']) if row['capabilities'] else []
-        except:
-            capabilities = []
-
-        # Parse system information JSON fields
+        """Convert database row to Machine object"""# Parse system information JSON fields
         def safe_json_parse(field_value):
             try:
                 return json.loads(field_value) if field_value else None
@@ -1077,7 +1093,6 @@ class Database:
             last_heartbeat=parse_datetime(row['last_heartbeat']),
             last_config_update=parse_datetime(safe_get('last_config_update')),
             current_task_id=safe_get('current_task_id'),
-            capabilities=capabilities,
             cpu_info=safe_json_parse(safe_get('cpu_info')),
             memory_info=safe_json_parse(safe_get('memory_info')),
             gpu_info=safe_json_parse(safe_get('gpu_info')),
@@ -1086,103 +1101,3 @@ class Database:
             system_summary=safe_json_parse(safe_get('system_summary'))
         )
 
-    # Client Communication Logs
-    def log_client_action(self, client_ip: str, client_name: str, action: str,
-                         message: str = None, data: Any = None, level: str = 'INFO'):
-        """Log client communication action"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO client_logs
-                (client_ip, client_name, action, message, data, level)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                client_ip,
-                client_name,
-                action,
-                message,
-                json.dumps(data) if data else None,
-                level
-            ))
-            conn.commit()
-            logger.debug(f"Logged client action: {client_ip} - {action}")
-
-    def get_client_logs(self, limit: int = 100, client_ip: str = None) -> List[Dict[str, Any]]:
-        """Get client communication logs"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-
-            if client_ip:
-                cursor.execute('''
-                    SELECT * FROM client_logs
-                    WHERE client_ip = ?
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                ''', (client_ip, limit))
-            else:
-                cursor.execute('''
-                    SELECT * FROM client_logs
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                ''', (limit,))
-
-            rows = cursor.fetchall()
-            logs = []
-
-            for row in rows:
-                log_entry = {
-                    'id': row['id'],
-                    'timestamp': row['timestamp'],
-                    'client_ip': row['client_ip'],
-                    'client_name': row['client_name'],
-                    'action': row['action'],
-                    'message': row['message'],
-                    'data': json.loads(row['data']) if row['data'] else None,
-                    'level': row['level']
-                }
-                logs.append(log_entry)
-
-            return logs
-
-    def clear_client_logs(self, older_than_days: int = 30):
-        """Clear old client logs"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                DELETE FROM client_logs
-                WHERE timestamp < datetime('now', '-{} days')
-            '''.format(older_than_days))
-            deleted_count = cursor.rowcount
-            conn.commit()
-            logger.info(f"Cleared {deleted_count} old client log entries")
-            return deleted_count
-
-    def _row_to_execution(self, row) -> TaskExecution:
-        """Convert database row to TaskExecution object"""
-        return TaskExecution(
-            id=row['id'],
-            task_id=row['task_id'],
-            machine_name=row['machine_name'],
-            started_at=parse_datetime(row['started_at']),
-            completed_at=parse_datetime(row['completed_at']),
-            status=TaskStatus(row['status']),
-            output=row['output'],
-            error_output=row['error_output'],
-            exit_code=row['exit_code']
-        )
-
-    def _row_to_subtask_execution(self, row) -> SubtaskExecution:
-        """Convert database row to SubtaskExecution object"""
-        return SubtaskExecution(
-            id=row['id'],
-            task_id=row['task_id'],
-            subtask_name=row['subtask_name'],
-            subtask_order=row['subtask_order'],
-            target_machine=row['target_machine'],
-            started_at=parse_datetime(row['started_at']),
-            completed_at=parse_datetime(row['completed_at']),
-            status=TaskStatus(row['status']),
-            result=row['result'],
-            error_message=row['error_message'],
-            execution_time=row['execution_time']
-        )

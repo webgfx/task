@@ -58,13 +58,16 @@ if errorlevel 1 (
 REM Test client module
 echo.
 echo Testing client module...
+cd ..
 %PYTHON_EXE% -c "from client.client_runner import TaskClientRunner; print('✓ Client module OK')" 2>nul
 if errorlevel 1 (
     echo ERROR: Client module cannot be imported
     echo Please ensure all project files are in place
+    cd client
     pause
     exit /b 1
 )
+cd client
 
 REM Test Windows service modules
 echo.
@@ -151,8 +154,11 @@ if errorlevel 1 (
 echo ✓ Administrator privileges detected
 echo Installing service...
 
+cd ..
 %PYTHON_EXE% -m client.service install
-if errorlevel 1 (
+set INSTALL_RESULT=%errorlevel%
+cd client
+if %INSTALL_RESULT% neq 0 (
     echo.
     echo ❌ Service installation failed
     echo.
@@ -202,8 +208,11 @@ if errorlevel 1 (
 echo ✓ Administrator privileges detected
 echo Uninstalling service...
 
+cd ..
 %PYTHON_EXE% -m client.service uninstall
-if errorlevel 1 (
+set UNINSTALL_RESULT=%errorlevel%
+cd client
+if %UNINSTALL_RESULT% neq 0 (
     echo.
     echo ❌ Service uninstallation failed
     echo.
@@ -331,7 +340,9 @@ echo Starting client process ^(Direct Mode^)...
 echo Press Ctrl+C to stop the client
 echo.
 echo Machine name and server URL will be auto-detected
+cd ..
 %PYTHON_EXE% -m client.client_runner
+cd client
 echo.
 echo Client process stopped.
 echo.
@@ -355,13 +366,16 @@ echo Step 2: Testing Python dependencies...
 echo.
 
 echo Testing imports:
+cd ..
 %PYTHON_EXE% -c "from client.client_runner import TaskClientRunner; print('✓ TaskClientRunner import: OK')" 2>nul
 if errorlevel 1 (
     echo ❌ TaskClientRunner import failed
     %PYTHON_EXE% -c "from client.client_runner import TaskClientRunner" 
+    cd client
     timeout /t 3 /nobreak >nul
     goto menu
 ) 
+cd client 
 
 %PYTHON_EXE% -c "import requests; print('✓ requests import: OK')" 2>nul
 if errorlevel 1 (

@@ -383,6 +383,23 @@ function getFormData(formElement) {
     return data;
 }
 
+// Escape HTML to prevent XSS attacks
+function escapeHtml(text) {
+    if (typeof text !== 'string') {
+        return text;
+    }
+    
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    
+    return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+
 // Pagination function
 function createPagination(totalItems, currentPage, itemsPerPage, container, onPageChange) {
     const totalPages = Math.ceil(totalItems / itemsPerPage);

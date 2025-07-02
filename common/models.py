@@ -150,7 +150,6 @@ class Machine:
     last_heartbeat: Optional[datetime] = None
     last_config_update: Optional[datetime] = None  # 最后配置更新时间
     current_task_id: Optional[int] = None
-    capabilities: List[str] = None
     
     # System information fields
     cpu_info: Optional[Dict[str, Any]] = None
@@ -159,10 +158,6 @@ class Machine:
     os_info: Optional[Dict[str, Any]] = None
     disk_info: Optional[List[Dict[str, Any]]] = None
     system_summary: Optional[Dict[str, str]] = None
-    
-    def __post_init__(self):
-        if self.capabilities is None:
-            self.capabilities = []
     
     def get_unique_id(self) -> str:
         """获取机器的唯一标识（基于机器名）"""
@@ -194,7 +189,6 @@ class Machine:
             'last_heartbeat': self.last_heartbeat.isoformat() if self.last_heartbeat else None,
             'last_config_update': self.last_config_update.isoformat() if self.last_config_update else None,
             'current_task_id': self.current_task_id,
-            'capabilities': self.capabilities,
             'cpu_info': self.cpu_info,
             'memory_info': self.memory_info,
             'gpu_info': self.gpu_info,

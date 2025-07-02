@@ -25,6 +25,41 @@ End-to-end tests for complete workflows. These tests should:
 - Test real-world scenarios
 - Include performance considerations
 
+## Official Test Scenarios
+
+### Quick Start
+To run official test scenarios that verify core system functionality:
+
+```bash
+# Windows - Run all test scenarios
+tests\run_tests.bat
+
+# Windows - Run specific test scenario
+tests\run_tests.bat single-subtask-single-client-now
+
+# Linux/Mac - Run all test scenarios
+python tests/run_official_tests.py
+
+# Linux/Mac - Run specific test scenario
+python tests/run_official_tests.py single-subtask-single-client-now
+```
+
+### Available Test Scenarios
+- **`single-subtask-single-client-now`**: Basic task with one subtask on one client, immediate execution
+
+### Test Scenario Documentation
+See `TEST_SCENARIOS.md` for detailed documentation of all official test scenarios, including:
+- Test objectives and requirements
+- Step-by-step execution procedures
+- Expected results and success criteria
+- Failure conditions and troubleshooting
+
+## Prerequisites for Official Tests
+1. Server running on `http://localhost:5000`
+2. At least one client connected and registered
+3. WebSocket connections established
+4. Network connectivity between server and clients
+
 ## Guidelines
 
 - **All test files must be written in English** (code, comments, documentation)
@@ -34,7 +69,7 @@ End-to-end tests for complete workflows. These tests should:
 - Use proper assertions and error messages
 - Document complex test scenarios
 
-## Running Tests
+## Running Unit/Integration Tests
 
 ```bash
 # Run all tests

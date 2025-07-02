@@ -38,6 +38,9 @@ if errorlevel 1 (
     echo ✓ Python is installed
 )
 
+REM Change to parent directory to maintain correct module paths
+cd /d "%~dp0.."
+
 REM Check dependencies
 echo.
 echo Checking dependencies...

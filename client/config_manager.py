@@ -50,7 +50,7 @@ class ClientConfigManager:
         self.config['DEFAULT'] = {
             'server_url': 'http://localhost:5000',
             'machine_name': '',
-            'heartbeat_interval': '30',
+            # Note: heartbeat_interval is now in common.cfg
             'config_update_interval': '600',
             'log_level': 'INFO',
             'install_dir': '~/.task_client',
@@ -183,7 +183,8 @@ class ClientConfigManager:
         """
         try:
             # 验证必需的配置项
-            heartbeat_interval = self.get_int('DEFAULT', 'heartbeat_interval', 30)
+            # Note: heartbeat_interval is now in common.cfg, validate it there
+            heartbeat_interval = get_heartbeat_interval()
             if heartbeat_interval <= 0:
                 logger.error("heartbeat_interval must be greater than 0")
                 return False
@@ -259,7 +260,7 @@ class ClientConfigManager:
         # 基本配置
         summary.append(f"Server URL: {self.get('DEFAULT', 'server_url', 'N/A')}")
         summary.append(f"Machine Name: {self.get('DEFAULT', 'machine_name', 'N/A')}")
-        summary.append(f"Heartbeat Interval: {self.get_int('DEFAULT', 'heartbeat_interval', 30)} seconds")
+        summary.append(f"Heartbeat Interval: {get_heartbeat_interval()} seconds (from common.cfg)")
         summary.append(f"Config Update Interval: {self.get_int('DEFAULT', 'config_update_interval', 600)} seconds")
         summary.append(f"Log Level: {self.get('DEFAULT', 'log_level', 'INFO')}")
         
@@ -301,8 +302,25 @@ def reload_config():
 
 # 便捷函数
 def get_heartbeat_interval() -> int:
-    """获取心跳间隔（秒）"""
-    return get_config_manager().get_int('DEFAULT', 'heartbeat_interval', 30)
+    """获取心跳间隔（秒）- 从 common.cfg 读取"""
+    try:
+        import configparser
+        import os
+        
+        # Get path to common.cfg
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        common_cfg_path = os.path.join(current_dir, '..', 'common', 'common.cfg')
+        
+        if os.path.exists(common_cfg_path):
+            config = configparser.ConfigParser()
+            config.read(common_cfg_path, encoding='utf-8')
+            return int(config.get('CLIENT', 'heartbeat_interval', fallback='60'))
+        else:
+            logger.warning(f"common.cfg not found at {common_cfg_path}, using default heartbeat interval")
+            return 60
+    except Exception as e:
+        logger.error(f"Failed to read heartbeat_interval from common.cfg: {e}")
+        return 60
 
 def get_server_url() -> str:
     """获取服务器URL"""

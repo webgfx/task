@@ -172,8 +172,10 @@ class TaskScheduler:
                         'subtasks': [subtask.to_dict() for subtask in machine_subtasks]
                     }
                     
-                    # Send task via WebSocket
-                    self.socketio.emit('task_dispatch', task_data, room=f"machine_{machine.name}")
+                    # Send task via WebSocket using IP-based room name
+                    room_name = f"machine_{machine.ip_address.replace('.', '_')}"
+                    logger.info(f"Dispatching subtask to room: {room_name} for machine {machine.name} ({machine.ip_address})")
+                    self.socketio.emit('task_dispatch', task_data, room=room_name)
                     
                     logger.info(f"Dispatched {len(machine_subtasks)} subtasks to machine {machine.name}")
             
@@ -190,7 +192,10 @@ class TaskScheduler:
             pending_tasks = self.database.get_pending_tasks()
             current_time = datetime.now()
             
+            logger.info(f"DEBUG: Found {len(pending_tasks)} pending tasks to check")
+            
             for task in pending_tasks:
+                logger.info(f"DEBUG: Checking task {task.id} - {task.name}, status: {task.status}")
                 # Check if execution time has come
                 should_execute = False
                 
@@ -269,8 +274,10 @@ class TaskScheduler:
                 task_data['execution_order'] = task.execution_order
                 logger.info(f"Dispatching legacy task {task.name} to machine {machine.name}")
             
-            # Send task via WebSocket (using machine name for room)
-            self.socketio.emit('task_dispatch', task_data, room=f"machine_{machine.name}")
+            # Send task via WebSocket using IP-based room name
+            room_name = f"machine_{machine.ip_address.replace('.', '_')}"
+            logger.info(f"Dispatching task to room: {room_name} for machine {machine.name} ({machine.ip_address})")
+            self.socketio.emit('task_dispatch', task_data, room=room_name)
             
             logger.info(f"Task {task.name} distributed to machine {machine.name}")
             
@@ -292,8 +299,8 @@ class TaskScheduler:
                 if machine.last_heartbeat:
                     time_since_heartbeat = current_time - machine.last_heartbeat
                     if time_since_heartbeat > offline_threshold and machine.status != MachineStatus.OFFLINE:
-                        # Mark machine as offline
-                        self.database.update_machine_heartbeat(machine.name, MachineStatus.OFFLINE)
+                        # Mark machine as offline using machine name
+                        self.database.update_machine_heartbeat_by_name(machine.name, MachineStatus.OFFLINE)
                         
                         # Broadcast machine offline event
                         self.socketio.emit('machine_offline', {

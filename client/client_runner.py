@@ -15,7 +15,10 @@ import socketio
 from datetime import datetime, timedelta
 
 # Ensure we can import local modules
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, current_dir)  # For client modules
+sys.path.insert(0, parent_dir)   # For common modules
 
 # Import local modules (these will be copied to installation directory)
 try:
@@ -72,8 +75,7 @@ class TaskClientRunner:
         # Use configuration from client.cfg if available, otherwise fall back to config.json
         self.config_update_interval = self.cfg_manager.get_int('DEFAULT', 'config_update_interval', 
                                                               config_data.get('config_update_interval', 600))
-        self.heartbeat_interval = self.cfg_manager.get_int('DEFAULT', 'heartbeat_interval',
-                                                          config_data.get('heartbeat_interval', 30))
+        # Note: heartbeat_interval is now read from common.cfg via get_heartbeat_interval()
         
         self.last_config_update = None
         self.running = False
@@ -92,15 +94,20 @@ class TaskClientRunner:
         
         # Initialize subtask executor
         try:
-            from subtask_executor import TaskSubtaskAdapter
-            self.subtask_adapter = TaskSubtaskAdapter(self.server_url, self.machine_name)
+            # Add current directory to path for imports
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.insert(0, current_dir)
+            
+            import subtask_executor
+            self.subtask_adapter = subtask_executor.TaskSubtaskAdapter(self.server_url, self.machine_name)
             logger.info("Subtask executor initialized successfully")
-        except ImportError as e:
+        except Exception as e:
             logger.warning(f"Failed to import subtask executor: {e}")
             self.subtask_adapter = None
         
         # Initialize components with configuration from cfg file
-        self.heartbeat = HeartbeatManager(self.server_url, self.machine_name, self.heartbeat_interval)
+        self.heartbeat = HeartbeatManager(self.server_url, self.machine_name, get_heartbeat_interval)
         
         # Initialize SocketIO client
         self.sio = socketio.Client()
@@ -110,7 +117,7 @@ class TaskClientRunner:
         self.config_update_thread = None
         
         logger.info(f"Client runner initialized: {self.machine_name} ({self.local_ip}) -> {self.server_url}")
-        logger.info(f"Heartbeat interval: {self.heartbeat_interval} seconds")
+        logger.info(f"Heartbeat interval: {get_heartbeat_interval()} seconds")
         logger.info(f"Configuration update interval: {self.config_update_interval} seconds")
         
         # Log configuration summary
@@ -173,8 +180,10 @@ class TaskClientRunner:
         @self.sio.event
         def connect():
             logger.info("Connected to server")
-            # Join machine-specific room using machine name
-            self.sio.emit('join_room', {'room': f"machine_{self.machine_name}"})
+            # Join machine-specific room using IP address instead of machine name
+            room_name = f"machine_{self.local_ip.replace('.', '_')}"
+            print(f"DEBUG: Joining room: {room_name}")
+            self.sio.emit('join_room', {'room': room_name})
         
         @self.sio.event
         def disconnect():
@@ -244,6 +253,41 @@ class TaskClientRunner:
                 
             except Exception as e:
                 logger.error(f"Failed to handle task cancellation: {e}")
+        
+        @self.sio.event
+        def machine_unregistered(data):
+            """Handle machine unregistration notification from server"""
+            try:
+                machine_name = data.get('machine_name')
+                reason = data.get('reason', 'Machine unregistered')
+                timestamp = data.get('timestamp')
+                
+                if machine_name == self.machine_name:
+                    logger.warning(f"This machine ({machine_name}) has been unregistered from the server")
+                    logger.warning(f"Reason: {reason}")
+                    logger.warning(f"Timestamp: {timestamp}")
+                    
+                    # Set machine to offline state
+                    self.running = False
+                    
+                    # Stop heartbeat if running
+                    if hasattr(self, 'heartbeat_manager') and self.heartbeat_manager:
+                        self.heartbeat_manager.stop()
+                    
+                    # Disconnect from server
+                    if self.sio and self.sio.connected:
+                        logger.info("Disconnecting from server due to unregistration")
+                        self.sio.disconnect()
+                    
+                    logger.error("CLIENT OFFLINE: Machine has been unregistered by administrator")
+                    logger.error("This client will now shut down. Please re-register the machine to continue.")
+                    
+                    # Exit the process gracefully
+                    import os
+                    os._exit(1)
+                    
+            except Exception as e:
+                logger.error(f"Failed to handle machine unregistration: {e}")
     
     def start(self):
         """Start client runtime"""
@@ -311,11 +355,15 @@ class TaskClientRunner:
             system_info = get_system_info()
             system_summary = get_system_summary()
             
+            # DEBUG: Log the exact machine name being used
+            logger.info(f"DEBUG: Registering machine with name: '{self.machine_name}'")
+            logger.info(f"DEBUG: Machine name type: {type(self.machine_name)}")
+            logger.info(f"DEBUG: Machine name length: {len(self.machine_name)}")
+            
             registration_data = {
                 'name': self.machine_name,
                 'ip_address': self.local_ip,
                 'port': 8080,
-                'capabilities': ['shell', 'python', 'general'],
                 'status': 'online',
                 # System information
                 'cpu_info': system_info['cpu'],
@@ -373,9 +421,14 @@ class TaskClientRunner:
     def _connect_to_server(self):
         """Connect to server"""
         try:
-            self.sio.connect(self.server_url)
+            print(f"DEBUG: Attempting to connect to {self.server_url}")
+            print(f"DEBUG: Client IP: {self.local_ip}")
+            print(f"DEBUG: Machine name: {self.machine_name}")
+            self.sio.connect(self.server_url, wait_timeout=10)
+            print("DEBUG: SocketIO connection successful")
             logger.info("Connected to server WebSocket")
         except Exception as e:
+            print(f"DEBUG: Connection failed: {e}")
             logger.error(f"Failed to connect to server: {e}")
             raise
     
@@ -435,7 +488,6 @@ class TaskClientRunner:
                 'name': self.machine_name,
                 'ip_address': self.local_ip,
                 'port': 8080,
-                'capabilities': ['shell', 'python', 'general'],
                 # 更新的系统信息
                 'cpu_info': system_info['cpu'],
                 'memory_info': system_info['memory'],
@@ -652,6 +704,32 @@ class TaskClientRunner:
                 
         except Exception as e:
             logger.error(f"Exception notifying task start: {e}")
+    
+    def _notify_task_completion(self, task_id, success, message):
+        """Notify server task execution completed"""
+        try:
+            data = {
+                'task_id': task_id,
+                'machine_name': self.machine_name,
+                'machine_ip': self.local_ip,
+                'success': success,
+                'message': message
+            }
+            
+            # Use the same endpoint for now (could be extended later)
+            response = requests.post(
+                f"{self.server_url}/api/execute",
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"Failed to notify task completion: {response.status_code}")
+            else:
+                logger.info(f"Task {task_id} completion notified: {success} - {message}")
+                
+        except Exception as e:
+            logger.error(f"Exception notifying task completion: {e}")
     
     def _save_intermediate_result(self, task_id, subtask_id, result):
         """Save intermediate result locally"""

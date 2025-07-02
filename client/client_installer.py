@@ -48,7 +48,7 @@ class ClientInstaller:
             config = {
                 'server_url': server_url,
                 'machine_name': machine_name,
-                'heartbeat_interval': kwargs.get('heartbeat_interval', 30),
+                # Note: heartbeat_interval is now configured in common.cfg
                 'config_update_interval': kwargs.get('config_update_interval', 600),
                 'log_level': kwargs.get('log_level', 'INFO'),
                 'install_dir': self.install_dir,
@@ -244,7 +244,7 @@ echo "Task client stopped"
                 config['DEFAULT'] = {}
             
             # Set configuration values from installation parameters
-            config['DEFAULT']['heartbeat_interval'] = str(kwargs.get('heartbeat_interval', 30))
+            # Note: heartbeat_interval is now in common.cfg, not client.cfg
             config['DEFAULT']['config_update_interval'] = str(kwargs.get('config_update_interval', 600))
             config['DEFAULT']['log_level'] = kwargs.get('log_level', 'INFO')
             config['DEFAULT']['install_dir'] = self.install_dir
@@ -265,7 +265,7 @@ echo "Task client stopped"
 [DEFAULT]
 server_url = http://localhost:5000
 machine_name = 
-heartbeat_interval = {kwargs.get('heartbeat_interval', 30)}
+# Note: heartbeat_interval is now configured in common.cfg
 config_update_interval = {kwargs.get('config_update_interval', 600)}
 log_level = {kwargs.get('log_level', 'INFO')}
 install_dir = {self.install_dir}

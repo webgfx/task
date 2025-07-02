@@ -11,23 +11,30 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class HeartbeatManager:
-    def __init__(self, server_url: str, machine_name: str, interval: int = 30):
+    def __init__(self, server_url: str, machine_name: str, get_interval_func=None):
         """
         Initialize heartbeat manager
         
         Args:
             server_url: Server URL
             machine_name: Machine name
-            interval: Heartbeat interval (seconds)
+            get_interval_func: Function to get heartbeat interval dynamically (if None, defaults to 60)
         """
         self.server_url = server_url
         self.machine_name = machine_name
-        self.interval = interval
+        self.get_interval_func = get_interval_func
         self.running = False
         self.thread = None
         self.last_heartbeat = None
         self.error_count = 0
         self.max_errors = 5  # Maximum consecutive error count
+        
+    @property
+    def interval(self):
+        """Get current heartbeat interval from configuration"""
+        if self.get_interval_func:
+            return self.get_interval_func()
+        return 60  # Default fallback
         
     def start(self):
         """Start heartbeat"""

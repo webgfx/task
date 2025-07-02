@@ -16,7 +16,55 @@ console.log('Tasks.js variables initialized');
 // Initialize after page load
 document.addEventListener('DOMContentLoaded', function() {
     initializeTasksPage();
+    setupWebSocketListeners();
 });
+
+// Setup WebSocket listeners for real-time updates
+function setupWebSocketListeners() {
+    if (typeof socket !== 'undefined' && socket) {
+        // Listen for subtask status updates
+        socket.on('subtask_updated', function(data) {
+            console.log('Subtask updated:', data);
+            
+            // Update task details view if it's open and matches this task
+            const taskDetailModal = document.getElementById('taskDetailModal');
+            if (taskDetailModal && taskDetailModal.style.display === 'block') {
+                const currentTaskId = getCurrentTaskDetailId();
+                if (currentTaskId && currentTaskId == data.task_id) {
+                    refreshTaskDetails(data.task_id);
+                }
+            }
+            
+            // Refresh task list to update overall status
+            if (typeof refreshTasks === 'function') {
+                refreshTasks();
+            }
+            
+            // Show notification for completion or failure
+            if (data.status === 'completed') {
+                showNotification('Subtask Completed', 
+                    `Subtask "${data.subtask_name}" completed on ${data.target_machine}`, 'success');
+            } else if (data.status === 'failed') {
+                showNotification('Subtask Failed', 
+                    `Subtask "${data.subtask_name}" failed on ${data.target_machine}`, 'error');
+            }
+        });
+        
+        // Listen for task status updates
+        socket.on('task_completed', function(data) {
+            console.log('Task completed:', data);
+            
+            // Update task details view if it's open and matches this task
+            const taskDetailModal = document.getElementById('taskDetailModal');
+            if (taskDetailModal && taskDetailModal.style.display === 'block') {
+                const currentTaskId = getCurrentTaskDetailId();
+                if (currentTaskId && currentTaskId == data.task_id) {
+                    refreshTaskDetails(data.task_id);
+                }
+            }
+        });
+    }
+}
 
 // Initialize task page
 async function initializeTasksPage() {
@@ -509,11 +557,19 @@ async function deleteTask(taskId) {
 // View task details
 async function viewTaskDetails(taskId) {
     try {
+        // Store current task ID for real-time updates
+        window.currentTaskDetailId = taskId;
+        
         const response = await apiGet(`/api/tasks/${taskId}`);
 
         if (response.success) {
             const task = response.data;
-            displayTaskDetails(task);
+            
+            // Get subtask execution status
+            const executionsResponse = await apiGet(`/api/tasks/${taskId}/subtask-executions`);
+            const executions = executionsResponse.success ? executionsResponse.data : [];
+            
+            displayTaskDetailsWithExecutions(task, executions);
         } else {
             showNotification(response.error || 'Failed to load task details', 'error');
         }
@@ -523,8 +579,8 @@ async function viewTaskDetails(taskId) {
     }
 }
 
-// Display task details in modal
-function displayTaskDetails(task) {
+// Display task details with execution status in modal
+function displayTaskDetailsWithExecutions(task, executions = []) {
     const modal = document.getElementById('taskDetailModal');
     const content = document.getElementById('taskDetailContent');
 
@@ -548,23 +604,93 @@ function displayTaskDetails(task) {
                     <label>Created:</label>
                     <span>${task.created_at ? new Date(task.created_at).toLocaleString() : '-'}</span>
                 </div>
+                <div class="detail-item">
+                    <label>Started:</label>
+                    <span>${task.started_at ? new Date(task.started_at).toLocaleString() : '-'}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Completed:</label>
+                    <span>${task.completed_at ? new Date(task.completed_at).toLocaleString() : '-'}</span>
+                </div>
             </div>
         </div>
     `;
 
     if (task.subtasks && task.subtasks.length > 0) {
+        // Create execution status map for quick lookup
+        const executionMap = {};
+        executions.forEach(exec => {
+            const key = `${exec.subtask_name}_${exec.target_machine}`;
+            executionMap[key] = exec;
+        });
+
+        // Calculate overall subtask statistics
+        const totalSubtasks = task.subtasks.length;
+        const completedSubtasks = executions.filter(e => e.status === 'completed').length;
+        const failedSubtasks = executions.filter(e => e.status === 'failed').length;
+        const runningSubtasks = executions.filter(e => e.status === 'running').length;
+        const pendingSubtasks = totalSubtasks - completedSubtasks - failedSubtasks - runningSubtasks;
+
         detailsHtml += `
             <div class="task-detail-section">
-                <h4>Subtasks (${task.subtasks.length})</h4>
+                <h4>Subtask Execution Overview</h4>
+                <div class="subtask-overview">
+                    <div class="overview-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">${totalSubtasks}</span>
+                            <span class="stat-label">Total</span>
+                        </div>
+                        <div class="stat-item completed">
+                            <span class="stat-number">${completedSubtasks}</span>
+                            <span class="stat-label">Completed</span>
+                        </div>
+                        <div class="stat-item running">
+                            <span class="stat-number">${runningSubtasks}</span>
+                            <span class="stat-label">Running</span>
+                        </div>
+                        <div class="stat-item failed">
+                            <span class="stat-number">${failedSubtasks}</span>
+                            <span class="stat-label">Failed</span>
+                        </div>
+                        <div class="stat-item pending">
+                            <span class="stat-number">${pendingSubtasks}</span>
+                            <span class="stat-label">Pending</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${totalSubtasks > 0 ? (completedSubtasks / totalSubtasks * 100) : 0}%"></div>
+                    </div>
+                    <div class="progress-text">${totalSubtasks > 0 ? Math.round(completedSubtasks / totalSubtasks * 100) : 0}% Complete</div>
+                </div>
+            </div>
+        `;
+
+        detailsHtml += `
+            <div class="task-detail-section">
+                <h4>Subtask Details (${task.subtasks.length})</h4>
                 <div class="subtasks-detail">
         `;
 
         task.subtasks.forEach((subtask, index) => {
+            const executionKey = `${subtask.name}_${subtask.target_machine}`;
+            const execution = executionMap[executionKey];
+            
+            // Determine status and timing
+            const status = execution ? execution.status : 'pending';
+            const startTime = execution && execution.started_at ? new Date(execution.started_at).toLocaleString() : '-';
+            const endTime = execution && execution.completed_at ? new Date(execution.completed_at).toLocaleString() : '-';
+            const executionTime = execution && execution.execution_time ? `${execution.execution_time.toFixed(3)}s` : '-';
+            const result = execution && execution.result ? execution.result : '-';
+            const errorMessage = execution && execution.error_message ? execution.error_message : '';
+
             detailsHtml += `
                 <div class="subtask-detail-item">
                     <div class="subtask-detail-header">
                         <h5>Subtask ${index + 1}: ${subtask.name}</h5>
-                        <span class="subtask-order">Order: ${subtask.order}</span>
+                        <div class="subtask-status-info">
+                            <span class="status-badge ${status}">${status}</span>
+                            <span class="subtask-order">Order: ${subtask.order}</span>
+                        </div>
                     </div>
                     <div class="subtask-detail-content">
                         <div class="detail-grid">
@@ -577,6 +703,22 @@ function displayTaskDetails(task) {
                                 <span>${subtask.timeout || 300}s</span>
                             </div>
                             <div class="detail-item">
+                                <label>Started At:</label>
+                                <span>${startTime}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Completed At:</label>
+                                <span>${endTime}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Execution Time:</label>
+                                <span>${executionTime}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Result:</label>
+                                <span class="result-text">${result}</span>
+                            </div>
+                            <div class="detail-item">
                                 <label>Arguments:</label>
                                 <span><code>${JSON.stringify(subtask.args || [])}</code></span>
                             </div>
@@ -585,6 +727,12 @@ function displayTaskDetails(task) {
                                 <span><code>${JSON.stringify(subtask.kwargs || {})}</code></span>
                             </div>
                         </div>
+                        ${errorMessage ? `
+                            <div class="error-message">
+                                <label>Error Message:</label>
+                                <div class="error-text">${errorMessage}</div>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -637,9 +785,41 @@ function displayTaskDetails(task) {
     modal.style.display = 'block';
 }
 
+// Keep the original function for backward compatibility
+function displayTaskDetails(task) {
+    displayTaskDetailsWithExecutions(task, []);
+}
+
 // Close task detail modal
 function closeTaskDetailModal() {
     document.getElementById('taskDetailModal').style.display = 'none';
+    // Clear the stored task ID
+    if (window.currentTaskDetailId) {
+        delete window.currentTaskDetailId;
+    }
+}
+
+// Get current task detail ID
+function getCurrentTaskDetailId() {
+    return window.currentTaskDetailId || null;
+}
+
+// Refresh task details view
+async function refreshTaskDetails(taskId) {
+    try {
+        const response = await apiGet(`/api/tasks/${taskId}`);
+        if (response.success) {
+            const task = response.data;
+            
+            // Get subtask execution status
+            const executionsResponse = await apiGet(`/api/tasks/${taskId}/subtask-executions`);
+            const executions = executionsResponse.success ? executionsResponse.data : [];
+            
+            displayTaskDetailsWithExecutions(task, executions);
+        }
+    } catch (error) {
+        console.error('Failed to refresh task details:', error);
+    }
 }
 
 // Load task data for editing

@@ -8,8 +8,7 @@ from flask_socketio import emit
 
 from common.models import Task, Machine, TaskStatus, MachineStatus, SubtaskDefinition
 from common.utils import parse_datetime, validate_cron_expression
-from common.predefined_commands import predefined_command_manager
-from common.subtasks import list_subtasks, get_subtask
+from common.subtasks import list_subtasks, get_subtask, execute_subtask
 
 logger = logging.getLogger(__name__)
 
@@ -349,8 +348,11 @@ def create_api_blueprint(database, socketio):
     @api.route('/tasks/<int:task_id>/subtask-executions', methods=['POST'])
     def update_subtask_execution(task_id):
         """Update subtask execution status (called by client)"""
+        print(f"PRINT DEBUG: update_subtask_execution called for task {task_id}")
         try:
+            logger.info(f"DEBUG: update_subtask_execution called for task {task_id}")
             data = request.get_json()
+            logger.info(f"DEBUG: Received data: {data}")
 
             # Validate required fields
             required_fields = ['subtask_name', 'target_machine', 'status']
@@ -393,6 +395,11 @@ def create_api_blueprint(database, socketio):
 
             database.update_subtask_execution(execution)
 
+            # Check if all subtasks are completed and update overall task status
+            logger.info(f"DEBUG: About to call check_and_update_task_completion for task {task_id}")
+            check_and_update_task_completion(task_id)
+            logger.info(f"DEBUG: Finished calling check_and_update_task_completion for task {task_id}")
+
             # Broadcast subtask status update
             socketio.emit('subtask_updated', {
                 'task_id': task_id,
@@ -413,151 +420,99 @@ def create_api_blueprint(database, socketio):
             logger.error(f"Update subtask execution failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    # 预定义指令管理API
-    @api.route('/predefined-commands', methods=['GET'])
-    def get_predefined_commands():
-        """获取所有预定义指令"""
-        try:
-            # 获取查询参数
-            category = request.args.get('category')
-            target_os = request.args.get('target_os')
-            search = request.args.get('search')
-
-            if search:
-                commands = predefined_command_manager.search_commands(search)
-            elif category:
-                commands = predefined_command_manager.get_commands_by_category(category)
-            elif target_os:
-                commands = predefined_command_manager.get_commands_by_os(target_os)
-            else:
-                commands = predefined_command_manager.get_all_commands()
-
-            return jsonify({
-                'success': True,
-                'data': [cmd.to_dict() for cmd in commands],
-                'categories': predefined_command_manager.get_categories()
-            })
-        except Exception as e:
-            logger.error(f"Get predefined commands failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @api.route('/predefined-commands', methods=['POST'])
-    def create_predefined_command():
-        """创建新的预定义指令"""
-        try:
-            data = request.get_json()
-
-            if not data.get('name') or not data.get('command'):
-                return jsonify({
-                    'success': False,
-                    'error': 'Command name and command text cannot be empty'
-                }), 400
-
-            from common.predefined_commands import PredefinedCommand
-            command = PredefinedCommand(
-                id=data.get('id', 0),  # 0 will auto-generate
-                name=data['name'],
-                command=data['command'],
-                description=data.get('description', ''),
-                category=data.get('category', 'general'),
-                timeout=data.get('timeout', 300),
-                requires_admin=data.get('requires_admin', False),
-                target_os=data.get('target_os', [])
-            )
-
-            command_id = predefined_command_manager.add_command(command)
-            command.id = command_id
-
-            return jsonify({
-                'success': True,
-                'data': command.to_dict()
-            }), 201
-
-        except Exception as e:
-            logger.error(f"Create predefined command failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @api.route('/predefined-commands/<int:command_id>', methods=['GET'])
-    def get_predefined_command(command_id):
-        """获取指定的预定义指令"""
-        try:
-            command = predefined_command_manager.get_command(command_id)
-            if not command:
-                return jsonify({
-                    'success': False,
-                    'error': 'Command does not exist'
-                }), 404
-
-            return jsonify({
-                'success': True,
-                'data': command.to_dict()
-            })
-        except Exception as e:
-            logger.error(f"Get predefined command failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @api.route('/predefined-commands/<int:command_id>', methods=['PUT'])
-    def update_predefined_command(command_id):
-        """更新预定义指令"""
-        try:
-            command = predefined_command_manager.get_command(command_id)
-            if not command:
-                return jsonify({
-                    'success': False,
-                    'error': 'Command does not exist'
-                }), 404
-
-            data = request.get_json()
-
-            # 更新字段
-            if 'name' in data:
-                command.name = data['name']
-            if 'command' in data:
-                command.command = data['command']
-            if 'description' in data:
-                command.description = data['description']
-            if 'category' in data:
-                command.category = data['category']
-            if 'timeout' in data:
-                command.timeout = data['timeout']
-            if 'requires_admin' in data:
-                command.requires_admin = data['requires_admin']
-            if 'target_os' in data:
-                command.target_os = data['target_os']
-
-            predefined_command_manager.update_command(command)
-
-            return jsonify({
-                'success': True,
-                'data': command.to_dict()
-            })
-
-        except Exception as e:
-            logger.error(f"Update predefined command failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @api.route('/predefined-commands/<int:command_id>', methods=['DELETE'])
-    def delete_predefined_command(command_id):
-        """删除预定义指令"""
-        try:
-            command = predefined_command_manager.get_command(command_id)
-            if not command:
-                return jsonify({
-                    'success': False,
-                    'error': 'Command does not exist'
-                }), 404
-
-            predefined_command_manager.delete_command(command_id)
-
-            return jsonify({'success': True})
-
-        except Exception as e:
-            logger.error(f"Delete predefined command failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
     # Subtasks API
     @api.route('/subtasks', methods=['GET'])
     def get_available_subtasks():
+        """Get all available subtasks"""
+        try:
+            subtasks = list_subtasks()
+            subtask_info = []
+            
+            for subtask_name in subtasks:
+                subtask_func = get_subtask(subtask_name)
+                if subtask_func:
+                    # Get docstring for description
+                    description = subtask_func.__doc__ or "No description available"
+                    subtask_info.append({
+                        'name': subtask_name,
+                        'description': description.strip(),
+                        'function': subtask_func.__name__
+                    })
+            
+            return jsonify({
+                'success': True,
+                'data': subtask_info,
+                'count': len(subtask_info)
+            })
+        except Exception as e:
+            logger.error(f"Get available subtasks failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/subtasks/<string:subtask_name>/execute', methods=['POST'])
+    def execute_subtask_api(subtask_name):
+        """Execute a specific subtask"""
+        try:
+            # Get any parameters from request body
+            data = request.get_json() or {}
+            args = data.get('args', [])
+            kwargs = data.get('kwargs', {})
+            
+            # Execute the subtask
+            result = execute_subtask(subtask_name, *args, **kwargs)
+            
+            return jsonify({
+                'success': result['success'],
+                'data': result['result'],
+                'error': result['error']
+            })
+        except Exception as e:
+            logger.error(f"Execute subtask {subtask_name} failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/subtasks/<string:subtask_name>/info', methods=['GET'])
+    def get_subtask_info(subtask_name):
+        """Get information about a specific subtask"""
+        try:
+            subtask_func = get_subtask(subtask_name)
+            if not subtask_func:
+                return jsonify({
+                    'success': False,
+                    'error': f'Subtask "{subtask_name}" not found'
+                }), 404
+
+            # Get detailed information about the subtask
+            info = {
+                'name': subtask_name,
+                'function': subtask_func.__name__,
+                'description': subtask_func.__doc__ or "No description available",
+                'module': subtask_func.__module__,
+            }
+            
+            # Try to get function signature if available
+            try:
+                import inspect
+                sig = inspect.signature(subtask_func)
+                info['parameters'] = {
+                    'signature': str(sig),
+                    'parameters': [
+                        {
+                            'name': param.name,
+                            'default': str(param.default) if param.default != inspect.Parameter.empty else None,
+                            'annotation': str(param.annotation) if param.annotation != inspect.Parameter.empty else None
+                        }
+                        for param in sig.parameters.values()
+                    ]
+                }
+            except Exception:
+                info['parameters'] = 'Unable to determine parameters'
+
+            return jsonify({
+                'success': True,
+                'data': info
+            })
+        except Exception as e:
+            logger.error(f"Get subtask info for {subtask_name} failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
         """Get all available subtasks"""
         try:
             subtasks = list_subtasks()
@@ -648,7 +603,6 @@ def create_api_blueprint(database, socketio):
                 ip_address=data['ip_address'],
                 port=data.get('port', 8080),
                 status=MachineStatus.ONLINE,
-                capabilities=data.get('capabilities', []),
                 # System information
                 cpu_info=data.get('cpu_info'),
                 memory_info=data.get('memory_info'),
@@ -669,8 +623,7 @@ def create_api_blueprint(database, socketio):
                     action='MACHINE_UPDATE',
                     message=f"Machine {machine.name} updated registration",
                     data={
-                        'system_summary': machine.system_summary,
-                        'capabilities': machine.capabilities
+                        'system_summary': machine.system_summary
                     }
                 )
             else:
@@ -680,8 +633,7 @@ def create_api_blueprint(database, socketio):
                     action='MACHINE_REGISTER',
                     message=f"New machine {machine.name} registered",
                     data={
-                        'system_summary': machine.system_summary,
-                        'capabilities': machine.capabilities
+                        'system_summary': machine.system_summary
                     }
                 )
 
@@ -743,7 +695,6 @@ def create_api_blueprint(database, socketio):
                 ip_address=data.get('ip_address', existing_machine.ip_address),
                 port=data.get('port', existing_machine.port),
                 status=existing_machine.status,  # 保持现有状态
-                capabilities=data.get('capabilities', existing_machine.capabilities),
                 # 更新系统信息
                 cpu_info=data.get('cpu_info'),
                 memory_info=data.get('memory_info'),
@@ -1064,6 +1015,60 @@ def create_api_blueprint(database, socketio):
             logger.error(f"Failed to get client logs: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @api.route('/logs/clear', methods=['POST'])
+    def clear_client_logs():
+        """Clear client logs before a specified date"""
+        try:
+            data = request.get_json()
+            
+            if 'clear_before_date' in data:
+                # Clear logs before specific date
+                clear_date = data['clear_before_date']
+                
+                # Validate date format
+                try:
+                    from datetime import datetime
+                    datetime.strptime(clear_date, '%Y-%m-%d')
+                except ValueError:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Invalid date format. Use YYYY-MM-DD.'
+                    }), 400
+                
+                # Clear logs directly with SQL
+                with database.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        DELETE FROM client_logs
+                        WHERE date(timestamp) < date(?)
+                    ''', (clear_date,))
+                    deleted_count = cursor.rowcount
+                    conn.commit()
+                
+                message = f"Cleared {deleted_count} log entries before {clear_date}"
+                
+            elif 'older_than_days' in data:
+                # Legacy support for older_than_days
+                days = int(data['older_than_days'])
+                deleted_count = database.clear_client_logs(older_than_days=days)
+                message = f"Cleared {deleted_count} log entries older than {days} days"
+                
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Either clear_before_date or older_than_days must be specified'
+                }), 400
+
+            return jsonify({
+                'success': True,
+                'message': message,
+                'deleted_count': deleted_count
+            })
+
+        except Exception as e:
+            logger.error(f"Failed to clear client logs: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @api.route('/machines/<machine_name>', methods=['GET'])
     def get_machine_by_name(machine_name):
         """Get machine by name (primary method)"""
@@ -1087,18 +1092,37 @@ def create_api_blueprint(database, socketio):
     def delete_machine_by_name(machine_name):
         """Delete machine by name (primary method - machine names are unique)"""
         try:
-            success = database.delete_machine(machine_name)
-            if not success:
+            # Get machine details before deleting
+            machine = database.get_machine_by_name(machine_name)
+            if not machine:
                 return jsonify({
                     'success': False,
                     'error': f'Machine "{machine_name}" not found'
                 }), 404
 
-            # Broadcast machine deletion event
+            # Notify the specific machine that it's being unregistered
+            room_name = f"machine_{machine.ip_address.replace('.', '_')}"
+            socketio.emit('machine_unregistered', {
+                'machine_name': machine_name,
+                'reason': 'Machine unregistered by administrator',
+                'timestamp': datetime.now().isoformat()
+            }, room=room_name)
+
+            # Delete the machine from database
+            success = database.delete_machine(machine_name)
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': f'Failed to delete machine "{machine_name}"'
+                }), 500
+
+            # Broadcast general machine deletion event for UI updates
             socketio.emit('machine_deleted', {
                 'machine_name': machine_name,
                 'deleted_at': datetime.now().isoformat()
             })
+
+            logger.info(f"Machine unregistered and notified: {machine_name} ({machine.ip_address})")
 
             return jsonify({
                 'success': True,
@@ -1157,5 +1181,100 @@ def create_api_blueprint(database, socketio):
         except Exception as e:
             logger.error(f"Validate machine name failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    def check_and_update_task_completion(task_id):
+        """
+        Check if all subtasks are completed and update overall task status
+        
+        Args:
+            task_id: ID of the task to check
+        """
+        try:
+            logger.info(f"DEBUG: Starting completion check for task {task_id}")
+            
+            # Get task and its subtasks
+            task = database.get_task(task_id)
+            if not task or not task.subtasks:
+                logger.warning(f"DEBUG: Task {task_id} not found or has no subtasks")
+                return
+            
+            # Get all subtask executions for this task
+            executions = database.get_subtask_executions(task_id)
+            logger.info(f"DEBUG: Found {len(executions)} subtask executions for task {task_id}")
+            
+            # Create a map of executed subtasks
+            execution_map = {}
+            for exec in executions:
+                key = f"{exec.subtask_name}_{exec.target_machine}"
+                execution_map[key] = exec
+                logger.info(f"DEBUG: Execution {key}: status={exec.status}")
+            
+            # Check completion status
+            total_subtasks = len(task.subtasks)
+            completed_subtasks = 0
+            failed_subtasks = 0
+            
+            logger.info(f"DEBUG: Task {task_id} has {total_subtasks} subtasks to check")
+            
+            for subtask in task.subtasks:
+                key = f"{subtask.name}_{subtask.target_machine}"
+                execution = execution_map.get(key)
+                
+                logger.info(f"DEBUG: Checking subtask {key}, found execution: {execution is not None}")
+                
+                if execution:
+                    if execution.status == TaskStatus.COMPLETED:
+                        completed_subtasks += 1
+                        logger.info(f"DEBUG: Subtask {key} is COMPLETED")
+                    elif execution.status == TaskStatus.FAILED:
+                        failed_subtasks += 1
+                        logger.info(f"DEBUG: Subtask {key} is FAILED")
+                    else:
+                        logger.info(f"DEBUG: Subtask {key} has status: {execution.status}")
+                else:
+                    logger.info(f"DEBUG: Subtask {key} has no execution record")
+            
+            # Determine if task is complete
+            all_subtasks_finished = (completed_subtasks + failed_subtasks) == total_subtasks
+            
+            logger.info(f"DEBUG: Task {task_id} completion status - Total: {total_subtasks}, Completed: {completed_subtasks}, Failed: {failed_subtasks}")
+            logger.info(f"DEBUG: Task {task_id} - All finished: {all_subtasks_finished}, Current status: {task.status}")
+            
+            if all_subtasks_finished and task.status not in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+                logger.info(f"DEBUG: Task {task_id} - Updating task status")
+                
+                # Update task status
+                task.completed_at = datetime.now()
+                
+                if failed_subtasks > 0:
+                    task.status = TaskStatus.FAILED
+                    task.error_message = f"{failed_subtasks} out of {total_subtasks} subtasks failed"
+                    logger.info(f"DEBUG: Task {task_id} - Set to FAILED")
+                else:
+                    task.status = TaskStatus.COMPLETED
+                    task.result = f"All {total_subtasks} subtasks completed successfully"
+                    logger.info(f"DEBUG: Task {task_id} - Set to COMPLETED")
+                
+                update_success = database.update_task(task)
+                logger.info(f"DEBUG: Task {task_id} - Database update success: {update_success}")
+                
+                # Broadcast task completion
+                logger.info(f"DEBUG: Task {task_id} - Emitting task_completed event")
+                socketio.emit('task_completed', {
+                    'task_id': task_id,
+                    'status': task.status.value,
+                    'success': task.status == TaskStatus.COMPLETED,
+                    'completed_at': task.completed_at.isoformat(),
+                    'total_subtasks': total_subtasks,
+                    'completed_subtasks': completed_subtasks,
+                    'failed_subtasks': failed_subtasks,
+                    'result': task.result,
+                    'error_message': task.error_message
+                })
+                
+                logger.info(f"Task {task_id} completed: {completed_subtasks}/{total_subtasks} subtasks successful")
+        
+        except Exception as e:
+            logger.error(f"Failed to check task completion for task {task_id}: {e}")
 
     return api

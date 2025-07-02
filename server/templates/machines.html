@@ -43,12 +43,6 @@
             <header class="header">
                 <div class="header-content">
                     <h1>Client Management</h1>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="refreshMachines()">
-                            <i class="fas fa-sync-alt"></i>
-                            Refresh
-                        </button>
-                    </div>
                 </div>
             </header>
 
@@ -98,7 +92,7 @@
 
     <!-- JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/machines.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025070204"></script>
+    <script src="{{ url_for('static', filename='js/machines.js') }}?v=2025070204"></script>
 </body>
 </html>
