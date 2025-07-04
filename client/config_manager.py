@@ -11,18 +11,18 @@ logger = logging.getLogger(__name__)
 
 class ClientConfigManager:
     """
-    管理客户端配置文件的读取和验证
+    Manages client configuration file reading and validation
     """
     
     def __init__(self, config_file_path: Optional[str] = None):
         """
-        初始化配置管理器
+        Initialize configuration manager
         
         Args:
-            config_file_path: 配置文件路径，如果为None则使用默认路径
+            config_file_path: Configuration file path, if None, use default path
         """
         if config_file_path is None:
-            # 默认配置文件路径
+            # Default configuration file path
             current_dir = os.path.dirname(os.path.abspath(__file__))
             config_file_path = os.path.join(current_dir, 'client.cfg')
         
@@ -31,7 +31,7 @@ class ClientConfigManager:
         self._load_config()
     
     def _load_config(self):
-        """加载配置文件"""
+        """Load configuration file"""
         try:
             if os.path.exists(self.config_file_path):
                 self.config.read(self.config_file_path, encoding='utf-8')
@@ -46,7 +46,7 @@ class ClientConfigManager:
             self._create_default_config()
     
     def _create_default_config(self):
-        """创建默认配置"""
+        """Create default configuration"""
         self.config['DEFAULT'] = {
             'server_url': 'http://localhost:5000',
             'client_name': '',
@@ -88,18 +88,18 @@ class ClientConfigManager:
             'max_worker_threads': '4',
             'thread_pool_size': '2'
         }
-    
+
     def get(self, section: str, key: str, fallback: Any = None) -> str:
         """
-        获取配置值
+        Get configuration value
         
         Args:
-            section: 配置段名
-            key: 配置键名
-            fallback: 默认值
+            section: Configuration section name
+            key: Configuration key name
+            fallback: Default value
             
         Returns:
-            配置值
+            Configuration value
         """
         try:
             return self.config.get(section, key, fallback=fallback)
@@ -108,15 +108,15 @@ class ClientConfigManager:
     
     def get_int(self, section: str, key: str, fallback: int = 0) -> int:
         """
-        获取整数配置值
+        Get integer configuration value
         
         Args:
-            section: 配置段名
-            key: 配置键名
-            fallback: 默认值
+            section: Configuration section name
+            key: Configuration key name
+            fallback: Default value
             
         Returns:
-            整数配置值
+            Integer configuration value
         """
         try:
             return self.config.getint(section, key, fallback=fallback)
@@ -125,15 +125,15 @@ class ClientConfigManager:
     
     def get_float(self, section: str, key: str, fallback: float = 0.0) -> float:
         """
-        获取浮点数配置值
+        Get float configuration value
         
         Args:
-            section: 配置段名
-            key: 配置键名
-            fallback: 默认值
+            section: Configuration section name
+            key: Configuration key name
+            fallback: Default value
             
         Returns:
-            浮点数配置值
+            Float configuration value
         """
         try:
             return self.config.getfloat(section, key, fallback=fallback)
@@ -142,15 +142,15 @@ class ClientConfigManager:
     
     def get_boolean(self, section: str, key: str, fallback: bool = False) -> bool:
         """
-        获取布尔配置值
+        Get boolean configuration value
         
         Args:
-            section: 配置段名
-            key: 配置键名
-            fallback: 默认值
+            section: Configuration section name
+            key: Configuration key name
+            fallback: Default value
             
         Returns:
-            布尔配置值
+            Boolean configuration value
         """
         try:
             return self.config.getboolean(section, key, fallback=fallback)
@@ -159,16 +159,16 @@ class ClientConfigManager:
     
     def get_all_config(self) -> Dict[str, Dict[str, str]]:
         """
-        获取所有配置
+        Get all configuration
         
         Returns:
-            包含所有配置的字典
+            Dictionary containing all configuration
         """
         result = {}
         for section_name in self.config.sections():
             result[section_name] = dict(self.config[section_name])
         
-        # 包含DEFAULT段
+        # Include DEFAULT section
         if 'DEFAULT' in self.config:
             result['DEFAULT'] = dict(self.config['DEFAULT'])
         
@@ -176,13 +176,13 @@ class ClientConfigManager:
     
     def validate_config(self) -> bool:
         """
-        验证配置的有效性
+        Validate configuration validity
         
         Returns:
             True if config is valid, False otherwise
         """
         try:
-            # 验证必需的配置项
+            # Validate required configuration items
             # Note: heartbeat_interval is now in common.cfg, validate it there
             heartbeat_interval = get_heartbeat_interval()
             if heartbeat_interval <= 0:
@@ -199,7 +199,7 @@ class ClientConfigManager:
                 logger.error("connection_timeout must be greater than 0")
                 return False
             
-            # 验证服务器URL
+            # Validate server URL
             server_url = self.get('DEFAULT', 'server_url', 'http://localhost:5000')
             if not server_url.startswith(('http://', 'https://')):
                 logger.error("server_url must start with http:// or https://")
@@ -214,12 +214,12 @@ class ClientConfigManager:
     
     def set(self, section: str, key: str, value: str):
         """
-        设置配置值
+        Set configuration value
         
         Args:
-            section: 配置段名
-            key: 配置键名
-            value: 配置值
+            section: Configuration section name
+            key: Configuration key name
+            value: Configuration value
         """
         if section not in self.config:
             self.config[section] = {}
@@ -227,10 +227,10 @@ class ClientConfigManager:
     
     def save_config(self, file_path: Optional[str] = None):
         """
-        保存配置到文件
+        Save configuration to file
         
         Args:
-            file_path: 保存路径，如果为None则使用原路径
+            file_path: Save path, if None use original path
         """
         if file_path is None:
             file_path = self.config_file_path
@@ -244,50 +244,50 @@ class ClientConfigManager:
             raise
     
     def reload(self):
-        """重新加载配置文件"""
+        """Reload configuration file"""
         self._load_config()
     
     def get_config_summary(self) -> str:
         """
-        获取配置摘要信息
+        Get configuration summary information
         
         Returns:
-            配置摘要字符串
+            Configuration summary string
         """
         summary = []
         summary.append("=== Client Configuration Summary ===")
         
-        # 基本配置
+        # Basic configuration
         summary.append(f"Server URL: {self.get('DEFAULT', 'server_url', 'N/A')}")
         summary.append(f"client Name: {self.get('DEFAULT', 'client_name', 'N/A')}")
         summary.append(f"Heartbeat Interval: {get_heartbeat_interval()} seconds (from common.cfg)")
         summary.append(f"Config Update Interval: {self.get_int('DEFAULT', 'config_update_interval', 600)} seconds")
         summary.append(f"Log Level: {self.get('DEFAULT', 'log_level', 'INFO')}")
         
-        # 高级配置
+        # Advanced configuration
         summary.append(f"WebSocket Ping Interval: {self.get_int('ADVANCED', 'websocket_ping_interval', 25)} seconds")
         summary.append(f"System Info Update Interval: {self.get_int('ADVANCED', 'system_info_update_interval', 300)} seconds")
         summary.append(f"Debug Mode: {self.get_boolean('ADVANCED', 'debug_mode', False)}")
         
-        # 性能配置
+        # Performance configuration
         summary.append(f"Max Concurrent Tasks: {self.get_int('DEFAULT', 'max_concurrent_tasks', 1)}")
         summary.append(f"Task Timeout: {self.get_int('DEFAULT', 'task_timeout', 3600)} seconds")
         
         return "\n".join(summary)
 
 
-# 全局配置实例
+# Global configuration instance
 _config_manager = None
 
 def get_config_manager(config_file_path: Optional[str] = None) -> ClientConfigManager:
     """
-    获取全局配置管理器实例
+    Get global configuration manager instance
     
     Args:
-        config_file_path: 配置文件路径
+        config_file_path: Configuration file path
         
     Returns:
-        配置管理器实例
+        Configuration manager instance
     """
     global _config_manager
     if _config_manager is None:
@@ -295,14 +295,14 @@ def get_config_manager(config_file_path: Optional[str] = None) -> ClientConfigMa
     return _config_manager
 
 def reload_config():
-    """重新加载配置"""
+    """Reload configuration"""
     global _config_manager
     if _config_manager is not None:
         _config_manager.reload()
 
-# 便捷函数
+# Convenience functions
 def get_heartbeat_interval() -> int:
-    """获取心跳间隔（秒）- 从 common.cfg 读取"""
+    """Get heartbeat interval (seconds) - read from common.cfg"""
     try:
         import configparser
         import os
@@ -323,34 +323,34 @@ def get_heartbeat_interval() -> int:
         return 60
 
 def get_server_url() -> str:
-    """获取服务器URL"""
+    """Get server URL"""
     return get_config_manager().get('DEFAULT', 'server_url', 'http://localhost:5000')
 
 def get_client_name() -> str:
-    """获取机器名"""
+    """Get client name"""
     return get_config_manager().get('DEFAULT', 'client_name', '')
 
 def get_config_update_interval() -> int:
-    """获取配置更新间隔（秒）"""
+    """Get configuration update interval (seconds)"""
     return get_config_manager().get_int('DEFAULT', 'config_update_interval', 600)
 
 def get_log_level() -> str:
-    """获取日志级别"""
+    """Get log level"""
     return get_config_manager().get('DEFAULT', 'log_level', 'INFO')
 
 def get_connection_timeout() -> int:
-    """获取连接超时时间（秒）"""
+    """Get connection timeout (seconds)"""
     return get_config_manager().get_int('DEFAULT', 'connection_timeout', 10)
 
 def get_websocket_ping_interval() -> int:
-    """获取WebSocket ping间隔（秒）"""
+    """Get WebSocket ping interval (seconds)"""
     return get_config_manager().get_int('ADVANCED', 'websocket_ping_interval', 25)
 
 def get_system_info_update_interval() -> int:
-    """获取系统信息更新间隔（秒）"""
+    """Get system information update interval (seconds)"""
     return get_config_manager().get_int('ADVANCED', 'system_info_update_interval', 300)
 
 def is_debug_mode() -> bool:
-    """是否开启调试模式"""
+    """Whether debug mode is enabled"""
     return get_config_manager().get_boolean('ADVANCED', 'debug_mode', False)
 

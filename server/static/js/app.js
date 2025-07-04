@@ -57,6 +57,9 @@ function initializeSocket() {
         if (typeof refreshTasks === 'function') {
             refreshTasks();
         }
+        if (typeof refreshClients === 'function') {
+            refreshClients();
+        }
     });
     
     socket.on('task_completed', function(data) {
@@ -65,6 +68,9 @@ function initializeSocket() {
         showNotification('Task execution completed', `Task ID: ${data.task_id} execute${status}`, type);
         if (typeof refreshTasks === 'function') {
             refreshTasks();
+        }
+        if (typeof refreshClients === 'function') {
+            refreshClients();
         }
     });
     
@@ -93,6 +99,13 @@ function initializeSocket() {
         console.log('Client heartbeat:', data);
         if (typeof updateClientStatus === 'function') {
             updateClientStatus(data);
+        }
+    });
+    
+    socket.on('client_task_updated', function(data) {
+        console.log('Client task updated:', data);
+        if (typeof refreshClients === 'function') {
+            refreshClients();
         }
     });
     

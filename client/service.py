@@ -80,26 +80,10 @@ def check_windows_service_support():
         raise RuntimeError(f"Windows service support check failed: {e}")
 
 def generate_client_name():
-    """Generate client name using hostname and IP"""
+    """Generate client name using hostname only"""
     try:
         hostname = platform.node()
-        
-        # Get local IP address
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            # Connect to a remote address to get local IP
-            s.connect(('8.8.8.8', 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-            
-            # Use last part of IP for brevity
-            ip_last = local_ip.split('.')[-1]
-            client_name = f"{hostname}-{ip_last}"
-        except Exception:
-            # Fallback to hostname only if IP detection fails
-            client_name = hostname
-        
-        return client_name
+        return hostname
     except Exception:
         # Ultimate fallback
         return f"windows-{platform.node()}"

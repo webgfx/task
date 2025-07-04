@@ -3,16 +3,46 @@
  */
 
 let clients = [];
+let allClientDetailsVisible = true; // Track global visibility state for clients
+
+// Legacy function stub for backward compatibility (prevents console errors)
+function toggleView() {
+    console.warn('toggleView function called but card/table view toggle has been removed. Using table view only.');
+}
 
 // Initialize after page load
 document.addEventListener('DOMContentLoaded', function() {
-    initializeClientsPage();
+    // Add a small delay to ensure all elements are rendered
+    setTimeout(() => {
+        initializeClientsPage();
+    }, 100);
 });
 
 // Initialize client page
 async function initializeClientsPage() {
-    await refreshClients();
-    setupEventListeners();
+    // Wait for DOM to be fully ready and check multiple times if needed
+    let retryCount = 0;
+    const maxRetries = 5;
+    
+    while (retryCount < maxRetries) {
+        const clientTableContainer = document.getElementById('clientTableContainer');
+        
+        if (clientTableContainer) {
+            // Table container found, proceed with initialization
+            await refreshClients();
+            setupEventListeners();
+            return;
+        }
+        
+        // Elements not found, wait and retry
+        retryCount++;
+        console.log(`Client table container not ready, retry ${retryCount}/${maxRetries}`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    // If we get here, elements weren't found after retries
+    console.error('Required client page elements not found after retries');
+    showNotification('Page Error', 'Client management page failed to initialize properly', 'error');
 }
 
 // Setup event listeners
@@ -29,7 +59,16 @@ function setupEventListeners() {
 // Refresh client list
 async function refreshClients() {
     try {
-        showLoading(document.getElementById('clientGrid'));
+        // Show loading on the table container
+        const loadingContainer = document.getElementById('clientTableContainer');
+            
+        if (loadingContainer) {
+            showLoading(loadingContainer);
+        } else {
+            // Fallback: show a general loading notification
+            console.log('Loading clients...');
+        }
+        
         const response = await apiGet('/api/clients');
         clients = response.data || [];
         displayClients();
@@ -40,7 +79,12 @@ async function refreshClients() {
         console.error('Refresh client list failed:', error);
         showNotification('Refresh Failed', error.message, 'error');
     } finally {
-        hideLoading(document.getElementById('clientGrid'));
+        // Hide loading from the table container
+        const loadingContainer = document.getElementById('clientTableContainer');
+            
+        if (loadingContainer) {
+            hideLoading(loadingContainer);
+        }
     }
 }
 
@@ -54,9 +98,9 @@ window.refreshClients = refreshClients;
 function updateConnectionStats() {
     const stats = {
         total: clients.length,
-        online: clients.filter(m => m.status === 'online').length,
-        offline: clients.filter(m => m.status === 'offline').length,
-        busy: clients.filter(m => m.status === 'busy').length
+        online: clients.filter(c => c.status === 'online').length,
+        offline: clients.filter(c => c.status === 'offline').length,
+        busy: clients.filter(c => c.status === 'busy').length
     };
     
     // Update header if stats element exists
@@ -121,156 +165,348 @@ function filterClients() {
     clients = originalClients;
 }
 
-// Display clients
+// Display clients (table view only)
 function displayClients() {
-    const container = document.getElementById('clientGrid');
+    displayClientsTable();
+}
+
+// Display clients in table view
+function displayClientsTable() {
+    const tbody = document.getElementById('clientTableBody');
+    
+    if (!tbody) {
+        console.error('Client table body not found');
+        return;
+    }
     
     if (clients.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-server" style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
-                <h3>No Registered Clients</h3>
-                <p>Please start client processes to register clients</p>
-                <div class="empty-actions">
-                    <code>python client/client.py --client-name your-client-name</code>
-                </div>
-            </div>
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center" style="padding: 40px;">
+                    <i class="fas fa-server" style="font-size: 2rem; color: #6c757d; margin-bottom: 1rem;"></i>
+                    <div>No Registered Clients</div>
+                    <small style="color: #6c757d;">Please start client processes to register clients</small>
+                </td>
+            </tr>
         `;
         return;
     }
     
-    const html = clients.map(client => createClientCard(client)).join('');
-    container.innerHTML = html;
+    const html = clients.map(client => createClientTableRow(client)).join('');
+    tbody.innerHTML = html;
+    
+    // Ensure all toggle icons are in correct initial state
+    initializeClientToggleIconStates();
+    
+    // Load details for all clients immediately since they're shown by default
+    // Add a small delay between requests to avoid overwhelming the server
+    clients.forEach((client, index) => {
+        setTimeout(() => {
+            loadClientDetails(client.name);
+        }, index * 100); // 100ms delay between each client detail load
+    });
 }
 
-// For backward compatibility
-function displayClients() {
-    displayClients();
-}
-
-// Create Client Card with enhanced system information display
-function createClientCard(client) {
+// Create client table row with toggle functionality
+function createClientTableRow(client) {
     const statusIcon = getStatusIcon(client.status);
     const lastHeartbeat = client.last_heartbeat ? formatRelativeTime(client.last_heartbeat) : 'Never';
-    const systemSummary = client.system_summary || {};
     
-    // Format detailed system information
-    const systemInfo = [];
+    // Get current task and subtask information
+    const taskId = client.current_task_id || '-';
+    const taskName = client.current_task_name || '-';
+    const subtaskId = client.current_subtask_id || '-';
+    const subtaskName = client.current_subtask_id ? getSubtaskDisplayName(client.current_subtask_id) : '-';
     
-    // Hostname (from client name or system summary)
-    const hostname = client.name || systemSummary.hostname || 'Unknown Host';
-    
-    // OS Information (detailed version)
-    if (client.os_info) {
-        const os = client.os_info;
-        let osDisplay = os.detailed_version || os.system || 'Unknown OS';
-        if (!os.detailed_version && os.release) osDisplay += ` ${os.release}`;
-        systemInfo.push(`<i class="fas fa-desktop"></i><span>OS: ${osDisplay}</span>`);
-    } else if (systemSummary.os) {
-        systemInfo.push(`<i class="fas fa-desktop"></i><span>OS: ${systemSummary.os}</span>`);
-    }
-    
-    // CPU Information
-    if (client.cpu_info) {
-        const cpu = client.cpu_info;
-        let cpuDisplay = cpu.processor || 'Unknown CPU';
-        if (cpu.cpu_count_logical) {
-            cpuDisplay += ` (${cpu.cpu_count_logical} cores)`;
-        }
-        if (cpu.cpu_freq_max) {
-            cpuDisplay += ` @ ${(cpu.cpu_freq_max / 1000).toFixed(1)}GHz`;
-        }
-        systemInfo.push(`<i class="fas fa-microchip"></i><span>CPU: ${cpuDisplay}</span>`);
-    } else if (systemSummary.cpu) {
-        systemInfo.push(`<i class="fas fa-microchip"></i><span>CPU: ${systemSummary.cpu}</span>`);
-    }
-    
-    // Memory Information (only show total)
-    if (client.memory_info) {
-        const mem = client.memory_info;
-        if (mem.total) {
-            systemInfo.push(`<i class="fas fa-memory"></i><span>Memory: ${formatBytes(mem.total)}</span>`);
-        }
-    } else if (systemSummary.memory) {
-        systemInfo.push(`<i class="fas fa-memory"></i><span>Memory: ${systemSummary.memory}</span>`);
-    }
-    
-    // GPU Information with model and driver version
-    if (client.gpu_info && client.gpu_info.length > 0) {
-        const gpus = client.gpu_info;
-        if (gpus.length === 1) {
-            const gpu = gpus[0];
-            let gpuDisplay = gpu.model || gpu.name || 'Unknown GPU';
-            if (gpu.driver_version && gpu.driver_version !== 'Unknown') {
-                gpuDisplay += ` (Driver: ${gpu.driver_version})`;
-            }
-            systemInfo.push(`<i class="fas fa-tv"></i><span>GPU: ${gpuDisplay}</span>`);
-        } else {
-            systemInfo.push(`<i class="fas fa-tv"></i><span>GPU: ${gpus.length} GPUs detected</span>`);
-        }
-    } else if (systemSummary.gpu) {
-        systemInfo.push(`<i class="fas fa-tv"></i><span>GPU: ${systemSummary.gpu}</span>`);
-    }
-    
-    return `
-        <div class="client-card" onclick="viewClientDetail('${client.name}')">
-            <div class="client-header">
-                <div class="client-title">
-                    <div class="client-name">
-                        ${statusIcon}
-                        ${escapeHtml(client.name)}
-                    </div>
-                    ${getClientStatusBadge(client.status)}
+    // Main client row
+    const mainRow = `
+        <tr class="client-main-row" data-client="${client.name}">
+            <td class="client-name-col">
+                ${statusIcon}
+                <span style="margin-left: 8px;">${escapeHtml(client.name)}</span>
+            </td>
+            <td class="status-col">
+                ${getClientStatusBadge(client.status)}
+            </td>
+            <td class="ip-col">
+                ${client.ip_address}
+            </td>
+            <td class="task-id-col">
+                ${taskId !== '-' ? `<span class="task-id-badge">#${taskId}</span>` : '<span class="no-id">—</span>'}
+            </td>
+            <td class="task-name-col">
+                <div class="task-name-info">
+                    <span class="task-name">${escapeHtml(taskName)}</span>
                 </div>
-            </div>
-            
-            <div class="client-body">
-                <div class="client-info">
-                    <div class="info-item">
-                        <i class="fas fa-network-wired"></i>
-                        <span>IP Address: ${client.ip_address}:${client.port}</span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-server"></i>
-                        <span>Hostname: ${hostname}</span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-heartbeat"></i>
-                        <span>Last Heartbeat: ${lastHeartbeat}</span>
-                    </div>
-                    ${client.current_task_id ? `
-                    <div class="info-item current-task">
-                        <i class="fas fa-tasks"></i>
-                        <span>Current Task: #${client.current_task_id}</span>
-                    </div>
-                    ` : ''}
-                    ${client.current_subtask_id ? `
-                    <div class="info-item current-subtask">
-                        <i class="fas fa-cog"></i>
-                        <span>Current Subtask: ${escapeHtml(client.current_subtask_id)}</span>
-                    </div>
-                    ` : ''}
-                    ${systemInfo.length > 0 ? systemInfo.map(info => `
-                    <div class="info-item system-info">
-                        ${info}
-                    </div>
-                    `).join('') : ''}
+            </td>
+            <td class="subtask-id-col">
+                ${subtaskId !== '-' ? `<span class="subtask-id-badge">${escapeHtml(subtaskId)}</span>` : '<span class="no-id">—</span>'}
+            </td>
+            <td class="subtask-name-col">
+                <div class="subtask-name-info">
+                    <span class="subtask-name">${escapeHtml(subtaskName)}</span>
                 </div>
-                
-                <div class="client-actions">
-                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); pingClient('${client.name}')" title="Ping Test">
-                        <i class="fas fa-satellite-dish"></i>
-                    </button>
-                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); viewClientTasks('${client.name}')" title="View Tasks">
-                        <i class="fas fa-list"></i>
+            </td>
+            <td class="heartbeat-col">
+                ${lastHeartbeat}
+            </td>
+            <td class="actions-col">
+                <div class="row-actions">
+                    <button class="collapse-toggle" onclick="event.stopPropagation(); toggleClientDetails('${client.name}')" 
+                            title="Toggle client details">
+                        <i class="fas fa-chevron-up" id="toggle-icon-${client.name}"></i>
                     </button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); unregisterClient('${client.name}')" title="Remove Client">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
+            </td>
+        </tr>
+    `;
+    
+    // Details row (initially expanded to show details by default)
+    const detailsRow = `
+        <tr class="client-details-row client-${client.name}-details" data-client="${client.name}">
+            <td colspan="9">
+                <div class="client-details-content" id="client-details-${client.name}">
+                    <!-- Content will be loaded dynamically -->
+                    <div class="loading-placeholder">
+                        <i class="fas fa-spinner fa-spin"></i> Loading details...
+                    </div>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    return mainRow + detailsRow;
+}
+
+// Initialize client toggle icon states to match current visibility
+function initializeClientToggleIconStates() {
+    // Set individual client toggle icons based on current visibility state
+    const allToggleIcons = document.querySelectorAll('.collapse-toggle i[id^="toggle-icon-"]');
+    allToggleIcons.forEach(icon => {
+        // Since details are visible by default (not collapsed), show chevron-up
+        icon.className = 'fas fa-chevron-up';
+    });
+}
+
+// Toggle client details visibility
+async function toggleClientDetails(clientName) {
+    const detailsRows = document.querySelectorAll(`.client-${clientName}-details`);
+    const toggleIcon = document.getElementById(`toggle-icon-${clientName}`);
+    
+    if (!toggleIcon || detailsRows.length === 0) return;
+    
+    const isCollapsed = detailsRows[0].classList.contains('collapsed');
+    
+    detailsRows.forEach(row => {
+        if (isCollapsed) {
+            row.classList.remove('collapsed');
+        } else {
+            row.classList.add('collapsed');
+        }
+    });
+    
+    // Update toggle icon based on NEW state after toggle
+    // If was collapsed (now expanding) → show up arrow (visible state)
+    // If was visible (now collapsing) → show down arrow (hidden state)
+    toggleIcon.className = isCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+    
+    // Load detailed content when expanding (or initially if details are shown by default)
+    if (isCollapsed) {
+        await loadClientDetails(clientName);
+    }
+}
+
+// Toggle all client details visibility (page-wise toggle)
+function toggleAllClientDetails() {
+    const toggleIcon = document.getElementById('toggleAllClientsIcon');
+    const toggleText = document.getElementById('toggleAllClientsText');
+    
+    // Get all client detail rows and toggle icons
+    const allDetailRows = document.querySelectorAll('.client-details-row');
+    const allToggleIcons = document.querySelectorAll('.collapse-toggle i[id^="toggle-icon-"]');
+    
+    if (allClientDetailsVisible) {
+        // Hide all details
+        allDetailRows.forEach(row => {
+            row.classList.add('collapsed');
+        });
+        
+        allToggleIcons.forEach(icon => {
+            icon.className = 'fas fa-chevron-down'; // Down arrow when hidden
+        });
+        
+        toggleIcon.className = 'fas fa-eye';
+        toggleText.textContent = 'Show All Details';
+        allClientDetailsVisible = false;
+    } else {
+        // Show all details
+        allDetailRows.forEach(row => {
+            row.classList.remove('collapsed');
+        });
+        
+        allToggleIcons.forEach(icon => {
+            icon.className = 'fas fa-chevron-up'; // Up arrow when visible
+        });
+        
+        toggleIcon.className = 'fas fa-eye-slash';
+        toggleText.textContent = 'Hide All Details';
+        allClientDetailsVisible = true;
+        
+        // Load details for all clients when showing
+        clients.forEach((client, index) => {
+            setTimeout(() => {
+                loadClientDetails(client.name);
+            }, index * 100);
+        });
+    }
+}
+
+// Load comprehensive client details
+async function loadClientDetails(clientName) {
+    try {
+        const client = clients.find(c => c.name === clientName);
+        if (!client) {
+            console.error('Client not found:', clientName);
+            return;
+        }
+        
+        // Get client tasks
+        const tasksResponse = await apiGet('/api/tasks');
+        const allTasks = tasksResponse.data || [];
+        const clientTasks = allTasks.filter(task => 
+            task.clients && task.clients.includes(clientName)
+        );
+        
+        const detailsContent = formatClientDetails(client, clientTasks);
+        const contentElement = document.getElementById(`client-details-${clientName}`);
+        if (contentElement) {
+            contentElement.innerHTML = detailsContent;
+        }
+    } catch (error) {
+        console.error('Failed to load client details:', error);
+        const contentElement = document.getElementById(`client-details-${clientName}`);
+        if (contentElement) {
+            contentElement.innerHTML = '<div class="error-message">Failed to load client details</div>';
+        }
+    }
+}
+
+// Format comprehensive client details
+function formatClientDetails(client, tasks) {
+    const systemSummary = client.system_summary || {};
+    
+    // Format compact system information
+    function formatCompactSystemDetails() {
+        if (!client.cpu_info && !client.memory_info && !client.gpu_info && !client.os_info) {
+            return '<p style="color: #6c757d;">No system information available</p>';
+        }
+        
+        let details = '<div class="compact-system-info">';
+        
+        // CPU Information (compact)
+        if (client.cpu_info) {
+            const cpu = client.cpu_info;
+            const cpuText = cpu.processor || 'Unknown CPU';
+            const cores = cpu.cpu_count_logical ? ` (${cpu.cpu_count_logical} cores)` : '';
+            const freq = cpu.cpu_freq_max ? ` @ ${(cpu.cpu_freq_max / 1000).toFixed(1)}GHz` : '';
+            details += `
+                <div class="system-info-item">
+                    <i class="fas fa-microchip"></i>
+                    <span class="info-label">CPU:</span>
+                    <span class="info-value">${cpuText}${cores}${freq}</span>
+                </div>
+            `;
+        }
+        
+        // Memory Information (compact)
+        if (client.memory_info) {
+            const mem = client.memory_info;
+            const total = mem.total ? formatBytes(mem.total) : 'Unknown';
+            details += `
+                <div class="system-info-item">
+                    <i class="fas fa-memory"></i>
+                    <span class="info-label">Memory:</span>
+                    <span class="info-value">${total}</span>
+                </div>
+            `;
+        }
+        
+        // GPU Information (compact)
+        if (client.gpu_info && client.gpu_info.length > 0) {
+            client.gpu_info.forEach((gpu, index) => {
+                const gpuName = gpu.model || gpu.name || 'Unknown GPU';
+                const memory = gpu.memory_total ? ` (${formatBytes(gpu.memory_total)})` : '';
+                const driver = gpu.driver_version ? ` - Driver: ${gpu.driver_version}` : '';
+                const driverDate = gpu.driver_date ? ` (${gpu.driver_date})` : '';
+                const deviceId = gpu.device_id ? ` - ID: ${gpu.device_id}` : '';
+                const prefix = client.gpu_info.length > 1 ? `GPU ${index + 1}: ` : 'GPU: ';
+                details += `
+                    <div class="system-info-item">
+                        <i class="fas fa-tv"></i>
+                        <span class="info-label">${prefix}</span>
+                        <span class="info-value">${gpuName}${memory}${driver}${driverDate}${deviceId}</span>
+                    </div>
+                `;
+            });
+        }
+        
+        // Operating System (compact)
+        if (client.os_info) {
+            const os = client.os_info;
+            const osText = os.detailed_version || os.system || 'Unknown OS';
+            const arch = os.machine ? ` (${os.machine})` : '';
+            details += `
+                <div class="system-info-item">
+                    <i class="fas fa-desktop"></i>
+                    <span class="info-label">OS:</span>
+                    <span class="info-value">${osText}${arch}</span>
+                </div>
+            `;
+        }
+        
+        details += '</div>';
+        return details;
+    }
+    
+    return `
+        <div class="client-detail">
+            <div class="detail-section">
+                ${formatCompactSystemDetails()}
             </div>
         </div>
     `;
+}
+
+// Get display name for subtask (convert ID to readable name)
+function getSubtaskDisplayName(subtaskId) {
+    // Convert snake_case or camelCase to readable names
+    if (!subtaskId || subtaskId === '-' || subtaskId === '') return '—';
+    
+    // Common subtask name mappings
+    const nameMap = {
+        'get_hostname': 'Get Hostname',
+        'get_system_info': 'Get System Info',
+        'dawn_e2e_tests': 'Dawn E2E Tests',
+        'system_info': 'System Info',
+        'hostname': 'Hostname',
+        'log_cleanup': 'Log Cleanup',
+        'file_download': 'File Download',
+        'command_execution': 'Subtask Execution',
+        'system_monitoring': 'System Monitoring'
+    };
+    
+    // Check if we have a predefined mapping
+    if (nameMap[subtaskId]) {
+        return nameMap[subtaskId];
+    }
+    
+    // Convert snake_case to readable format
+    return subtaskId
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase());
 }
 
 // Get status icon
@@ -295,236 +531,13 @@ function getClientStatusBadge(status) {
     return `<span class="badge ${badgeClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
 }
 
-// View client details
-async function viewClientDetail(clientName) {
-    try {
-        const client = clients.find(m => m.name === clientName);
-        if (!client) {
-            showNotification('Error', 'Client not found', 'error');
-            return;
-        }
-        
-        // Get client tasks
-        const tasksResponse = await apiGet('/api/tasks');
-        const allTasks = tasksResponse.data || [];
-        const clientTasks = allTasks.filter(task => 
-            task.target_clients && task.target_clients.includes(clientName)
-        );
-        
-        showClientDetailModal(client, clientTasks);
-    } catch (error) {
-        console.error('View client detail failed:', error);
-        showNotification('Error', error.message, 'error');
-    }
-}
 
-// Show client details modal
-function showClientDetailModal(client, tasks) {
-    const modal = document.getElementById('clientDetailModal');
-    const content = document.getElementById('clientDetailContent');
-    
-    const onlineTasks = tasks.filter(task => task.status === 'running');
-    const completedTasks = tasks.filter(task => task.status === 'completed');
-    const failedTasks = tasks.filter(task => task.status === 'failed');
-    const systemSummary = client.system_summary || {};
-    
-    // Format detailed system information
-    function formatSystemDetails() {
-        if (!client.cpu_info && !client.memory_info && !client.gpu_info && !client.os_info) {
-            return '<p style="color: #6c757d;">No detailed system information available</p>';
-        }
-        
-        let details = '';
-        
-        // CPU Information
-        if (client.cpu_info) {
-            const cpu = client.cpu_info;
-            details += `
-                <div class="detail-subsection">
-                    <h5><i class="fas fa-microchip"></i> CPU Information</h5>
-                    <div class="detail-grid">
-                        ${cpu.processor ? `<div class="detail-item"><label>Processor:</label><span>${cpu.processor}</span></div>` : ''}
-                        ${cpu.architecture ? `<div class="detail-item"><label>Architecture:</label><span>${cpu.architecture}</span></div>` : ''}
-                        ${cpu.cpu_count_logical ? `<div class="detail-item"><label>Logical Cores:</label><span>${cpu.cpu_count_logical}</span></div>` : ''}
-                        ${cpu.cpu_count_physical ? `<div class="detail-item"><label>Physical Cores:</label><span>${cpu.cpu_count_physical}</span></div>` : ''}
-                        ${cpu.cpu_freq_max ? `<div class="detail-item"><label>Max Frequency:</label><span>${(cpu.cpu_freq_max / 1000).toFixed(2)} GHz</span></div>` : ''}
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Memory Information
-        if (client.memory_info) {
-            const mem = client.memory_info;
-            details += `
-                <div class="detail-subsection">
-                    <h5><i class="fas fa-memory"></i> Memory Information</h5>
-                    <div class="detail-grid">
-                        ${mem.total ? `<div class="detail-item"><label>Total Memory:</label><span>${formatBytes(mem.total)}</span></div>` : ''}
-                        ${mem.available ? `<div class="detail-item"><label>Available Memory:</label><span>${formatBytes(mem.available)}</span></div>` : ''}
-                    </div>
-                </div>
-            `;
-        }
-        
-        // GPU Information
-        if (client.gpu_info && client.gpu_info.length > 0) {
-            details += `
-                <div class="detail-subsection">
-                    <h5><i class="fas fa-tv"></i> GPU Information</h5>
-            `;
-            client.gpu_info.forEach((gpu, index) => {
-                details += `
-                    <div class="detail-grid">
-                        <div class="detail-item"><label>GPU ${index + 1} Model:</label><span>${gpu.model || gpu.name || 'Unknown'}</span></div>
-                        ${gpu.vendor ? `<div class="detail-item"><label>Vendor:</label><span>${gpu.vendor}</span></div>` : ''}
-                        ${gpu.driver_version && gpu.driver_version !== 'Unknown' ? `<div class="detail-item"><label>Driver Version:</label><span>${gpu.driver_version}</span></div>` : ''}
-                        ${gpu.memory_total ? `<div class="detail-item"><label>Memory:</label><span>${formatBytes(gpu.memory_total)}</span></div>` : ''}
-                    </div>
-                `;
-            });
-            details += '</div>';
-        }
-        
-        // Operating System
-        if (client.os_info) {
-            const os = client.os_info;
-            details += `
-                <div class="detail-subsection">
-                    <h5><i class="fas fa-desktop"></i> Operating System</h5>
-                    <div class="detail-grid">
-                        ${os.detailed_version ? `<div class="detail-item"><label>Version:</label><span>${os.detailed_version}</span></div>` : ''}
-                        ${os.system ? `<div class="detail-item"><label>System:</label><span>${os.system}</span></div>` : ''}
-                        ${os.machine ? `<div class="detail-item"><label>Architecture:</label><span>${os.machine}</span></div>` : ''}
-                        ${os.windows_build ? `<div class="detail-item"><label>Build:</label><span>${os.windows_build}</span></div>` : ''}
-                    </div>
-                </div>
-            `;
-        }
-        
-        return details;
-    }
-    
-    const html = `
-        <div class="client-detail">
-            <div class="detail-section">
-                <h4>Client Information</h4>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <label>Client Name:</label>
-                        <span>${escapeHtml(client.name)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Hostname:</label>
-                        <span>${escapeHtml(systemSummary.hostname || client.name || 'Unknown')}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Status:</label>
-                        <span>${getClientStatusBadge(client.status)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>IP Address:</label>
-                        <span>${client.ip_address}:${client.port}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Last Heartbeat:</label>
-                        <span>${client.last_heartbeat ? formatRelativeTime(client.last_heartbeat) : 'Never'}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="detail-section">
-                <h4>Task Statistics</h4>
-                <div class="task-stats">
-                    <div class="stat-item">
-                        <span class="stat-number">${tasks.length}</span>
-                        <span class="stat-label">Total</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">${onlineTasks.length}</span>
-                        <span class="stat-label">Running</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">${completedTasks.length}</span>
-                        <span class="stat-label">Completed</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">${failedTasks.length}</span>
-                        <span class="stat-label">Failed</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="detail-section">
-                <h4>Recent Tasks</h4>
-                ${tasks.length > 0 ? `
-                    <div class="task-list-small">
-                        ${tasks.slice(0, 5).map(task => `
-                            <div class="task-item-small">
-                                <div class="task-info-small">
-                                    <div class="task-name-small">${escapeHtml(task.name)}</div>
-                                    <div class="task-time-small">${formatRelativeTime(task.created_at)}</div>
-                                </div>
-                                <div class="task-status-small">${getStatusBadge(task.status)}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '<p style="color: #6c757d;">No tasks assigned to this client</p>'}
-            </div>
-            
-            <div class="detail-section">
-                <h4>System Details</h4>
-                ${formatSystemDetails()}
-            </div>
-        </div>
-    `;
-    
-    content.innerHTML = html;
-    modal.style.display = 'block';
-}
-
-// Close client details modal
-function closeClientDetailModal() {
-    const modal = document.getElementById('clientDetailModal');
-    modal.style.display = 'none';
-}
-
-// View client tasks
-async function viewClientTasks(clientName) {
-    try {
-        const tasksResponse = await apiGet('/api/tasks');
-        const allTasks = tasksResponse.data || [];
-        const clientTasks = allTasks.filter(task => 
-            task.target_clients && task.target_clients.includes(clientName)
-        );
-        
-        showNotification('Info', `Found ${clientTasks.length} tasks for ${clientName}`, 'info');
-    } catch (error) {
-        console.error('View client tasks failed:', error);
-        showNotification('Error', error.message, 'error');
-    }
-}
-
-// Ping client
-async function pingClient(clientName) {
-    try {
-        showNotification('Info', `Pinging ${clientName}...`, 'info');
-        
-        // This would typically make an API call to ping the client
-        setTimeout(() => {
-            showNotification('Success', `${clientName} is reachable`, 'success');
-        }, 1000);
-    } catch (error) {
-        console.error('Ping client failed:', error);
-        showNotification('Error', error.message, 'error');
-    }
-}
 
 // Unregister client
 async function unregisterClient(clientName) {
     try {
         // Get client info for better confirmation dialog
-        const client = clients.find(m => m.name === clientName);
+        const client = clients.find(c => c.name === clientName);
         const currentTasks = client && client.current_task_id ? `\n- Has active task #${client.current_task_id}` : '';
         
         // Show detailed confirmation dialog

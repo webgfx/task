@@ -22,28 +22,25 @@ class ClientStatus(Enum):
 class SubtaskDefinition:
     """Represents a subtask definition within a task"""
     name: str = ""
-    target_client: str = ""  # Target client for this subtask
+    client: str = ""  # Target client for this subtask
     order: int = 0
     args: List[Any] = None
     kwargs: Dict[str, Any] = None
     timeout: int = 300  # seconds
     retry_count: int = 0
     max_retries: int = 3
-    subtask_id: Optional[str] = None  # Unique identifier for the subtask within the task
+    subtask_id: Optional[int] = None  # Unique identifier for the subtask within the task
     
     def __post_init__(self):
         if self.args is None:
             self.args = []
         if self.kwargs is None:
             self.kwargs = {}
-        # Generate subtask_id if not provided (format: task_order_name)
-        if not self.subtask_id:
-            self.subtask_id = f"{self.order}_{self.name}"
     
     def to_dict(self) -> Dict[str, Any]:
         return {
             'name': self.name,
-            'target_client': self.target_client,
+            'client': self.client,
             'order': self.order,
             'args': self.args,
             'kwargs': self.kwargs,
@@ -60,8 +57,8 @@ class Task:
     command: str = ""
     schedule_time: Optional[datetime] = None
     cron_expression: Optional[str] = None
-    target_clients: List[str] = None  # Support multiple clients
-    commands: List[Dict[str, Any]] = None  # Predefined command list
+    clients: List[str] = None  # Support multiple clients
+    commands: List[Dict[str, Any]] = None  # Legacy subtask list for backward compatibility
     execution_order: List[int] = None  # Command execution order
     subtasks: List[SubtaskDefinition] = None  # New: subtask definition list
     status: TaskStatus = TaskStatus.PENDING
@@ -78,11 +75,11 @@ class Task:
     email_recipients: Optional[str] = None  # Semicolon-separated email addresses
     
     # For backward compatibility, keep single client field
-    target_client: Optional[str] = None
+    client: Optional[str] = None
     
     def __post_init__(self):
-        if self.target_clients is None:
-            self.target_clients = []
+        if self.clients is None:
+            self.clients = []
         if self.commands is None:
             self.commands = []
         if self.execution_order is None:
@@ -90,11 +87,11 @@ class Task:
         if self.subtasks is None:
             self.subtasks = []
         
-        # Backward compatibility: if target_client is used, add to target_clients
-        if self.target_client and self.target_client not in self.target_clients:
-            self.target_clients.append(self.target_client)
+        # Backward compatibility: if client is used, add to clients
+        if self.client and self.client not in self.clients:
+            self.clients.append(self.client)
         
-        # If only command field exists, convert to commands format
+        # If only command field exists, convert to subtasks format
         if self.command and not self.commands and not self.subtasks:
             self.commands = [{
                 'id': 1,
@@ -105,37 +102,28 @@ class Task:
             }]
             self.execution_order = [1]
     
-    def get_all_target_clients(self) -> List[str]:
-        """Get all unique target clients from subtasks and legacy fields"""
+    def get_all_clients(self) -> List[str]:
+        """Get all unique clients from subtasks and legacy fields"""
         clients = set()
         
-        # Add from legacy target_clients
-        clients.update(self.target_clients or [])
+        # Add from legacy clients
+        clients.update(self.clients or [])
         
         # Add from subtasks
         for subtask in self.subtasks or []:
-            if subtask.target_client:
-                clients.add(subtask.target_client)
+            if subtask.client:
+                clients.add(subtask.client)
         
-        # Add legacy target_client
-        if self.target_client:
-            clients.add(self.target_client)
+        # Add legacy client
+        if self.client:
+            clients.add(self.client)
         
         return list(clients)
-    
-    # Backward compatibility alias
-    def get_all_target_clients(self) -> List[str]:
-        """Deprecated: Use get_all_target_clients() instead"""
-        return self.get_all_target_clients()
-    
-    def get_subtasks_for_client(self, client_name: str) -> List[SubtaskDefinition]:
-        """Deprecated: Use get_subtasks_for_client() instead"""
-        return self.get_subtasks_for_client(client_name)
     
     def get_subtasks_for_client(self, client_name: str) -> List[SubtaskDefinition]:
         """Get all subtasks assigned to a specific client"""
         return [subtask for subtask in (self.subtasks or []) 
-                if subtask.target_client == client_name]
+                if subtask.client == client_name]
     
     def get_email_recipients_list(self) -> List[str]:
         """Get email recipients as a list, parsing semicolon-separated string"""
@@ -159,8 +147,8 @@ class Task:
             'command': self.command,  # Keep backward compatibility
             'schedule_time': self.schedule_time.isoformat() if self.schedule_time else None,
             'cron_expression': self.cron_expression,
-            'target_client': self.target_client,  # Keep backward compatibility
-            'target_clients': self.target_clients,
+            'client': self.client,  # Keep backward compatibility
+            'clients': self.clients,
             'commands': self.commands,
             'execution_order': self.execution_order,
             'subtasks': [subtask.to_dict() for subtask in (self.subtasks or [])],
@@ -243,7 +231,7 @@ class SubtaskExecution:
     subtask_id: str = ""  # Unique identifier for the subtask within the task
     subtask_name: str = ""
     subtask_order: int = 0
-    target_client: str = ""  # Target client for execution
+    client: str = ""  # Target client for execution
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     status: TaskStatus = TaskStatus.PENDING
@@ -258,37 +246,12 @@ class SubtaskExecution:
             'subtask_id': self.subtask_id,
             'subtask_name': self.subtask_name,
             'subtask_order': self.subtask_order,
-            'target_client': self.target_client,
+            'client': self.client,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'status': self.status.value,
             'result': self.result,
             'error_message': self.error_message,
             'execution_time': self.execution_time
-        }
-
-@dataclass
-class TaskExecution:
-    id: Optional[int] = None
-    task_id: int = 0
-    client_name: str = ""  # Client name
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    status: TaskStatus = TaskStatus.PENDING
-    output: Optional[str] = None
-    error_output: Optional[str] = None
-    exit_code: Optional[int] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'task_id': self.task_id,
-            'client_name': self.client_name,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'status': self.status.value,
-            'output': self.output,
-            'error_output': self.error_output,
-            'exit_code': self.exit_code
         }
 

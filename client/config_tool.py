@@ -20,7 +20,7 @@ except ImportError:
     sys.exit(1)
 
 def show_config(cfg_manager):
-    """显示当前配置"""
+    """Show current configuration"""
     print("=" * 60)
     print("Current Client Configuration")
     print("=" * 60)
@@ -28,7 +28,7 @@ def show_config(cfg_manager):
     print("=" * 60)
 
 def edit_heartbeat(cfg_manager, interval):
-    """编辑心跳间隔"""
+    """Edit heartbeat interval"""
     if interval <= 0:
         print("Error: Heartbeat interval must be greater than 0")
         return False
@@ -38,7 +38,7 @@ def edit_heartbeat(cfg_manager, interval):
     return True
 
 def edit_config_update_interval(cfg_manager, interval):
-    """编辑配置更新间隔"""
+    """Edit configuration update interval"""
     if interval <= 0:
         print("Error: Configuration update interval must be greater than 0")
         return False
@@ -48,7 +48,7 @@ def edit_config_update_interval(cfg_manager, interval):
     return True
 
 def edit_log_level(cfg_manager, level):
-    """编辑日志级别"""
+    """Edit log level"""
     valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
     if level.upper() not in valid_levels:
         print(f"Error: Log level must be one of {valid_levels}")
@@ -59,13 +59,13 @@ def edit_log_level(cfg_manager, level):
     return True
 
 def edit_debug_mode(cfg_manager, enabled):
-    """编辑调试模式"""
+    """Edit debug mode"""
     cfg_manager.set('ADVANCED', 'debug_mode', 'true' if enabled else 'false')
     print(f"Debug mode {'enabled' if enabled else 'disabled'}")
     return True
 
 def edit_websocket_ping(cfg_manager, interval):
-    """编辑WebSocket ping间隔"""
+    """Edit WebSocket ping interval"""
     if interval <= 0:
         print("Error: WebSocket ping interval must be greater than 0")
         return False
@@ -75,7 +75,7 @@ def edit_websocket_ping(cfg_manager, interval):
     return True
 
 def validate_and_save(cfg_manager, config_file):
-    """验证并保存配置"""
+    """Validate and save configuration"""
     if not cfg_manager.validate_config():
         print("Error: Configuration validation failed")
         return False
@@ -89,7 +89,7 @@ def validate_and_save(cfg_manager, config_file):
         return False
 
 def interactive_mode(cfg_manager, config_file):
-    """交互式配置模式"""
+    """Interactive configuration mode"""
     print("=" * 60)
     print("Interactive Configuration Mode")
     print("=" * 60)
@@ -166,7 +166,7 @@ def interactive_mode(cfg_manager, config_file):
         print()
 
 def main():
-    """主函数"""
+    """Main function"""
     parser = argparse.ArgumentParser(description='Task Client Configuration Tool')
     parser.add_argument('--config', default='client.cfg',
                        help='Configuration file path (default: client.cfg)')

@@ -2,7 +2,7 @@
 Subtasks package for distributed task execution.
 
 This package provides a modular approach to subtask definitions where each
-subtask is defined in its own file with proper result specifications.
+subtask is defined as a class inheriting from BaseSubtask.
 
 Usage:
     from common.subtasks import get_subtask, list_subtasks, execute_subtask
@@ -17,11 +17,10 @@ Usage:
 import os
 import importlib
 import logging
-from typing import Dict, Any, Callable, Optional, List
-from dataclasses import dataclass
+from typing import Dict, Any, Optional, List
 
 # Import the base classes
-from .base import SubtaskResultDefinition, SubtaskRegistry
+from .base import BaseSubtask, SubtaskRegistry, SubtaskResultDefinition
 
 # Global registry instance
 _registry = None
@@ -58,23 +57,15 @@ def _load_all_subtasks():
                 logging.error(f"Failed to load subtask module {module_name}: {e}")
 
 
-def register_subtask(name: str, result_def: Optional[SubtaskResultDefinition] = None):
-    """Decorator to register a subtask function"""
-    def decorator(func: Callable):
-        registry = get_registry()
-        registry.register(name, func, result_def)
-        return func
-    return decorator
+def register_subtask_class(name: str, subtask_instance: BaseSubtask):
+    """Register a subtask instance"""
+    registry = get_registry()
+    registry.register(name, subtask_instance)
 
 
-def get_subtask(name: str) -> Optional[Callable]:
-    """Get a subtask function by name"""
+def get_subtask(name: str) -> Optional[BaseSubtask]:
+    """Get a subtask instance by name"""
     return get_registry().get(name)
-
-
-def get_subtask_result_definition(name: str) -> Optional[SubtaskResultDefinition]:
-    """Get the result definition for a subtask"""
-    return get_registry().get_result_definition(name)
 
 
 def list_subtasks() -> List[str]:
@@ -82,14 +73,14 @@ def list_subtasks() -> List[str]:
     return get_registry().list_subtasks()
 
 
-def list_subtasks_with_definitions() -> Dict[str, Dict[str, Any]]:
-    """List all subtasks with their result definitions"""
-    return get_registry().list_subtasks_with_definitions()
+def list_subtasks_with_descriptions() -> Dict[str, str]:
+    """List all subtasks with their descriptions"""
+    return get_registry().list_subtasks_with_descriptions()
 
 
-def execute_subtask(name: str, *args, **kwargs) -> Dict[str, Any]:
+def execute_subtask(name: str) -> Dict[str, Any]:
     """Execute a subtask and return the result"""
-    return get_registry().execute(name, *args, **kwargs)
+    return get_registry().execute(name)
 
 
 # Convenience functions for backward compatibility
@@ -109,4 +100,46 @@ def get_system_info() -> Dict[str, Any]:
         return result['result']
     else:
         raise Exception(result['error'])
+
+
+# Legacy registration function for backward compatibility
+def register_subtask(name: str, result_def: Optional[SubtaskResultDefinition] = None):
+    """Legacy decorator - kept for backward compatibility"""
+    def decorator(func):
+        # This is kept for legacy support but new subtasks should use classes
+        logging.warning(f"Legacy subtask registration for {name}. Consider migrating to BaseSubtask class.")
+        return func
+    return decorator
+
+
+# Legacy function for getting result definitions
+def get_subtask_result_definition(name: str) -> Optional[SubtaskResultDefinition]:
+    """Legacy function - result definitions are now handled by subtask classes"""
+    subtask = get_subtask(name)
+    if subtask:
+        # Create a legacy result definition from the subtask description
+        return SubtaskResultDefinition(
+            name=name,
+            description=subtask.get_description(),
+            result_type="any"
+        )
+    return None
+
+
+# Legacy function for listing with definitions
+def list_subtasks_with_definitions() -> Dict[str, Dict[str, Any]]:
+    """Legacy function - returns subtasks with descriptions"""
+    result = {}
+    registry = get_registry()
+    for name in registry.list_subtasks():
+        subtask = registry.get(name)
+        result[name] = {
+            'function': subtask.get_description(),
+            'result_definition': SubtaskResultDefinition(
+                name=name,
+                description=subtask.get_description(),
+                result_type="any"
+            )
+        }
+    return result
 

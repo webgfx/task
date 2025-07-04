@@ -117,7 +117,7 @@ class TaskScheduler:
                 self._execute_subtask_task(task)
             else:
                 # Legacy single-client task
-                available_client = self._find_available_client(task.target_client)
+                available_client = self._find_available_client(task.client)
                 if not available_client:
                     logger.warning(f"No available client to execute task: {task.name}")
                     return
@@ -130,16 +130,16 @@ class TaskScheduler:
     def _execute_subtask_task(self, task):
         """Execute a subtask-based task on multiple clients"""
         try:
-            # Get all unique target clients from subtasks
-            target_clients = task.get_all_target_clients()
+            # Get all unique clients from subtasks
+            clients = task.get_all_clients()
             
-            if not target_clients:
-                logger.warning(f"No target clients found for task: {task.name}")
+            if not clients:
+                logger.warning(f"No clients found for task: {task.name}")
                 return
             
             # Check if all required clients are available
             available_clients = {}
-            for client_name in target_clients:
+            for client_name in clients:
                 client = self._find_available_client(client_name)
                 if not client:
                     logger.warning(f"Client {client_name} not available for task {task.name}")
@@ -174,10 +174,18 @@ class TaskScheduler:
                     
                     # Send task via WebSocket using IP-based room name
                     room_name = f"client_{client.ip_address.replace('.', '_')}"
-                    logger.info(f"Dispatching subtask to room: {room_name} for client {client.name} ({client.ip_address})")
+                    
+                    # Enhanced logging for subtask dispatch
+                    logger.info(f"🚀 DISPATCH_START: Sending {len(client_subtasks)} subtasks to client '{client.name}' ({client.ip_address})")
+                    logger.info(f"DISPATCH_DETAILS: Task '{task.name}' (ID: {task.id}) → Room: {room_name}")
+                    
+                    # Log each subtask being dispatched
+                    for i, subtask in enumerate(client_subtasks, 1):
+                        logger.info(f"DISPATCH_SUBTASK[{i}/{len(client_subtasks)}]: '{subtask.name}' (order: {subtask.order}) → '{client.name}'")
+                    
                     self.socketio.emit('task_dispatch', task_data, room=room_name)
                     
-                    logger.info(f"Dispatched {len(client_subtasks)} subtasks to client {client.name}")
+                    logger.info(f"✅ DISPATCH_COMPLETE: Successfully dispatched {len(client_subtasks)} subtasks to client '{client.name}'")
             
         except Exception as e:
             logger.error(f"Failed to execute subtask task {task.name}: {e}")
@@ -213,7 +221,7 @@ class TaskScheduler:
                         self._execute_subtask_task(task)
                     else:
                         # Legacy single-client task
-                        available_client = self._find_available_client(task.target_client)
+                        available_client = self._find_available_client(task.client)
                         if available_client:
                             self._dispatch_task_to_client(task, available_client)
                         else:
@@ -222,21 +230,26 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"Failed to check pending execution tasks: {e}")
     
-    def _find_available_client(self, target_client=None):
+    def _find_available_client(self, client=None):
         """Find available clients"""
         try:
             online_clients = self.database.get_online_clients()
             
-            if target_client:
-                # Find specified client
+            if client:
+                # Find specified client - accept both online and busy clients
                 for client in online_clients:
-                    if client.name == target_client and client.status == ClientStatus.ONLINE:
+                    if client.name == client and client.status in [ClientStatus.ONLINE, ClientStatus.BUSY]:
                         return client
                 return None
             else:
-                # Find any available client
+                # Find any available client - prefer online over busy
                 for client in online_clients:
                     if client.status == ClientStatus.ONLINE:
+                        return client
+                # If no online clients, try busy clients
+                for client in online_clients:
+                    if client.status == ClientStatus.BUSY:
+                        return client
                         return client
                 return None
                 
@@ -270,7 +283,7 @@ class TaskScheduler:
                 logger.info(f"Dispatching task {task.name} with {len(task.subtasks)} subtasks to client {client.name}")
             else:
                 # Legacy command-based task
-                task_data['commands'] = task.commands
+                task_data['subtasks'] = task.commands
                 task_data['execution_order'] = task.execution_order
                 logger.info(f"Dispatching legacy task {task.name} to client {client.name}")
             

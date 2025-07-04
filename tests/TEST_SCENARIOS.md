@@ -42,7 +42,7 @@ Before running any test scenario, verify:
 - [ ] Fill in task details:
   - **Task Name**: `Test Single Hostname Task`
   - **Subtasks**: Select `get_hostname` from predefined subtasks
-  - **Target Clients**: Select one connected client
+  - **Clients**: Select one connected client
   - **Execution**: Set to "Execute Now" (immediate execution)
 - [ ] Click "Create Task" button
 - [ ] Verify task appears in task list with "pending" status

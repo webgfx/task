@@ -75,10 +75,10 @@ function displayRecentTasks() {
         <div class=task-item onclick=viewTaskDetail(${task.id})>
             <div class=task-info>
                 <div class=task-name>${escapeHtml(task.name)}</div>
-                <div class=task-command>${escapeHtml(task.command.substring(0, 60))}${task.command.length > 60 ? '...' : ''}</div>
+                <div class=task-subtask>${escapeHtml(task.command.substring(0, 60))}${task.command.length > 60 ? '...' : ''}</div>
                 <div class=task-meta>
                     <span>Created time: ${formatRelativeTime(task.created_at)}</span>
-                    ${task.target_client ? `<span> • Target Client: ${task.target_client}</span>` : ''}
+                    ${task.client ? `<span> • Target Client: ${task.client}</span>` : ''}
                 </div>
             </div>
             <div class=task-status>

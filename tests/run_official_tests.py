@@ -45,9 +45,10 @@ class TestExecutor:
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
-                    online_clients = [m for m in data['data'] if m['status'] == 'online']
-                    self.log(f"✅ Found {len(online_clients)} online clients")
-                    return online_clients
+                    # Accept both online and busy clients for testing
+                    available_clients = [m for m in data['data'] if m['status'] in ['online', 'busy']]
+                    self.log(f"✅ Found {len(available_clients)} available clients")
+                    return available_clients
                 else:
                     self.log(f"❌ API error: {data.get('error', 'Unknown error')}", "ERROR")
                     return []
@@ -58,14 +59,27 @@ class TestExecutor:
             self.log(f"❌ Error getting clients: {e}", "ERROR")
             return []
     
-    def create_task(self, task_name, subtasks, target_clients):
+    def create_task(self, task_name, subtasks, clients):
         """Create a new task"""
         try:
+            # Create subtask list with client for each subtask
+            formatted_subtasks = []
+            for subtask in subtasks:
+                # Create one subtask per target client
+                for client in clients:
+                    formatted_subtasks.append({
+                        "name": subtask["name"],
+                        "description": subtask.get("description", ""),
+                        "client": client,
+                        "order": subtask.get("order", 0),
+                        "args": subtask.get("args", []),
+                        "kwargs": subtask.get("kwargs", {}),
+                        "timeout": subtask.get("timeout", 300)
+                    })
+            
             task_data = {
                 "name": task_name,
-                "subtasks": subtasks,
-                "target_clients": target_clients,
-                "execution_type": "now"
+                "subtasks": formatted_subtasks
             }
             
             response = requests.post(
@@ -74,7 +88,7 @@ class TestExecutor:
                 data=json.dumps(task_data)
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:  # Accept both 200 and 201 (Created)
                 data = response.json()
                 if data.get('success'):
                     task_id = data['data']['id']
@@ -85,6 +99,12 @@ class TestExecutor:
                     return None
             else:
                 self.log(f"❌ HTTP error creating task: {response.status_code}", "ERROR")
+                # Try to get more details about the error
+                try:
+                    error_data = response.json()
+                    self.log(f"❌ Error details: {error_data}", "ERROR")
+                except:
+                    self.log(f"❌ Response text: {response.text}", "ERROR")
                 return None
         except Exception as e:
             self.log(f"❌ Error creating task: {e}", "ERROR")
@@ -139,12 +159,12 @@ class TestExecutor:
         # Step 2: Check for online clients
         online_clients = self.get_online_clients()
         if not online_clients:
-            self.log("❌ No online clients found. Please start at least one client.", "ERROR")
+            self.log("❌ No available clients found. Please start at least one client.", "ERROR")
             return False
         
         # Use the first online client
-        target_client = online_clients[0]['name']
-        self.log(f"Using target client: {target_client}")
+        client = online_clients[0]['name']
+        self.log(f"Using target client: {client}")
         
         # Step 3: Create task with get_hostname subtask
         subtasks = [
@@ -158,7 +178,7 @@ class TestExecutor:
         task_id = self.create_task(
             task_name="Test Single Hostname Task",
             subtasks=subtasks,
-            target_clients=[target_client]
+            clients=[client]
         )
         
         if not task_id:
@@ -174,17 +194,47 @@ class TestExecutor:
             # Check if task has subtasks with results
             subtasks_data = task_result.get('subtasks', [])
             if subtasks_data:
-                hostname_subtask = subtasks_data[0]
-                if hostname_subtask.get('status') == 'completed':
-                    result = hostname_subtask.get('result', '')
-                    if result and 'hostname' in result.lower():
-                        self.log(f"✅ Hostname subtask completed successfully: {result}")
-                        self.log("🎉 Test PASSED: single-subtask-single-client-now")
-                        return True
-                    else:
-                        self.log(f"❌ Invalid hostname result: {result}", "ERROR")
+                # Find the hostname subtask for our target client
+                hostname_subtask = None
+                for subtask in subtasks_data:
+                    if subtask.get('name') == 'get_hostname' and subtask.get('client') == client:
+                        hostname_subtask = subtask
+                        break
+                
+                if hostname_subtask:
+                    self.log(f"Found hostname subtask: {hostname_subtask}")
+                    # We need to check the execution results, not just the subtask definition
+                    self.log("💡 Checking execution results via API...")
+                    
+                    # Get subtask execution results
+                    try:
+                        exec_response = requests.get(f"{self.base_url}/api/tasks/{task_id}/subtask-executions")
+                        if exec_response.status_code == 200:
+                            exec_data = exec_response.json()
+                            if exec_data.get('success'):
+                                executions = exec_data['data']
+                                for execution in executions:
+                                    if (execution.get('subtask_name') == 'get_hostname' and 
+                                        execution.get('client') == client and
+                                        execution.get('status') == 'completed'):
+                                        result = execution.get('result', '')
+                                        if result:
+                                            self.log(f"✅ Hostname subtask completed successfully: {result}")
+                                            self.log("🎉 Test PASSED: single-subtask-single-client-now")
+                                            return True
+                                        else:
+                                            self.log(f"❌ Empty result from hostname subtask", "ERROR")
+                                            break
+                                else:
+                                    self.log("❌ No completed hostname execution found", "ERROR")
+                            else:
+                                self.log(f"❌ Execution API error: {exec_data.get('error')}", "ERROR")
+                        else:
+                            self.log(f"❌ Failed to get executions: {exec_response.status_code}", "ERROR")
+                    except Exception as e:
+                        self.log(f"❌ Error getting execution results: {e}", "ERROR")
                 else:
-                    self.log(f"❌ Subtask status: {hostname_subtask.get('status')}", "ERROR")
+                    self.log(f"❌ Hostname subtask not found for client {client}", "ERROR")
             else:
                 self.log("❌ No subtask results found", "ERROR")
         

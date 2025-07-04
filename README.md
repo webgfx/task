@@ -35,7 +35,7 @@ task/
 │   ├── models.py          # Data model definitions
 │   ├── config.py          # Configuration management
 │   ├── common.cfg         # Common configuration (server settings, database)
-│   ├── predefined_commands.py # Built-in system commands
+│   ├── predefined_subtasks.py # Built-in system subtasks
 │   ├── system_info.py     # System information collection
 │   └── utils.py           # Utility functions
 ├── server/                # Web server
@@ -228,7 +228,7 @@ The service automatically reads server address from `common/server.txt` file:
 
 3. **No manual server URL input required**
 
-#### **Service Management Commands**
+#### **Service Management Subtasks**
 ```batch
 # Service control
 service_manager.bat start    # Start service
@@ -281,7 +281,7 @@ For detailed service documentation, see [WINDOWS_SERVICE_GUIDE.md](WINDOWS_SERVI
 
 ### **Manual Deployment (Development/Testing)**
 
-Deployment steps on target clients:
+Deployment steps on clients:
 
 1. **Copy project files**
 ```bash
@@ -355,7 +355,7 @@ from datetime import datetime, timedelta
 task_data = {
     "name": "System Backup Task",
     "command": "tar -czf /backup/system-$(date +%Y%m%d).tar.gz /etc /home",
-    "target_clients": ["server-001", "server-002"],
+    "clients": ["server-001", "server-002"],
     "scheduled_time": (datetime.now() + timedelta(hours=1)).isoformat(),
     "timeout": 3600,
     "retry_count": 2,

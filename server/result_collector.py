@@ -122,31 +122,31 @@ class TaskResultCollector:
                     return False
                 
                 # Get all clients involved in this task
-                target_clients = task.get_all_target_clients()
-                if not target_clients:
-                    logger.warning(f"Task {task_id} has no target clients")
+                clients = task.get_all_clients()
+                if not clients:
+                    logger.warning(f"Task {task_id} has no clients")
                     return False
                 
                 # Check completion status for each client
                 all_completed = True
-                for client_name in target_clients:
+                for client_name in clients:
                     client_subtasks = task.get_subtasks_for_client(client_name)
                     if not client_subtasks:
                         continue  # No subtasks for this client
                     
                     # Check if all subtasks for this client are completed
                     for subtask in client_subtasks:
-                        subtask_executions = self.database.get_subtask_executions_filtered(
+                        executions = self.database.get_executions_filtered(
                             task_id, subtask.name, client_name
                         )
                         
-                        if not subtask_executions:
+                        if not executions:
                             # Subtask not started yet
                             all_completed = False
                             break
                         
                         # Check if any execution is not completed
-                        latest_execution = max(subtask_executions, key=lambda x: x.id or 0)
+                        latest_execution = max(executions, key=lambda x: x.id or 0)
                         if latest_execution.status not in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
                             all_completed = False
                             break
@@ -212,7 +212,7 @@ class TaskResultCollector:
                                 # Use the send_notification method with custom recipient
                                 result = self.email_notifier.send_notification(
                                     task_name=task.name,
-                                    client_name=task.get_all_target_clients()[0] if task.get_all_target_clients() else 'unknown',
+                                    client_name=task.get_all_clients()[0] if task.get_all_clients() else 'unknown',
                                     report_html=self.report_generator.generate_html_report(task, client_results),
                                     to_email=recipient.strip()
                                 )
@@ -265,9 +265,9 @@ class TaskResultCollector:
         client_results = {}
         
         try:
-            target_clients = task.get_all_target_clients()
+            clients = task.get_all_clients()
             
-            for client_name in target_clients:
+            for client_name in clients:
                 client_subtasks = task.get_subtasks_for_client(client_name)
                 
                 if not client_subtasks:
@@ -284,13 +284,13 @@ class TaskResultCollector:
                 
                 for subtask in client_subtasks:
                     # Get subtask execution results
-                    subtask_executions = self.database.get_subtask_executions_filtered(
+                    executions = self.database.get_executions_filtered(
                         task.id, subtask.name, client_name
                     )
                     
-                    if subtask_executions:
+                    if executions:
                         # Get the latest execution
-                        latest_execution = max(subtask_executions, key=lambda x: x.id or 0)
+                        latest_execution = max(executions, key=lambda x: x.id or 0)
                         
                         if latest_execution.status == TaskStatus.COMPLETED:
                             client_data['successful_count'] += 1
@@ -304,7 +304,7 @@ class TaskResultCollector:
                             task_id=task.id,
                             subtask_name=subtask.name,
                             subtask_order=subtask.order,
-                            target_client=client_name,
+                            client=client_name,
                             status=TaskStatus.FAILED,
                             error_message="Subtask was not executed"
                         )

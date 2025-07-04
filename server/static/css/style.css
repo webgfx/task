@@ -289,7 +289,7 @@ body {
     margin-bottom: 5px;
 }
 
-.task-command {
+.task-subtask {
     font-family: 'Courier New', monospace;
     font-size: 0.85rem;
     color: #6c757d;
@@ -481,7 +481,7 @@ body {
     background-color: #f8f9fa;
 }
 
-.task-table .command-cell {
+.task-table .subtask-cell {
     font-family: 'Courier New', monospace;
     font-size: 0.85rem;
     max-width: 200px;
@@ -1158,14 +1158,44 @@ body {
     font-size: 0.9rem;
 }
 
-.enhanced-task-table .task-id-col { width: 8%; }
-.enhanced-task-table .task-name-col { width: 20%; }
-.enhanced-task-table .subtask-col { width: 18%; }
+.enhanced-task-table .task-id-col { width: 7%; }
+.enhanced-task-table .task-name-col { width: 16%; }
+.enhanced-task-table .subtask-id-col { width: 8%; }
+.enhanced-task-table .subtask-name-col { width: 15%; }
 .enhanced-task-table .client-col { width: 15%; }
-.enhanced-task-table .status-col { width: 12%; }
-.enhanced-task-table .timing-col { width: 15%; }
-.enhanced-task-table .progress-col { width: 8%; }
-.enhanced-task-table .actions-col { width: 4%; }
+
+/* Client info inline layout */
+.client-info-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.client-info-inline .client-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.875rem;
+}
+
+.client-info-inline .client-status {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.client-info-inline .btn-micro {
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.enhanced-task-table .status-col { width: 10%; }
+.enhanced-task-table .result-col { width: 15%; }
+.enhanced-task-table .timing-col { width: 12%; }
+.enhanced-task-table .actions-col { width: 6%; }
 
 /* Task Group Rows */
 .task-group-row {
@@ -1217,26 +1247,6 @@ body {
     background-color: #e7f3ff;
 }
 
-.task-group-progress {
-    width: 100px;
-    height: 6px;
-    background-color: #e9ecef;
-    border-radius: 3px;
-    overflow: hidden;
-    margin: 2px 0;
-}
-
-.task-group-progress-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-
-.task-group-progress-fill.completed { background-color: #28a745; }
-.task-group-progress-fill.running { background-color: #007bff; }
-.task-group-progress-fill.failed { background-color: #dc3545; }
-.task-group-progress-fill.mixed { background: linear-gradient(90deg, #28a745 0%, #007bff 50%, #dc3545 100%); }
-
 /* Subtask Execution Rows */
 .subtask-execution-row {
     background: white;
@@ -1258,6 +1268,50 @@ body {
     display: none;
 }
 
+/* Client details row styling */
+.client-details-row {
+    background-color: #f8f9fa;
+    border-left: 3px solid #007bff;
+}
+
+.client-details-row.collapsed {
+    display: none;
+}
+
+.client-details-content {
+    padding: 15px 20px;
+}
+
+.client-detail-section {
+    margin-bottom: 20px;
+}
+
+.client-detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.client-detail-section h5 {
+    color: #495057;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.client-detail-section h5 i {
+    margin-right: 8px;
+    color: #6c757d;
+}
+
+.client-main-row {
+    cursor: default;
+}
+
+.client-main-row:hover {
+    background-color: #f8f9fa;
+}
+
 /* Subtask name styling */
 .subtask-name {
     font-family: 'Courier New', monospace;
@@ -1266,6 +1320,52 @@ body {
     border-radius: 3px;
     font-size: 0.85rem;
     color: #495057;
+}
+
+/* Result column styling */
+.result-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.result-preview {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    padding: 4px 6px;
+    border-radius: 3px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    color: #495057;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.result-preview.result-success {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.result-preview.result-error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+.result-details-btn {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+}
+
+.no-result {
+    color: #6c757d;
+    font-style: italic;
 }
 
 /* Client name styling */
@@ -1352,41 +1452,7 @@ body {
     margin-left: 4px;
 }
 
-/* Progress indicators */
-.progress-indicator {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: white;
-    margin: 0 auto;
-}
 
-.progress-indicator.pending {
-    background-color: #6c757d;
-}
-
-.progress-indicator.running {
-    background-color: #007bff;
-    animation: spin 2s linear infinite;
-}
-
-.progress-indicator.completed {
-    background-color: #28a745;
-}
-
-.progress-indicator.failed {
-    background-color: #dc3545;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
 
 /* Action buttons for rows */
 .row-actions {
@@ -1401,11 +1467,74 @@ body {
     min-width: auto;
 }
 
+/* Micro button styles for client actions */
+.btn-micro {
+    padding: 2px 4px;
+    font-size: 0.7rem;
+    min-width: auto;
+    border-radius: 3px;
+    gap: 2px;
+}
+
+.btn-micro i {
+    font-size: 0.65rem;
+}
+
+/* Client actions in task table */
+.client-actions {
+    display: flex;
+    gap: 2px;
+    margin-top: 2px;
+    justify-content: flex-start;
+}
+
+.client-actions .btn-micro {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.client-actions .btn-micro:hover {
+    opacity: 1;
+    transform: none; /* Disable transform for micro buttons */
+}
+
+/* Client column layout */
+.client-col {
+    min-width: 120px;
+}
+
+.client-name {
+    font-weight: 500;
+    font-size: 0.85rem;
+}
+
+.client-status {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.client-status.online,
+.client-status.free {
+    color: #28a745;
+}
+
+.client-status.busy {
+    color: #ffc107;
+}
+
+.client-status.offline {
+    color: #dc3545;
+}
+
 /* Responsive design for enhanced table */
 @media (max-width: 1200px) {
-    .enhanced-task-table .task-name-col { width: 18%; }
-    .enhanced-task-table .subtask-col { width: 16%; }
-    .enhanced-task-table .timing-col { width: 12%; }
+    .enhanced-task-table .task-name-col { width: 15%; }
+    .enhanced-task-table .subtask-id-col { width: 8%; }
+    .enhanced-task-table .subtask-name-col { width: 13%; }
+    .enhanced-task-table .result-col { width: 14%; }
+    .enhanced-task-table .timing-col { width: 11%; }
 }
 
 @media (max-width: 992px) {
@@ -1413,21 +1542,169 @@ body {
         font-size: 0.85rem;
     }
     
-    .enhanced-task-table .task-name-col { width: 25%; }
-    .enhanced-task-table .subtask-col { width: 20%; }
-    .enhanced-task-table .client-col { width: 15%; }
+    .enhanced-task-table .task-name-col { width: 20%; }
+    .enhanced-task-table .subtask-col { width: 18%; }
+    .enhanced-task-table .client-col { width: 12%; }
+    .enhanced-task-table .result-col { width: 15%; }
     .enhanced-task-table .timing-col { display: none; }
-    .enhanced-task-table .progress-col { width: 10%; }
 }
 
 @media (max-width: 768px) {
     .enhanced-task-table .task-id-col { display: none; }
-    .enhanced-task-table .task-name-col { width: 30%; }
-    .enhanced-task-table .subtask-col { width: 25%; }
+    .enhanced-task-table .task-name-col { width: 25%; }
+    .enhanced-task-table .result-col { display: none; }
+    .enhanced-task-table .subtask-id-col { width: 8%; }
+    .enhanced-task-table .subtask-name-col { width: 17%; }
     .enhanced-task-table .client-col { width: 20%; }
     .enhanced-task-table .status-col { width: 15%; }
-    .enhanced-task-table .progress-col { display: none; }
     .enhanced-task-table .actions-col { width: 10%; }
+}
+
+/* Enhanced Client Table Styling */
+.enhanced-client-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.enhanced-client-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: none;
+}
+
+/* Client table column widths */
+.enhanced-client-table .client-name-col { width: 18%; }
+.enhanced-client-table .status-col { width: 8%; }
+.enhanced-client-table .ip-col { width: 12%; }
+.enhanced-client-table .task-id-col { width: 8%; }
+.enhanced-client-table .task-name-col { width: 15%; }
+.enhanced-client-table .subtask-id-col { width: 10%; }
+.enhanced-client-table .subtask-name-col { width: 15%; }
+.enhanced-client-table .heartbeat-col { width: 10%; }
+.enhanced-client-table .actions-col { width: 4%; }
+
+.enhanced-client-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+.enhanced-client-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Subtask column styling */
+.subtask-id {
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #495057;
+    font-weight: 600;
+}
+
+/* Task and subtask badge styling */
+.task-id-badge {
+    font-family: 'Courier New', monospace;
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.task-name {
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.task-name-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.subtask-id-badge {
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    color: #495057;
+    font-weight: 600;
+}
+
+.subtask-name {
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* Client table subtask styling (matching task management) */
+.enhanced-client-table .subtask-name-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.enhanced-client-table .subtask-name-info .subtask-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.9rem;
+}
+
+.enhanced-client-table .no-id {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+/* Client table responsive design */
+@media (max-width: 1200px) {
+    .enhanced-client-table .client-name-col { width: 16%; }
+    .enhanced-client-table .task-id-col { width: 8%; }
+    .enhanced-client-table .task-name-col { width: 14%; }
+    .enhanced-client-table .subtask-id-col { width: 10%; }
+    .enhanced-client-table .subtask-name-col { width: 14%; }
+    .enhanced-client-table .heartbeat-col { width: 12%; }
+}
+
+@media (max-width: 768px) {
+    .enhanced-client-table .ip-col { display: none; }
+    .enhanced-client-table .heartbeat-col { display: none; }
+    .enhanced-client-table .task-id-col { display: none; }
+    .enhanced-client-table .client-name-col { width: 20%; }
+    .enhanced-client-table .task-name-col { width: 18%; }
+    .enhanced-client-table .subtask-id-col { width: 12%; }
+    .enhanced-client-table .subtask-name-col { width: 20%; }
+    .enhanced-client-table .actions-col { width: 10%; }
+}
+
+/* View toggle buttons */
+.view-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.view-toggle .btn {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+.view-toggle .btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
 }
 
 /* No tasks message styling */
@@ -1442,4 +1719,224 @@ body {
     font-size: 3rem;
     margin-bottom: 15px;
     color: #dee2e6;
+}
+
+/* Enhanced Subtask Information Display */
+.subtask-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.subtask-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.9rem;
+}
+
+.subtask-id {
+    font-size: 0.75rem;
+    color: #7f8c8d;
+    font-family: 'Courier New', monospace;
+    background-color: #ecf0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    align-self: flex-start;
+    border: 1px solid #bdc3c7;
+}
+
+.subtask-details {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.subtask-id-badge {
+    background-color: #3498db;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-family: 'Courier New', monospace;
+    font-weight: normal;
+    margin-left: 8px;
+}
+
+/* Task Detail Modal Enhancements */
+.subtask-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.subtask-detail-header h5 {
+    color: #2c3e50;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.subtask-status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subtask-status-info .subtask-id-badge {
+    background-color: #6c757d;
+}
+
+/* Enhanced table cell styling for subtasks */
+.enhanced-task-table .subtask-col {
+    vertical-align: top;
+    padding: 12px 8px;
+}
+
+.enhanced-task-table .subtask-execution-row .subtask-col {
+    border-left: 3px solid #e9ecef;
+    background-color: #f8f9fa;
+}
+
+.enhanced-task-table .subtask-execution-row.collapsed {
+    display: none;
+}
+
+/* Subtask execution status colors */
+.subtask-execution-row.pending .subtask-col {
+    border-left-color: #ffc107;
+}
+
+.subtask-execution-row.running .subtask-col {
+    border-left-color: #17a2b8;
+}
+
+.subtask-execution-row.completed .subtask-col {
+    border-left-color: #28a745;
+}
+
+.subtask-execution-row.failed .subtask-col {
+    border-left-color: #dc3545;
+}
+
+/* Compact System Information Styles */
+.compact-system-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.system-info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+}
+
+.system-info-item i {
+    width: 16px;
+    color: #007bff;
+    flex-shrink: 0;
+}
+
+.system-info-item .info-label {
+    font-weight: 600;
+    color: #495057;
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+.system-info-item .info-value {
+    color: #212529;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    flex-grow: 1;
+    overflow-wrap: break-word;
+}
+
+/* Responsive adjustments for compact system info */
+@media (max-width: 768px) {
+    .system-info-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .system-info-item .info-label {
+        min-width: auto;
+    }
+}
+
+/* Medium modal styles for copy dialog */
+.modal-medium {
+    width: 80%;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+/* Copy modal specific styles */
+.client-updates-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e1e5e9;
+    border-radius: 4px;
+    padding: 15px;
+    background-color: #f8f9fa;
+}
+
+.client-update-item {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.client-update-item label {
+    min-width: 120px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.client-update-select {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: white;
+}
+
+/* Toggle buttons styles */
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid #6c757d;
+    color: #6c757d;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-outline:hover {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-outline i {
+    font-size: 0.875rem;
+}
+
+/* Filter group spacing for toggle button */
+.filters .filter-group:last-child {
+    margin-left: auto;
+}
+
+.filter-bar .filter-group:last-child {
+    margin-left: auto;
 }

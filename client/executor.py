@@ -18,12 +18,12 @@ class TaskExecutor:
         self.running_processes = {}
         self.process_lock = threading.Lock()
         
-    def execute(self, command: str, timeout: int = 300, work_dir: str = None) -> Dict[str, Any]:
+    def execute(self, subtask: str, timeout: int = 300, work_dir: str = None) -> Dict[str, Any]:
         """
-        Execute command
+        Execute subtask
         
         Args:
-            command: Command to execute
+            subtask: Subtask to execute
             timeout: Timeout (seconds)
             work_dir: Working directory
             

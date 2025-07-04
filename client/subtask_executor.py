@@ -114,7 +114,7 @@ class SubtaskExecutor:
         self.task_logger.info(f"Log Folder: {self.task_log_folder}")
         
         # Filter subtasks for this client
-        my_subtasks = [s for s in subtasks if s.target_client == self.client_name]
+        my_subtasks = [s for s in subtasks if s.client == self.client_name]
         
         if not my_subtasks:
             self.task_logger.info(f"No subtasks assigned to client {self.client_name}")
@@ -261,13 +261,17 @@ class SubtaskExecutor:
         if self.task_logger:
             self.task_logger.info(f"Executing subtask: {subtask.name}")
             self.task_logger.info(f"  Order: {subtask.order}")
-            self.task_logger.info(f"  Target client: {subtask.target_client}")
+            self.task_logger.info(f"  Target client: {subtask.client}")
             if subtask.args:
                 self.task_logger.info(f"  Arguments: {subtask.args}")
             if subtask.kwargs:
                 self.task_logger.info(f"  Keyword arguments: {subtask.kwargs}")
         
-        # Report subtask started
+        # Report subtask started with enhanced logging
+        logger.info(f"🏃 SUBTASK_START: Task {task_id} - '{subtask.name}' execution starting on client '{self.client_name}'")
+        if self.task_logger:
+            self.task_logger.info(f"🏃 Starting execution of subtask '{subtask.name}' (order: {subtask.order})")
+        
         self._report_subtask_status(task_id, subtask, TaskStatus.RUNNING)
         
         start_time = time.time()
@@ -355,7 +359,7 @@ class SubtaskExecutor:
         try:
             data = {
                 'subtask_name': subtask.name,
-                'target_client': self.client_name,
+                'client': self.client_name,
                 'status': status.value,
                 'order': subtask.order
             }
@@ -378,12 +382,26 @@ class SubtaskExecutor:
             response = requests.post(url, json=data, timeout=10)
             
             if response.status_code == 200:
+                # Enhanced logging for successful result reporting
+                logger.info(f"📤 REPORT_SUCCESS: Task {task_id} - '{subtask.name}' status '{status.value}' reported to server")
+                if self.task_logger:
+                    self.task_logger.info(f"✅ Successfully reported subtask '{subtask.name}' status '{status.value}' to server")
+                    if result is not None and status == TaskStatus.COMPLETED:
+                        result_preview = str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
+                        self.task_logger.info(f"REPORT_RESULT: Sent result to server: {result_preview}")
+                    elif error_message and status == TaskStatus.FAILED:
+                        error_preview = str(error_message)[:100] + "..." if len(str(error_message)) > 100 else str(error_message)
+                        self.task_logger.info(f"REPORT_ERROR: Sent error to server: {error_preview}")
+                
                 logger.debug(f"Reported subtask {subtask.name} status: {status.value}")
                 if self.task_logger:
                     self.task_logger.info(f"Successfully reported subtask {subtask.name} status to server")
             else:
+                # Enhanced logging for failed result reporting
+                logger.error(f"❌ REPORT_FAILED: Task {task_id} - '{subtask.name}' status report failed: {response.status_code}")
                 logger.warning(f"Failed to report subtask status: {response.status_code} - {response.text}")
                 if self.task_logger:
+                    self.task_logger.error(f"❌ Failed to report subtask '{subtask.name}' status to server: {response.status_code}")
                     self.task_logger.warning(f"Failed to report subtask status: {response.status_code} - {response.text}")
                 
         except Exception as e:
@@ -422,7 +440,7 @@ class TaskSubtaskAdapter:
         
     def execute_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute task - either legacy command-based or new subtask-based
+        Execute task - either legacy subtask-based or new subtask-based
         
         Args:
             task_data: Task data from server
@@ -448,7 +466,7 @@ class TaskSubtaskAdapter:
         for subtask_data in subtasks_data:
             subtask = SubtaskDefinition(
                 name=subtask_data.get('name', ''),
-                target_client=subtask_data.get('target_client', ''),
+                client=subtask_data.get('client', ''),
                 order=subtask_data.get('order', 0),
                 args=subtask_data.get('args', []),
                 kwargs=subtask_data.get('kwargs', {}),
@@ -461,7 +479,7 @@ class TaskSubtaskAdapter:
         return self.subtask_executor.execute_task_subtasks(task_id, task_name, subtasks)
     
     def _execute_legacy_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute legacy command-based task"""
+        """Execute legacy subtask-based task"""
         command = task_data.get('command', '')
         if not command:
             return {
@@ -470,5 +488,5 @@ class TaskSubtaskAdapter:
             }
         
         # Use legacy executor
-        return self.legacy_executor.execute(command)
+        return self.legacy_executor.execute(subtask)
 

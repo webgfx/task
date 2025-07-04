@@ -6,7 +6,20 @@ import time
 import threading
 import logging
 import requests
+import sys
+import os
 from datetime import datetime
+
+# Add parent directory to path for importing common modules
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
+try:
+    from common.client_info_collector import prepare_heartbeat_data
+except ImportError as e:
+    print(f"Warning: Failed to import client_info_collector module: {e}")
+    prepare_heartbeat_data = None
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +103,27 @@ class HeartbeatManager:
                 time.sleep(5)  # Wait 5 seconds before retry after exception
     
     def _send_heartbeat(self) -> bool:
-        """Send heartbeat to server"""
+        """Send heartbeat to server with fresh system information"""
         try:
-            heartbeat_data = {
-                'client_name': self.client_name,
-                'status': 'online',
-                'timestamp': datetime.now().isoformat()
-            }
+            # Use unified client info collector for fresh system information
+            heartbeat_data = None
+            
+            if prepare_heartbeat_data:
+                try:
+                    logger.debug("Using unified client info collector for heartbeat...")
+                    heartbeat_data = prepare_heartbeat_data(self.client_name, 'online')
+                    logger.debug("Fresh system information collected via unified collector")
+                except Exception as e:
+                    logger.warning(f"Failed to use unified collector, falling back to minimal heartbeat: {e}")
+            
+            # Fallback to minimal heartbeat if unified collector fails or unavailable
+            if not heartbeat_data:
+                heartbeat_data = {
+                    'client_name': self.client_name,
+                    'status': 'online',
+                    'timestamp': datetime.now().isoformat(),
+                    'collection_source': 'fallback_minimal'
+                }
             
             response = requests.post(
                 f"{self.server_url}/api/clients/heartbeat",
@@ -105,7 +132,12 @@ class HeartbeatManager:
             )
             
             if response.status_code == 200:
-                logger.debug(f"Heartbeat sent successfully: {self.client_name}")
+                collection_source = heartbeat_data.get('collection_source', 'unknown')
+                if 'system_summary' in heartbeat_data:
+                    system_summary = heartbeat_data['system_summary']
+                    logger.debug(f"Heartbeat sent with fresh system info ({collection_source}): CPU={system_summary.get('cpu', 'Unknown')}, GPU={system_summary.get('gpu', 'Unknown')}")
+                else:
+                    logger.debug(f"Heartbeat sent ({collection_source}): {self.client_name}")
                 return True
             else:
                 logger.warning(f"Heartbeat send failed: {response.status_code} - {response.text}")
@@ -156,7 +188,7 @@ class HeartbeatManager:
         }
     
     def force_heartbeat(self) -> bool:
-        """Force send heartbeat once"""
-        logger.info("Force send heartbeat")
+        """Force send heartbeat once with fresh system information"""
+        logger.info("Force send heartbeat with fresh system information")
         return self._send_heartbeat()
 

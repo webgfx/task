@@ -43,6 +43,9 @@
             <header class="header">
                 <div class="header-content">
                     <h1>Client Management</h1>
+                    <div class="header-actions">
+                        <!-- View toggle buttons removed - table view only -->
+                    </div>
                 </div>
             </header>
 
@@ -61,30 +64,35 @@
                     <label>Search:</label>
                     <input type="text" id="searchInput" placeholder="Search client name or IP" onkeyup="filterClients()">
                 </div>
-            </div>
-
-            <!-- Client grid -->
-            <div class="client-grid" id="clientGrid">
-                <!-- Client cards will be loaded dynamically via JavaScript -->
-            </div>
-        </main>
-    </div>
-
-    <!-- Client details modal -->
-    <div id="clientDetailModal" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3>Client Details</h3>
-                <button class="close-btn" onclick="closeClientDetailModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div id="clientDetailContent">
-                    <!-- Client detail content will be loaded dynamically via JavaScript -->
+                <div class="filter-group">
+                    <button class="btn btn-outline" onclick="toggleAllClientDetails()" id="toggleAllClientsBtn" title="Toggle all client details">
+                        <i class="fas fa-eye-slash" id="toggleAllClientsIcon"></i>
+                        <span id="toggleAllClientsText">Hide All Details</span>
+                    </button>
                 </div>
             </div>
-        </div>
+
+                <div class="client-table-container" id="clientTableContainer">
+                <table class="enhanced-client-table">
+                    <thead>
+                        <tr>
+                            <th class="client-name-col">Client Name</th>
+                            <th class="status-col">Status</th>
+                            <th class="ip-col">IP Address</th>
+                            <th class="task-id-col">Task ID</th>
+                            <th class="task-name-col">Task Name</th>
+                            <th class="subtask-id-col">Subtask ID</th>
+                            <th class="subtask-name-col">Subtask Name</th>
+                            <th class="heartbeat-col">Last Heartbeat</th>
+                            <th class="actions-col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientTableBody">
+                        <!-- Client rows will be loaded dynamically via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
     </div>
 
     <!-- Notification container -->
@@ -92,7 +100,7 @@
 
     <!-- JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025070204"></script>
-    <script src="{{ url_for('static', filename='js/clients.js') }}?v=2025070204"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=1751615981"></script>
+    <script src="{{ url_for('static', filename='js/clients.js') }}?v=1751615981"></script>
 </body>
 </html>

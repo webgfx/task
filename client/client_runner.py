@@ -22,7 +22,8 @@ sys.path.insert(0, parent_dir)   # For common modules
 
 # Import local modules (these will be copied to installation directory)
 try:
-    from common.system_info import get_system_info, get_system_summary, get_client_name, get_server_url
+    from common.system_info import get_client_name, get_server_url
+    from common.client_info_collector import prepare_registration_data, prepare_ping_response_data
     from common.config import ClientConfig
     from common.utils import setup_logging, get_local_ip
     from executor import TaskExecutor
@@ -52,15 +53,15 @@ class TaskClientRunner:
         self.config = config_data
         self.server_url = config_data['server_url']
         
-        # 获取机器名：优先级 config_data > client.cfg > 系统hostname
+        # Get client name: priority config_data > client.cfg > system hostname
         self.client_name = self._get_client_name(config_data, cfg_file_path)
         self.local_ip = get_local_ip()
         
-        # 验证机器名有效性
+        # Validate client name validity
         if not self.client_name or self.client_name.strip() == '':
             raise ValueError("Client name cannot be empty. Please configure client_name in client.cfg or config.json")
         
-        # 记录机器名来源
+        # Record client name source
         logger.info(f"Using client name: {self.client_name}")
         
         # Initialize configuration manager for client.cfg
@@ -127,25 +128,25 @@ class TaskClientRunner:
     
     def _get_client_name(self, config_data, cfg_file_path=None) -> str:
         """
-        获取客户端名，按优先级顺序：
-        1. config_data 中的 client_name
-        2. client.cfg 中的 client_name  
-        3. 系统 hostname
+        Get client name by priority order:
+        1. client_name in config_data
+        2. client_name in client.cfg  
+        3. system hostname
         
         Args:
-            config_data: 配置数据字典
-            cfg_file_path: client.cfg 文件路径
+            config_data: Configuration data dictionary
+            cfg_file_path: client.cfg file path
             
         Returns:
-            客户端名字符串
+            Client name string
         """
-        # 首先尝试从 config_data 获取
+        # First try to get from config_data
         client_name = config_data.get('client_name', '').strip()
         if client_name:
             logger.debug(f"Client name from config_data: {client_name}")
             return client_name
         
-        # 然后尝试从 client.cfg 获取
+        # Then try to get from client.cfg
         try:
             if cfg_file_path:
                 cfg_manager = get_config_manager(cfg_file_path)
@@ -161,7 +162,7 @@ class TaskClientRunner:
         except Exception as e:
             logger.warning(f"Failed to read client name from client.cfg: {e}")
         
-        # 最后使用系统 hostname
+        # Finally use system hostname
         try:
             client_name = get_client_name().strip()
             if client_name:
@@ -170,7 +171,7 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Failed to get system hostname: {e}")
         
-        # 如果都失败了，返回默认值
+        # If all failed, return default value
         logger.warning("Could not determine client name, using default")
         return f"unknown-{self.local_ip.replace('.', '-')}" if hasattr(self, 'local_ip') else "unknown-client"
     
@@ -198,6 +199,17 @@ class TaskClientRunner:
                 
                 # Check if this is a subtask-based task
                 if 'subtasks' in data and data['subtasks']:
+                    # Enhanced logging for task reception
+                    logger.info(f"📨 TASK_RECEIVED: '{task_name}' (ID: {task_id}) with {len(data['subtasks'])} subtasks from server")
+                    logger.info(f"TASK_DETAILS: Client '{self.client_name}' received task assignment")
+                    
+                    # Log subtasks assigned to this client
+                    my_subtasks = [s for s in data['subtasks'] if s.get('client') == self.client_name]
+                    logger.info(f"TASK_ASSIGNMENT: {len(my_subtasks)}/{len(data['subtasks'])} subtasks assigned to this client")
+                    
+                    for i, subtask in enumerate(my_subtasks, 1):
+                        logger.info(f"ASSIGNED_SUBTASK[{i}]: '{subtask.get('name')}' (order: {subtask.get('order', 0)})")
+                    
                     logger.info(f"Received subtask-based task: {task_name} (ID: {task_id}) with {len(data['subtasks'])} subtasks")
                     
                     # Execute subtask-based task in new thread
@@ -208,12 +220,12 @@ class TaskClientRunner:
                     ).start()
                 else:
                     # Legacy command-based task
-                    commands = data.get('commands', [])
+                    subtasks_legacy = data.get('subtasks', [])
                     execution_order = data.get('execution_order', [])
                     
-                    # 向后兼容旧的单指令格式
-                    if not commands and data.get('command'):
-                        commands = [{
+                    # Backward compatibility for old single command format
+                    if not subtasks_legacy and data.get('command'):
+                        subtasks_legacy = [{
                             'id': 1,
                             'name': 'Default Command',
                             'command': data.get('command'),
@@ -222,12 +234,12 @@ class TaskClientRunner:
                         }]
                         execution_order = [1]
                     
-                    logger.info(f"Received legacy task: {task_name} (ID: {task_id}) with {len(commands)} commands")
+                    logger.info(f"Received legacy task: {task_name} (ID: {task_id}) with {len(subtasks_legacy)} subtasks")
                     
                     # Execute task in new thread
                     threading.Thread(
                         target=self._execute_task,
-                        args=(task_id, task_name, commands, execution_order),
+                        args=(task_id, task_name, subtasks_legacy, execution_order),
                         daemon=True
                     ).start()
                 
@@ -240,16 +252,67 @@ class TaskClientRunner:
             self.sio.emit('pong', {'client_ip': self.local_ip, 'client_name': self.client_name})
         
         @self.sio.event
+        def ping_request(data):
+            """Handle ping request from server and respond with real status"""
+            try:
+                requested_client = data.get('client_name')
+                if requested_client == self.client_name:
+                    logger.info(f"PING_REQUEST: Received ping request from server")
+                    
+                    # Determine current status based on task execution state
+                    current_status = self.get_current_status()
+                    
+                    logger.info(f"PING_REQUEST: Responding with status '{current_status}' and fresh system info")
+                    
+                    # Prepare ping response with fresh system information
+                    additional_data = {
+                        'client_ip': self.local_ip,
+                        'current_task_id': getattr(self, 'current_task_id', None),
+                        'current_subtask_id': getattr(self, 'current_subtask_id', None)
+                    }
+                    
+                    try:
+                        ping_response_data = prepare_ping_response_data(
+                            client_name=self.client_name,
+                            additional_data=additional_data
+                        )
+                        # Update status from current execution state
+                        ping_response_data['status'] = current_status
+                        
+                        # Send response back to server with fresh system info
+                        self.sio.emit('client_ping_response', ping_response_data)
+                        
+                        logger.info(f"PING_RESPONSE: Sent response with fresh system information")
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to prepare ping response with fresh info, using fallback: {e}")
+                        # Fallback to minimal response
+                        self.sio.emit('client_ping_response', {
+                            'client_name': self.client_name,
+                            'client_ip': self.local_ip,
+                            'status': current_status,
+                            'timestamp': datetime.now().isoformat(),
+                            'current_task_id': getattr(self, 'current_task_id', None),
+                            'current_subtask_id': getattr(self, 'current_subtask_id', None),
+                            'collection_source': 'ping_response_fallback'
+                        })
+                else:
+                    logger.debug(f"PING_REQUEST: Ignoring ping for different client '{requested_client}'")
+                    
+            except Exception as e:
+                logger.error(f"Failed to handle ping request: {e}")
+        
+        @self.sio.event
         def task_cancelled(data):
             """Handle task cancellation from server"""
             try:
                 task_id = data.get('task_id')
                 logger.warning(f"Task {task_id} has been cancelled by server")
                 
-                # 如果任务正在执行，标记为取消状态
+                # If task is running, mark as cancelled
                 if hasattr(self, 'current_task_id') and self.current_task_id == task_id:
                     logger.info(f"Attempting to cancel currently running task {task_id}")
-                    # 这里可以添加停止当前任务执行的逻辑
+                    # Here we can add logic to stop current task execution
                 
             except Exception as e:
                 logger.error(f"Failed to handle task cancellation: {e}")
@@ -343,41 +406,81 @@ class TaskClientRunner:
             self.sio.disconnect()
         
         # Stop task executor
-        if self.executor:
-            self.executor.stop()
+        if self.task_executor:
+            self.task_executor.stop()
         
         logger.info("Client runtime stopped")
+    
+    def get_current_status(self):
+        """
+        Get the current status of the client based on its execution state
+        
+        Returns:
+            str: 'free' if not executing tasks, 'busy' if executing tasks
+        """
+        try:
+            # Check if currently executing a task
+            if hasattr(self, 'current_task_id') and self.current_task_id is not None:
+                return 'busy'
+            
+            # Check if task executor is busy (fallback)
+            if self.task_executor and hasattr(self.task_executor, 'is_executing'):
+                if self.task_executor.is_executing():
+                    return 'busy'
+            
+            # Check subtask adapter status if available
+            if self.subtask_adapter and hasattr(self.subtask_adapter, 'is_executing'):
+                if self.subtask_adapter.is_executing():
+                    return 'busy'
+            
+            # Default to free if no active execution detected
+            return 'free'
+            
+        except Exception as e:
+            logger.warning(f"Error determining current status: {e}")
+            return 'free'  # Default to free on error
+    
+    def run(self):
+        """
+        Run method for service wrapper integration
+        This method can be called by the service wrapper to start and run the client
+        """
+        try:
+            logger.info("Starting client runtime via run() method...")
+            self.start()
+        except KeyboardInterrupt:
+            logger.info("Received interrupt signal")
+        except Exception as e:
+            logger.error(f"Runtime error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        finally:
+            self.stop()
     
     def _register_client(self):
         """Register client with server including system information"""
         try:
-            logger.info("Collecting system information...")
-            system_info = get_system_info()
-            system_summary = get_system_summary()
+            logger.info("Preparing registration with fresh system information...")
             
             # DEBUG: Log the exact client name being used
             logger.info(f"DEBUG: Registering client with name: '{self.client_name}'")
             logger.info(f"DEBUG: client name type: {type(self.client_name)}")
             logger.info(f"DEBUG: client name length: {len(self.client_name)}")
             
-            registration_data = {
-                'name': self.client_name,
-                'ip_address': self.local_ip,
-                'port': 8080,
-                'status': 'online',
-                # System information
-                'cpu_info': system_info['cpu'],
-                'memory_info': system_info['memory'],
-                'gpu_info': system_info['gpu'],
-                'os_info': system_info['os'],
-                'disk_info': system_info['disk'],
-                'system_summary': system_summary
-            }
+            # Use unified client info collector
+            registration_data = prepare_registration_data(
+                client_name=self.client_name,
+                ip_address=self.local_ip,
+                port=8080
+            )
             
-            logger.info(f"System summary: CPU: {system_summary.get('cpu', 'Unknown')}")
-            logger.info(f"System summary: Memory: {system_summary.get('memory', 'Unknown')}")
-            logger.info(f"System summary: GPU: {system_summary.get('gpu', 'Unknown')}")
-            logger.info(f"System summary: OS: {system_summary.get('os', 'Unknown')}")
+            # Log system summary if available
+            if 'system_summary' in registration_data:
+                system_summary = registration_data['system_summary']
+                logger.info(f"System summary: CPU: {system_summary.get('cpu', 'Unknown')}")
+                logger.info(f"System summary: Memory: {system_summary.get('memory', 'Unknown')}")
+                logger.info(f"System summary: GPU: {system_summary.get('gpu', 'Unknown')}")
+                logger.info(f"System summary: OS: {system_summary.get('os', 'Unknown')}")
             
             response = requests.post(
                 f"{self.server_url}/api/clients/register",
@@ -455,17 +558,17 @@ class TaskClientRunner:
             self.stop()
     
     def _start_config_update_thread(self):
-        """启动配置更新线程"""
+        """Start configuration update thread"""
         def config_update_loop():
             while self.running:
                 try:
-                    # 等待指定的时间间隔
+                    # Wait for specified time interval
                     time.sleep(self.config_update_interval)
                     
                     if not self.running:
                         break
                     
-                    # 更新配置信息
+                    # Update configuration information
                     self._update_client_config()
                     
                 except Exception as e:
@@ -476,26 +579,16 @@ class TaskClientRunner:
         logger.info(f"Started configuration update thread (interval: {self.config_update_interval}s)")
     
     def _update_client_config(self):
-        """更新机器配置信息到服务器"""
+        """Update client configuration information to server"""
         try:
-            logger.info("Updating client configuration...")
+            logger.info("Updating client configuration with fresh system information...")
             
-            # 重新收集系统信息
-            system_info = get_system_info()
-            system_summary = get_system_summary()
-            
-            update_data = {
-                'name': self.client_name,
-                'ip_address': self.local_ip,
-                'port': 8080,
-                # 更新的系统信息
-                'cpu_info': system_info['cpu'],
-                'memory_info': system_info['memory'],
-                'gpu_info': system_info['gpu'],
-                'os_info': system_info['os'],
-                'disk_info': system_info['disk'],
-                'system_summary': system_summary
-            }
+            # Use unified client info collector for fresh configuration update
+            update_data = prepare_registration_data(
+                client_name=self.client_name,
+                ip_address=self.local_ip,
+                port=8080
+            )
             
             response = requests.post(
                 f"{self.server_url}/api/clients/update_config",
@@ -507,8 +600,9 @@ class TaskClientRunner:
                 logger.info(f"client configuration updated successfully: {self.client_name} ({self.local_ip})")
                 self.last_config_update = datetime.now()
                 
-                # 记录更新的系统信息摘要
-                if system_summary:
+                # Log updated system information summary if available
+                if 'system_summary' in update_data:
+                    system_summary = update_data['system_summary']
                     logger.info(f"  Updated CPU: {system_summary.get('cpu', 'Unknown')}")
                     logger.info(f"  Updated Memory: {system_summary.get('memory', 'Unknown')}")
                     logger.info(f"  Updated GPU: {system_summary.get('gpu', 'Unknown')}")
@@ -554,45 +648,45 @@ class TaskClientRunner:
             # Clear current task ID
             self.current_task_id = None
     
-    def _execute_task(self, task_id, task_name, commands, execution_order):
-        """Execute task with multiple commands in specified order"""
+    def _execute_task(self, task_id, task_name, subtasks_legacy, execution_order):
+        """Execute task with multiple subtasks in specified order"""
         try:
-            # 设置当前执行的任务ID
+            # Set current executing task ID
             self.current_task_id = task_id
             
-            logger.info(f"Start executing task: {task_name} with {len(commands)} commands")
+            logger.info(f"Start executing task: {task_name} with {len(subtasks_legacy)} subtasks")
             
             # Notify server task execution started
             self._notify_task_start(task_id)
             
-            # 按照执行顺序执行指令
+            # Execute subtasks in specified order
             overall_success = True
             subtask_results = []
             overall_errors = []
             
-            # 创建指令ID到指令的映射
-            command_map = {cmd['id']: cmd for cmd in commands}
+            # Create command ID to command mapping
+            subtask_map = {cmd['id']: cmd for cmd in subtasks_legacy}
             
             for cmd_id in execution_order:
-                if cmd_id not in command_map:
-                    error_msg = f"Command ID {cmd_id} not found in commands list"
+                if cmd_id not in subtask_map:
+                    error_msg = f"Subtask ID {cmd_id} not found in subtasks list"
                     logger.error(error_msg)
                     overall_errors.append(error_msg)
                     overall_success = False
                     continue
                 
-                cmd = command_map[cmd_id]
-                cmd_name = cmd.get('name', f'Command-{cmd_id}')
+                cmd = subtask_map[cmd_id]
+                cmd_name = cmd.get('name', f'Subtask-{cmd_id}')
                 cmd_command = cmd.get('command', '')
                 cmd_timeout = cmd.get('timeout', 300)
                 
                 logger.info(f"Executing subtask {cmd_id}: {cmd_name}")
                 
                 try:
-                    # Execute individual command
+                    # Execute individual subtask
                     result = self.task_executor.execute(cmd_command, timeout=cmd_timeout)
                     
-                    # 记录subtask结果
+                    # Record subtask result
                     subtask_result = {
                         'subtask_id': cmd_id,
                         'subtask_name': cmd_name,
@@ -607,10 +701,10 @@ class TaskClientRunner:
                     
                     subtask_results.append(subtask_result)
                     
-                    # 保存中间结果到本地
+                    # Save intermediate result to local
                     self._save_intermediate_result(task_id, cmd_id, subtask_result)
                     
-                    # 立即上传subtask结果到服务器
+                    # Immediately upload subtask result to server
                     self._upload_subtask_result(task_id, subtask_result)
                     
                     if not result.get('success', False):
@@ -619,7 +713,7 @@ class TaskClientRunner:
                         overall_errors.append(error_msg)
                         logger.warning(error_msg)
                         
-                        # 检查是否应该继续执行后续指令
+                        # Check if subsequent instructions should continue to execute
                         if cmd.get('stop_on_failure', False):
                             logger.info(f"Stopping execution due to subtask {cmd_id} failure")
                             break
@@ -632,7 +726,7 @@ class TaskClientRunner:
                     overall_errors.append(error_msg)
                     overall_success = False
                     
-                    # 记录失败的subtask结果
+                    # Record failed subtask result
                     subtask_result = {
                         'subtask_id': cmd_id,
                         'subtask_name': cmd_name,
@@ -681,7 +775,7 @@ class TaskClientRunner:
                 'exit_code': -1
             })
         finally:
-            # 清除当前任务ID
+            # Clear current task ID
             self.current_task_id = None
     
     def _notify_task_start(self, task_id):
@@ -734,11 +828,11 @@ class TaskClientRunner:
     def _save_intermediate_result(self, task_id, subtask_id, result):
         """Save intermediate result locally"""
         try:
-            # 创建任务结果目录
+            # Create task results directory
             task_results_dir = os.path.join(self.work_dir, 'task_results')
             os.makedirs(task_results_dir, exist_ok=True)
             
-            # 保存中间结果
+            # Save intermediate result
             result_file = os.path.join(task_results_dir, f'task_{task_id}_subtask_{subtask_id}.json')
             with open(result_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)

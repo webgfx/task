@@ -1,148 +1,148 @@
 # Task Client - Modular Architecture
 
-## 概述
+## Overview
 
-客户端已重构为模块化架构，将安装/卸载逻辑与启动/停止逻辑分离，实现更好的部署和更新体验。
+The client has been refactored into a modular architecture, separating installation/uninstallation logic from startup/stop logic to provide better deployment and update experience.
 
-## 架构说明
+## Architecture Description
 
-### 🏗️ 文件结构
+### 🏗️ File Structure
 
 ```
 client/
-├── client_installer.py    # 安装/卸载/更新管理器
-├── client_runner.py       # 运行时执行器
-├── client.cfg            # 客户端配置文件模板
-├── config_manager.py     # 配置管理模块
-├── config_tool.py        # 配置管理工具
-├── quick_setup.sh        # Linux/Mac 快速安装脚本
-├── quick_setup.bat       # Windows 快速安装脚本
-├── executor.py           # 任务执行器
-├── heartbeat.py          # 心跳管理器
-└── README_CLIENT.md      # 本文档
+├── client_installer.py    # Installation/uninstallation/update manager
+├── client_runner.py       # Runtime executor
+├── client.cfg            # Client configuration file template
+├── config_manager.py     # Configuration management module
+├── config_tool.py        # Configuration management tool
+├── quick_setup.sh        # Linux/Mac quick installation script
+├── quick_setup.bat       # Windows quick installation script
+├── executor.py           # Task executor
+├── heartbeat.py          # Heartbeat manager
+└── README_CLIENT.md      # This document
 ```
 
-### 🔧 组件说明
+### 🔧 Component Description
 
-1. **client_installer.py** - 安装管理器
-   - 一次性安装和配置
-   - 更新核心文件（无需重新安装）
-   - 卸载和清理
-   - 生成启动脚本和配置文件
+1. **client_installer.py** - Installation manager
+   - One-time installation and configuration
+   - Update core files (no need to reinstall)
+   - Uninstallation and cleanup
+   - Generate startup scripts and configuration files
 
-2. **client_runner.py** - 运行时执行器
-   - 处理服务器通信
-   - 执行任务
-   - 系统信息收集
-   - 心跳管理
+2. **client_runner.py** - Runtime executor
+   - Handle server communication
+   - Execute tasks
+   - System information collection
+   - Heartbeat management
 
-3. **client.cfg** - 配置文件
-   - 心跳频率配置
-   - 日志级别设置
-   - 网络参数调优
-   - 性能和安全设置
+3. **client.cfg** - Configuration file
+   - Heartbeat frequency configuration
+   - Log level settings
+   - Network parameter tuning
+   - Performance and security settings
 
-4. **config_manager.py** - 配置管理模块
-   - 配置文件读取和验证
-   - 默认值管理
-   - 配置项访问接口
+4. **config_manager.py** - Configuration management module
+   - Configuration file reading and validation
+   - Default value management
+   - Configuration item access interface
 
-5. **config_tool.py** - 配置管理工具
-   - 交互式配置编辑
-   - 配置验证和保存
-   - 配置重置功能
+5. **config_tool.py** - Configuration management tool
+   - Interactive configuration editing
+   - Configuration validation and saving
+   - Configuration reset functionality
 
-## � 配置管理
+## ⚙️ Configuration Management
 
-### 配置文件说明
+### Configuration File Description
 
-客户端使用两个配置文件：
+The client uses two configuration files:
 
-1. **config.json** - 安装时生成的基本配置
-2. **client.cfg** - 详细的运行时配置（可手动编辑）
+1. **config.json** - Basic configuration generated during installation
+2. **client.cfg** - Detailed runtime configuration (can be manually edited)
 
-### 心跳频率配置
+### Heartbeat Frequency Configuration
 
-心跳频率决定客户端向服务器发送存活信号的间隔，单位为秒。
+Heartbeat frequency determines the interval at which the client sends alive signals to the server, in seconds.
 
-**安装时设置:**
+**Set during installation:**
 ```bash
 python client_installer.py install \
     --server-url http://localhost:5000 \
     --client-name my-client \
-    --heartbeat-interval 60  # 60秒间隔
+    --heartbeat-interval 60  # 60 second interval
 ```
 
-**安装后修改:**
+**Modify after installation:**
 ```bash
-# 方法1: 使用配置工具
+# Method 1: Use configuration tool
 python config_tool.py --heartbeat-interval 60 --save
 
-# 方法2: 交互式配置
+# Method 2: Interactive configuration
 python config_tool.py --interactive
 
-# 方法3: 直接编辑 client.cfg 文件
+# Method 3: Directly edit client.cfg file
 ```
 
-### 配置工具使用
+### Configuration Tool Usage
 
-**查看当前配置:**
+**View current configuration:**
 ```bash
 python config_tool.py --show
 ```
 
-**设置各种参数:**
+**Set various parameters:**
 ```bash
-# 设置心跳间隔为60秒
+# Set heartbeat interval to 60 seconds
 python config_tool.py --heartbeat-interval 60 --save
 
-# 设置日志级别为DEBUG
+# Set log level to DEBUG
 python config_tool.py --log-level DEBUG --save
 
-# 启用调试模式
+# Enable debug mode
 python config_tool.py --debug-mode --save
 
-# 设置WebSocket ping间隔
+# Set WebSocket ping interval
 python config_tool.py --websocket-ping-interval 30 --save
 ```
 
-**交互式配置模式:**
+**Interactive configuration mode:**
 ```bash
 python config_tool.py --interactive
 ```
 
-**验证配置:**
+**Validate configuration:**
 ```bash
 python config_tool.py --validate
 ```
 
-### 配置项说明
+### Configuration Items Description
 
-| 配置项 | 默认值 | 说明 |
-|--------|-------|------|
-| `heartbeat_interval` | 30 | 心跳发送间隔（秒） |
-| `config_update_interval` | 600 | 配置更新间隔（秒） |
-| `log_level` | INFO | 日志级别（DEBUG/INFO/WARNING/ERROR） |
-| `connection_timeout` | 10 | 连接超时时间（秒） |
-| `websocket_ping_interval` | 25 | WebSocket ping间隔（秒） |
-| `debug_mode` | false | 是否启用调试模式 |
-| `max_concurrent_tasks` | 1 | 最大并发任务数 |
+| Configuration Item | Default Value | Description |
+|-------|-------|------|
+| `heartbeat_interval` | 30 | Heartbeat send interval (seconds) |
+| `config_update_interval` | 600 | Configuration update interval (seconds) |
+| `log_level` | INFO | Log level (DEBUG/INFO/WARNING/ERROR) |
+| `connection_timeout` | 10 | Connection timeout (seconds) |
+| `websocket_ping_interval` | 25 | WebSocket ping interval (seconds) |
+| `debug_mode` | false | Whether to enable debug mode |
+| `max_concurrent_tasks` | 1 | Maximum concurrent tasks |
 
-### 配置生效
+### Configuration Takes Effect
 
-配置修改后需要重启客户端才能生效：
+Configuration changes require client restart to take effect:
 
 ```bash
-# 停止客户端
+# Stop client
 ~/.task_client/stop_client.sh
 
-# 启动客户端
+# Start client
 ~/.task_client/start_client.sh
 ```
 
-## �🚀 快速开始
+## 🚀 Quick Start
 
-### 方法 1: 使用快速安装脚本（推荐）
+### Method 1: Use Quick Installation Script (Recommended)
 
 **Linux/Mac:**
 ```bash
@@ -154,51 +154,51 @@ python config_tool.py --validate
 quick_setup.bat --server-url http://your-server:5000 --client-name your-client
 ```
 
-### 方法 2: 手动安装
+### Method 2: Manual Installation
 
-#### 1. 安装客户端
+#### 1. Install Client
 ```bash
 python client_installer.py install \
     --server-url http://localhost:5000 \
     --client-name my-client
 ```
 
-#### 2. 启动客户端
+#### 2. Start Client
 ```bash
-# 使用生成的启动脚本
+# Use generated startup script
 ~/.task_client/start_client.sh    # Linux/Mac
 %USERPROFILE%\.task_client\start_client.bat    # Windows
 
-# 或直接运行
+# Or run directly
 python client_runner.py --config ~/.task_client/config.json
 ```
 
-#### 3. 停止客户端
+#### 3. Stop Client
 ```bash
 ~/.task_client/stop_client.sh     # Linux/Mac
 %USERPROFILE%\.task_client\stop_client.bat     # Windows
 ```
 
-## 🔄 优势
+## 🔄 Advantages
 
-### 🎯 模块化设计
-- **分离关注点**: 安装逻辑与运行时逻辑完全分离
-- **独立更新**: 可以只更新运行时文件，无需重新安装
-- **清晰职责**: 每个组件有明确的责任边界
+### 🎯 Modular Design
+- **Separation of Concerns**: Installation logic completely separated from runtime logic
+- **Independent Updates**: Can update only runtime files without reinstallation
+- **Clear Responsibilities**: Each component has clear responsibility boundaries
 
-### 🚀 简化部署
-- **一次安装**: 安装完成后生成标准启动脚本
-- **标准化**: 跨平台一致的安装和运行体验
-- **自动化**: 支持脚本化部署和管理
+### 🚀 Simplified Deployment
+- **One-time Installation**: Generates standard startup scripts after installation
+- **Standardization**: Consistent installation and runtime experience across platforms
+- **Automation**: Supports scripted deployment and management
 
-### 🔧 便捷维护
-- **热更新**: 更新核心功能无需停机重装
-- **版本管理**: 清晰的版本和配置管理
-- **状态监控**: 内置状态检查和诊断工具
+### 🔧 Convenient Maintenance
+- **Hot Updates**: Update core functionality without downtime reinstallation
+- **Version Management**: Clear version and configuration management
+- **Status Monitoring**: Built-in status checking and diagnostic tools
 
-## 📋 使用说明
+## 📋 Usage Instructions
 
-### 安装选项
+### Installation Options
 
 ```bash
 python client_installer.py install \
@@ -210,207 +210,207 @@ python client_installer.py install \
     --install-dir ~/.task_client
 ```
 
-### 配置管理
+### Configuration Management
 
-**查看当前配置:**
+**View current configuration:**
 ```bash
 python config_tool.py --show
 ```
 
-**设置心跳频率（秒）:**
+**Set heartbeat frequency (seconds):**
 ```bash
 python config_tool.py --heartbeat-interval 60 --save
 ```
 
-**交互式配置:**
+**Interactive configuration:**
 ```bash
 python config_tool.py --interactive
 ```
 
-**验证配置:**
+**Validate configuration:**
 ```bash
 python config_tool.py --validate
 ```
 
-### 管理命令
+### Management Subtasks
 
 ```bash
-# 检查安装状态
+# Check installation status
 python client_installer.py status
 
-# 查看配置信息
+# View configuration information
 python client_installer.py info
 
-# 更新核心文件（不重新安装）
+# Update core files (without reinstallation)
 python client_installer.py update
 
-# 卸载（保留数据）
+# Uninstall (keep data)
 python client_installer.py uninstall
 
-# 完全卸载（删除所有数据）
+# Complete uninstall (delete all data)
 python client_installer.py uninstall --remove-data
 ```
 
-### 运行选项
+### Runtime Options
 
 ```bash
-# 使用配置文件运行
+# Run with configuration file
 python client_runner.py --config ~/.task_client/config.json
 
-# 覆盖日志级别
+# Override log level
 python client_runner.py --config ~/.task_client/config.json --log-level DEBUG
 ```
 
-## 🗂️ 文件组织
+## 🗂️ File Organization
 
-### 安装目录结构 (~/.task_client)
+### Installation Directory Structure (~/.task_client)
 
 ```
 .task_client/
-├── config.json           # 主配置文件
-├── client.cfg            # 客户端详细配置
-├── client_runner.py      # 运行时执行器
-├── executor.py           # 任务执行器
-├── heartbeat.py          # 心跳管理器
-├── config_manager.py     # 配置管理模块
-├── common/               # 公共模块
+├── config.json           # Main configuration file
+├── client.cfg            # Client detailed configuration
+├── client_runner.py      # Runtime executor
+├── executor.py           # Task executor
+├── heartbeat.py          # Heartbeat manager
+├── config_manager.py     # Configuration management module
+├── common/               # Common modules
 │   ├── __init__.py
 │   ├── config.py
 │   ├── models.py
 │   ├── system_info.py
 │   └── utils.py
-├── logs/                 # 日志目录
-├── work/                 # 工作目录
-│   └── task_results/     # 任务结果
-├── start_client.bat      # Windows 启动脚本
-├── stop_client.bat       # Windows 停止脚本
-├── start_client.sh       # Linux/Mac 启动脚本
-└── stop_client.sh        # Linux/Mac 停止脚本
+├── logs/                 # Log directory
+├── work/                 # Work directory
+│   └── task_results/     # Task results
+├── start_client.bat      # Windows startup script
+├── stop_client.bat       # Windows stop script
+├── start_client.sh       # Linux/Mac startup script
+└── stop_client.sh        # Linux/Mac stop script
 ```
 
-### 配置文件 (client.cfg)
+### Configuration File (client.cfg)
 
 ```ini
 # Task Client Configuration File
 [DEFAULT]
-# 服务器连接设置
+# Server connection settings
 server_url = http://localhost:5000
 
-# 客户端标识
+# Client identifier
 client_name = 
 
-# 心跳设置（秒）
+# Heartbeat settings (seconds)
 heartbeat_interval = 30
 
-# 配置更新设置（秒）
+# Configuration update settings (seconds)
 config_update_interval = 600
 
-# 日志设置
+# Log settings
 log_level = INFO
 
-# 网络设置
+# Network settings
 connection_timeout = 10
 reconnect_delay = 5
 
 [ADVANCED]
-# WebSocket 设置
+# WebSocket settings
 websocket_ping_interval = 25
 websocket_ping_timeout = 20
 
-# 系统信息收集间隔（秒）
+# System information collection interval (seconds)
 system_info_update_interval = 300
 
-# 调试设置
+# Debug settings
 debug_mode = false
 verbose_logging = false
 
 [PERFORMANCE]
-# 性能调优设置
+# Performance tuning settings
 max_concurrent_tasks = 1
 max_worker_threads = 4
 ```
 
-## 🔄 更新流程
+## 🔄 Update Process
 
-### 更新核心功能（推荐）
+### Update Core Functionality (Recommended)
 ```bash
-# 1. 停止客户端
+# 1. Stop client
 ~/.task_client/stop_client.sh
 
-# 2. 更新核心文件
+# 2. Update core files
 python client_installer.py update
 
-# 3. 重新启动客户端
+# 3. Restart client
 ~/.task_client/start_client.sh
 ```
 
-### 完整重新安装
+### Complete Reinstallation
 ```bash
-# 1. 卸载现有安装
+# 1. Uninstall existing installation
 python client_installer.py uninstall
 
-# 2. 重新安装
+# 2. Reinstall
 python client_installer.py install \
     --server-url http://localhost:5000 \
     --client-name my-client
 ```
 
-## 🐛 故障排除
+## 🐛 Troubleshooting
 
-### 检查安装状态
+### Check Installation Status
 ```bash
 python client_installer.py status
 ```
 
-### 查看日志
+### View Logs
 ```bash
-# 实时日志
+# Real-time logs
 tail -f ~/.task_client/logs/client.log
 
-# 查看配置
+# View configuration
 python client_installer.py info
 ```
 
-### 常见问题
+### Common Issues
 
-1. **模块导入错误**
-   - 确保使用 `client_runner.py` 进行运行时执行
-   - 检查安装目录中的文件是否完整
+1. **Module Import Error**
+   - Ensure using `client_runner.py` for runtime execution
+   - Check if files in installation directory are complete
 
-2. **权限问题**
-   - 确保启动脚本有执行权限
+2. **Permission Issues**
+   - Ensure startup scripts have execute permissions
    - Linux/Mac: `chmod +x ~/.task_client/start_client.sh`
 
-3. **配置问题**
-   - 使用 `python client_installer.py info` 检查配置
-   - 手动编辑 `~/.task_client/config.json` 修正配置
+3. **Configuration Issues**
+   - Use `python client_installer.py info` to check configuration
+   - Manually edit `~/.task_client/config.json` to fix configuration
 
-## 🔄 从旧版本迁移
+## 🔄 Migration from Old Version
 
-如果你使用的是旧版本的单文件客户端（client.py）：
+If you are using the old single-file client (client.py):
 
-1. **停止旧客户端**
-2. **安装新模块化客户端**:
+1. **Stop old client**
+2. **Install new modular client**:
    ```bash
    python client_installer.py install \
        --server-url YOUR_SERVER_URL \
-       --client-name YOUR_client_name
+       --client-name YOUR_CLIENT_NAME
    ```
-3. **使用新的启动方式**
+3. **Use new startup method**
 
-旧的单文件客户端已被完全替换为模块化架构。
+The old single-file client has been completely replaced with modular architecture.
 
-## 🎯 最佳实践
+## 🎯 Best Practices
 
-1. **使用配置文件**: 避免在命令行中硬编码参数
-2. **定期更新**: 使用 `python client_installer.py update` 获取最新功能
-3. **监控日志**: 定期检查 `~/.task_client/logs/` 目录中的日志
-4. **备份配置**: 重要部署前备份配置文件
-5. **环境隔离**: 不同环境使用不同的机器名和配置
+1. **Use configuration files**: Avoid hardcoding parameters in command line
+2. **Regular updates**: Use `python client_installer.py update` to get latest features
+3. **Monitor logs**: Regularly check logs in `~/.task_client/logs/` directory
+4. **Backup configuration**: Backup configuration files before important deployments
+5. **Environment isolation**: Use different client names and configurations for different environments
 
-## 📝 注意事项
+## 📝 Notes
 
-- 新架构与旧版服务器完全兼容
-- 配置文件格式向后兼容
-- 所有现有功能保持不变
-- 支持所有现有的服务器 API
+- New architecture is fully compatible with old version servers
+- Configuration file format is backward compatible
+- All existing functionality remains unchanged
+- Supports all existing server APIs
