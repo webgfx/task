@@ -4,8 +4,8 @@
 
 console.log('Loading tasks.js...');
 
-let tasksList = [];
-let machinesList = [];
+let allTasks = [];
+let clientsList = [];
 let availableSubtasks = [];
 let filteredTasks = [];
 let tasksCurrentPage = 1;
@@ -43,10 +43,10 @@ function setupWebSocketListeners() {
             // Show notification for completion or failure
             if (data.status === 'completed') {
                 showNotification('Subtask Completed', 
-                    `Subtask "${data.subtask_name}" completed on ${data.target_machine}`, 'success');
+                    `Subtask "${data.subtask_name}" completed on client ${data.target_client}`, 'success');
             } else if (data.status === 'failed') {
                 showNotification('Subtask Failed', 
-                    `Subtask "${data.subtask_name}" failed on ${data.target_machine}`, 'error');
+                    `Subtask "${data.subtask_name}" failed on client ${data.target_client}`, 'error');
             }
         });
         
@@ -63,15 +63,67 @@ function setupWebSocketListeners() {
                 }
             }
         });
+        
+        // Listen for subtask deletion events
+        socket.on('subtask_deleted', function(data) {
+            console.log('Subtask deleted:', data);
+            
+            // Update task details view if it's open and matches this task
+            const taskDetailModal = document.getElementById('taskDetailModal');
+            if (taskDetailModal && taskDetailModal.style.display === 'block') {
+                const currentTaskId = getCurrentTaskDetailId();
+                if (currentTaskId && currentTaskId == data.task_id) {
+                    refreshTaskDetails(data.task_id);
+                }
+            }
+            
+            // Refresh task list to show updated state
+            if (typeof refreshTasks === 'function') {
+                refreshTasks();
+            }
+            
+            // Show notification
+            showNotification('Subtask Deleted', 
+                `Subtask "${data.subtask_name}" deleted from client ${data.target_client}`, 'info');
+                
+            // If all subtasks were deleted, show task cancellation notice
+            if (data.remaining_subtasks === 0) {
+                showNotification('Task Cancelled', 
+                    'All subtasks were deleted - task has been cancelled', 'warning');
+            }
+        });
+        
+        // Listen for task deletion events
+        socket.on('task_deleted', function(data) {
+            console.log('Task deleted:', data);
+            
+            // Close task details modal if it's open for this task
+            const taskDetailModal = document.getElementById('taskDetailModal');
+            if (taskDetailModal && taskDetailModal.style.display === 'block') {
+                const currentTaskId = getCurrentTaskDetailId();
+                if (currentTaskId && currentTaskId == data.task_id) {
+                    taskDetailModal.style.display = 'none';
+                }
+            }
+            
+            // Refresh task list to remove deleted task
+            if (typeof refreshTasks === 'function') {
+                refreshTasks();
+            }
+            
+            // Show notification
+            showNotification('Task Deleted', 
+                `Task "${data.task_name}" has been deleted`, 'info');
+        });
     }
 }
 
 // Initialize task page
 async function initializeTasksPage() {
-    await loadMachines();
+    await loadClients();
     await loadAvailableSubtasks();
     await refreshTasks();
-    populateMachineFilter();
+    populateClientFilter();
     setupEventListeners();
 }
 
@@ -97,26 +149,57 @@ function setupEventListeners() {
     });
 }
 
-// Load machines from server
-async function loadMachines() {
+// Load clients from server
+async function loadClients() {
     try {
-        const response = await apiGet('/api/machines');
-        machinesList = response.data || [];
+        const response = await apiGet('/api/clients');
+        clientsList = response.data || [];
     } catch (error) {
-        console.error('Failed to load machines:', error);
-        showNotification('Failed to load machines', 'error');
+        console.error('Failed to load clients:', error);
+        showNotification('Failed to load clients', 'error');
     }
 }
 
 // Load available subtasks from server
 async function loadAvailableSubtasks() {
     try {
-        const response = await apiGet('/api/subtasks');
-        availableSubtasks = response.data || [];
-        console.log('Loaded available subtasks:', availableSubtasks);
+        // Try to load enhanced subtask definitions first
+        let response;
+        try {
+            response = await apiGet('/api/subtasks/definitions');
+            if (response.success && response.data) {
+                // Enhanced format with result definitions
+                availableSubtasks = Object.keys(response.data).map(name => {
+                    const def = response.data[name];
+                    return {
+                        name: name,
+                        description: def.description,
+                        result_definition: def.result_definition
+                    };
+                });
+                console.log('Loaded enhanced subtask definitions:', availableSubtasks);
+                return;
+            }
+        } catch (error) {
+            console.warn('Enhanced subtasks endpoint not available, falling back to basic subtasks');
+        }
+        
+        // Fallback to basic subtasks list
+        response = await apiGet('/api/subtasks');
+        if (response.success && response.data) {
+            availableSubtasks = response.data.map(subtask => ({
+                name: subtask.name,
+                description: subtask.description || 'No description available',
+                result_definition: null
+            }));
+        } else {
+            availableSubtasks = [];
+        }
+        console.log('Loaded basic subtasks:', availableSubtasks);
     } catch (error) {
         console.error('Failed to load available subtasks:', error);
-        showNotification('Failed to load available subtasks', 'error');
+        showNotification('Error', 'Failed to load available subtasks', 'error');
+        availableSubtasks = [];
     }
 }
 
@@ -145,25 +228,32 @@ function addSubtask() {
                     <label>Subtask Type <span class="required">*</span></label>
                     <select class="subtask-name" onchange="updateSubtaskDescription(this)" required>
                         <option value="">Select subtask...</option>
-                        ${availableSubtasks.map(subtask =>
-                            `<option value="${subtask.name}">${subtask.name}</option>`
-                        ).join('')}
+                        ${availableSubtasks.map(subtask => {
+                            let displayName = subtask.name;
+                            if (subtask.result_definition && subtask.result_definition.result_type) {
+                                displayName += ` (${subtask.result_definition.result_type})`;
+                            }
+                            let description = subtask.description || 'No description available';
+                            // Truncate description for the option data attribute
+                            let shortDescription = description.length > 100 ? description.substring(0, 100) + '...' : description;
+                            return `<option value="${subtask.name}" data-description="${shortDescription}" data-result-type="${subtask.result_definition ? subtask.result_definition.result_type : ''}">${displayName}</option>`;
+                        }).join('')}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Target Machines <span class="required">*</span></label>
-                    <div class="machine-selection">
-                        <div class="machine-option">
+                    <label>Target Clients <span class="required">*</span></label>
+                    <div class="client-selection">
+                        <div class="client-option">
                             <label class="checkbox-label">
-                                <input type="checkbox" class="all-machines-checkbox" onchange="toggleAllMachines(this)">
-                                <span>All Machines</span>
+                                <input type="checkbox" class="all-clients-checkbox" onchange="toggleAllClients(this)">
+                                <span>All Clients</span>
                             </label>
                         </div>
-                        ${machinesList.map(machine =>
-                            `<div class="machine-option">
+                        ${clientsList.map(client =>
+                            `<div class="client-option">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" class="machine-checkbox" value="${machine.name}" onchange="updateMachineSelection(this)">
-                                    <span>${machine.name} (${machine.ip_address})</span>
+                                    <input type="checkbox" class="client-checkbox" value="${client.name}" onchange="updateClientSelection(this)">
+                                    <span>${client.name} (${client.ip_address})</span>
                                 </label>
                             </div>`
                         ).join('')}
@@ -180,43 +270,43 @@ function addSubtask() {
     updateSubtaskNumbers();
 }
 
-// Toggle all machines selection
-function toggleAllMachines(checkbox) {
+// Toggle all clients selection
+function toggleAllClients(checkbox) {
     if (!checkbox) return;
     
     const subtaskRow = checkbox.closest('.subtask-row');
     if (!subtaskRow) return;
     
-    const machineCheckboxes = subtaskRow.querySelectorAll('.machine-checkbox');
+    const clientCheckboxes = subtaskRow.querySelectorAll('.client-checkbox');
 
-    machineCheckboxes.forEach(cb => {
+    clientCheckboxes.forEach(cb => {
         cb.checked = checkbox.checked;
     });
 }
 
-// Update machine selection when individual checkboxes change
-function updateMachineSelection(checkbox) {
+// Update client selection when individual checkboxes change
+function updateClientSelection(checkbox) {
     if (!checkbox) return;
     
     const subtaskRow = checkbox.closest('.subtask-row');
     if (!subtaskRow) return;
     
-    const allMachinesCheckbox = subtaskRow.querySelector('.all-machines-checkbox');
-    const machineCheckboxes = subtaskRow.querySelectorAll('.machine-checkbox');
-    const checkedBoxes = subtaskRow.querySelectorAll('.machine-checkbox:checked');
+    const allClientsCheckbox = subtaskRow.querySelector('.all-clients-checkbox');
+    const clientCheckboxes = subtaskRow.querySelectorAll('.client-checkbox');
+    const checkedBoxes = subtaskRow.querySelectorAll('.client-checkbox:checked');
 
-    if (!allMachinesCheckbox) return;
+    if (!allClientsCheckbox) return;
 
-    // Update "All Machines" checkbox state
-    if (checkedBoxes.length === machineCheckboxes.length) {
-        allMachinesCheckbox.checked = true;
-        allMachinesCheckbox.indeterminate = false;
+    // Update "All Clients" checkbox state
+    if (checkedBoxes.length === clientCheckboxes.length) {
+        allClientsCheckbox.checked = true;
+        allClientsCheckbox.indeterminate = false;
     } else if (checkedBoxes.length === 0) {
-        allMachinesCheckbox.checked = false;
-        allMachinesCheckbox.indeterminate = false;
+        allClientsCheckbox.checked = false;
+        allClientsCheckbox.indeterminate = false;
     } else {
-        allMachinesCheckbox.checked = false;
-        allMachinesCheckbox.indeterminate = true;
+        allClientsCheckbox.checked = false;
+        allClientsCheckbox.indeterminate = true;
     }
 }
 
@@ -266,14 +356,38 @@ function updateSubtaskDescription(selectElement) {
     if (subtaskName) {
         const subtask = availableSubtasks.find(s => s.name === subtaskName);
         if (subtask) {
-            descriptionDiv.innerHTML = `
+            let descriptionHTML = `
                 <small class="help-text">
-                    <strong>${subtask.name}:</strong> ${subtask.description}
-                </small>
+                    <strong>${subtask.name}:</strong> ${subtask.description || 'No description available'}
             `;
+            
+            // Add result definition information if available
+            if (subtask.result_definition) {
+                const rd = subtask.result_definition;
+                descriptionHTML += `<br>
+                    <strong>Result Type:</strong> ${rd.result_type}`;
+                
+                if (rd.format_hint) {
+                    descriptionHTML += `<br>
+                    <strong>Format:</strong> ${rd.format_hint}`;
+                }
+                
+                if (rd.is_critical !== undefined) {
+                    descriptionHTML += `<br>
+                    <strong>Critical:</strong> ${rd.is_critical ? 'Yes' : 'No'}`;
+                }
+                
+                if (rd.required_fields && rd.required_fields.length > 0) {
+                    descriptionHTML += `<br>
+                    <strong>Required Fields:</strong> ${rd.required_fields.join(', ')}`;
+                }
+            }
+            
+            descriptionHTML += '</small>';
+            descriptionDiv.innerHTML = descriptionHTML;
         }
     } else {
-        descriptionDiv.innerHTML = '<small class="help-text">Select a subtask to see its description</small>';
+        descriptionDiv.innerHTML = '<small class="help-text">Select a subtask to see its description and result specification</small>';
     }
 }
 
@@ -320,6 +434,19 @@ function toggleScheduleOptions() {
     cronGroup.style.display = scheduleType === 'cron' ? 'block' : 'none';
 }
 
+// Toggle email recipients field
+function toggleEmailRecipients() {
+    const sendEmail = document.getElementById('sendEmail').checked;
+    const emailRecipientsGroup = document.getElementById('emailRecipientsGroup');
+    
+    emailRecipientsGroup.style.display = sendEmail ? 'block' : 'none';
+    
+    // Clear recipients field if email is disabled
+    if (!sendEmail) {
+        document.getElementById('emailRecipients').value = '';
+    }
+}
+
 // Save task (create or update)
 async function saveTask() {
     try {
@@ -354,6 +481,20 @@ async function saveTask() {
         }
         taskData.subtasks = subtasks;
 
+        // Handle email notification settings
+        const sendEmail = document.getElementById('sendEmail').checked;
+        taskData.send_email = sendEmail;
+        
+        if (sendEmail) {
+            const emailRecipients = document.getElementById('emailRecipients').value.trim();
+            if (emailRecipients) {
+                taskData.email_recipients = emailRecipients;
+            } else {
+                // If send_email is true but no recipients specified, show warning
+                showNotification('Warning: Email notifications enabled but no recipients specified. Default recipient will be used.', 'warning');
+            }
+        }
+
         // Submit to server
         const taskId = document.getElementById('taskId').value;
         let response;
@@ -385,14 +526,14 @@ function collectSubtasks() {
 
     subtaskRows.forEach((row, index) => {
         const name = row.querySelector('.subtask-name').value;
-        const checkedMachines = Array.from(row.querySelectorAll('.machine-checkbox:checked')).map(cb => cb.value);
+        const checkedClients = Array.from(row.querySelectorAll('.client-checkbox:checked')).map(cb => cb.value);
 
-        if (name && checkedMachines.length > 0) {
-            // Create a subtask for each selected machine
-            checkedMachines.forEach((machineName, machineIndex) => {
+        if (name && checkedClients.length > 0) {
+            // Create a subtask for each selected client
+            checkedClients.forEach((clientName, clientIndex) => {
                 subtasks.push({
                     name: name,
-                    target_machine: machineName,
+                    target_client: clientName,
                     order: index,
                     args: [],
                     kwargs: {},
@@ -405,28 +546,37 @@ function collectSubtasks() {
     return subtasks;
 }
 
-// Load tasks from server
+// Load tasks from server and get execution data
 async function refreshTasks() {
     try {
         const response = await apiGet('/api/tasks');
-        tasksList = response.data || [];
+        if (response.success) {
+            allTasks = response.data || [];
+        } else {
+            throw new Error(response.error || 'Unknown error');
+        }
+        
+        // Load subtask execution data for each task
+        for (const task of allTasks) {
+            try {
+                const executionsResponse = await apiGet(`/api/tasks/${task.id}/subtask-executions`);
+                task.executions = executionsResponse.success ? executionsResponse.data : [];
+            } catch (error) {
+                console.warn(`Failed to load executions for task ${task.id}:`, error);
+                task.executions = [];
+            }
+        }
+        
         filterTasks();
-        renderTasks();
+        renderEnhancedTasks();
     } catch (error) {
         console.error('Failed to load tasks:', error);
         showNotification('Failed to load tasks', 'error');
     }
 }
 
-// Filter tasks based on current filters
-function filterTasks() {
-    filteredTasks = tasksList;
-    // Add filtering logic here if needed
-    tasksCurrentPage = 1;
-}
-
-// Render tasks table
-function renderTasks() {
+// Enhanced task rendering with subtask-client combinations
+function renderEnhancedTasks() {
     const tasksTableBody = document.getElementById('taskTableBody');
     if (!tasksTableBody) {
         console.error('Could not find taskTableBody element');
@@ -442,57 +592,531 @@ function renderTasks() {
     if (paginatedTasks.length === 0) {
         tasksTableBody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center">No tasks found</td>
+                <td colspan="8" class="no-tasks-message">
+                    <i class="fas fa-tasks"></i><br>
+                    No tasks found
+                </td>
             </tr>
         `;
         return;
     }
 
     paginatedTasks.forEach(task => {
-        const row = document.createElement('tr');
-
-        // Get subtask details
-        const subtaskCount = task.subtasks ? task.subtasks.length : 0;
-        const subtaskDetails = subtaskCount > 0
-            ? `${subtaskCount} subtask${subtaskCount > 1 ? 's' : ''}`
-            : 'No subtasks';
-
-        // Get target machines
-        const targetMachines = task.subtasks && task.subtasks.length > 0
-            ? [...new Set(task.subtasks.map(st => st.target_machine))].join(', ')
-            : task.target_machine || 'Not specified';
-
-        row.innerHTML = `
-            <td>${task.id}</td>
-            <td>${task.name}</td>
-            <td>${subtaskDetails}</td>
-            <td>${targetMachines}</td>
-            <td><span class="status-badge ${task.status}">${task.status}</span></td>
-            <td>${task.schedule_time ? new Date(task.schedule_time).toLocaleString() : task.cron_expression || 'Immediate'}</td>
-            <td>${task.created_at ? new Date(task.created_at).toLocaleString() : '-'}</td>
-            <td class="task-actions">
-                <button class="btn btn-small btn-primary" onclick="viewTaskDetails(${task.id})" title="View Details">
-                    <i class="fas fa-eye"></i>
-                </button>
-                <button class="btn btn-small btn-secondary" onclick="openTaskModal(${task.id})" title="Edit">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-small btn-danger" onclick="deleteTask(${task.id})" title="Delete">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-
-        tasksTableBody.appendChild(row);
+        renderTaskGroup(task, tasksTableBody);
     });
 
     updatePagination();
 }
 
-// Update pagination
+// Render a complete task group with all subtask-client combinations
+function renderTaskGroup(task, container) {
+    // Calculate task statistics
+    const taskStats = calculateTaskStatistics(task);
+    
+    // Create task group header row
+    const groupRow = document.createElement('tr');
+    groupRow.className = 'task-group-row';
+    groupRow.innerHTML = `
+        <td>${task.id}</td>
+        <td colspan="7">
+            <div class="task-group-header">
+                <div class="task-group-title">${task.name}</div>
+                <div class="task-group-summary">
+                    ${taskStats.totalExecutions} executions • 
+                    ${taskStats.completed} completed • 
+                    ${taskStats.running} running • 
+                    ${taskStats.failed} failed • 
+                    ${taskStats.pending} pending
+                </div>
+                <div class="task-group-actions">
+                    <div class="task-group-progress">
+                        <div class="task-group-progress-fill ${taskStats.progressClass}" 
+                             style="width: ${taskStats.completionPercentage}%"></div>
+                    </div>
+                    <span class="status-badge ${task.status}">${task.status}</span>
+                    <button class="collapse-toggle" onclick="toggleTaskGroup(${task.id})" 
+                            title="Toggle subtask details">
+                        <i class="fas fa-chevron-down" id="toggle-icon-${task.id}"></i>
+                    </button>
+                    <button class="btn btn-small btn-primary" onclick="viewTaskDetails(${task.id})" 
+                            title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${task.status !== 'running' ? 
+                        `<button class="btn btn-small btn-danger" onclick="deleteTask(${task.id})" 
+                                title="Delete Task">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''
+                    }
+                </div>
+            </div>
+        </td>
+    `;
+    container.appendChild(groupRow);
+
+    // Create subtask execution rows
+    const subtaskExecutions = generateSubtaskExecutions(task);
+    subtaskExecutions.forEach(execution => {
+        const executionRow = createSubtaskExecutionRow(task, execution);
+        container.appendChild(executionRow);
+    });
+}
+
+// Generate subtask execution combinations
+function generateSubtaskExecutions(task) {
+    const executions = [];
+    
+    if (task.subtasks && task.subtasks.length > 0) {
+        // Group subtasks by name and order, then create execution for each target client
+        task.subtasks.forEach(subtask => {
+            const executionData = findExecutionData(task, subtask.name, subtask.target_client);
+            
+            executions.push({
+                subtask_name: subtask.name,
+                target_client: subtask.target_client,
+                order: subtask.order,
+                timeout: subtask.timeout,
+                status: executionData ? executionData.status : 'pending',
+                started_at: executionData ? executionData.started_at : null,
+                completed_at: executionData ? executionData.completed_at : null,
+                execution_time: executionData ? executionData.execution_time : null,
+                result: executionData ? executionData.result : null,
+                error_message: executionData ? executionData.error_message : null
+            });
+        });
+    } else {
+        // Legacy command-based task
+        const targetClients = task.target_clients && task.target_clients.length > 0 
+            ? task.target_clients 
+            : [task.target_client || 'Any Available'];
+        
+        targetClients.forEach(client => {
+            executions.push({
+                subtask_name: 'Command Execution',
+                target_client: client,
+                order: 0,
+                timeout: 300,
+                status: task.status,
+                started_at: task.started_at,
+                completed_at: task.completed_at,
+                execution_time: null,
+                result: task.result,
+                error_message: task.error_message
+            });
+        });
+    }
+    
+    // Sort by order and then by target client
+    executions.sort((a, b) => {
+        if (a.order !== b.order) {
+            return a.order - b.order;
+        }
+        return a.target_client.localeCompare(b.target_client);
+    });
+    
+    return executions;
+}
+
+// Find execution data for a specific subtask-client combination
+function findExecutionData(task, subtaskName, targetClient) {
+    if (!task.executions) return null;
+    
+    return task.executions.find(exec => 
+        exec.subtask_name === subtaskName && 
+        exec.target_client === targetClient
+    );
+}
+
+// Create a subtask execution row
+function createSubtaskExecutionRow(task, execution) {
+    const row = document.createElement('tr');
+    row.className = `subtask-execution-row task-${task.id}-executions`;
+    
+    // Get client status
+    const client = clientsList.find(m => m.name === execution.target_client);
+    const clientStatus = client ? client.status : 'unknown';
+    
+    // Format timing information
+    const timingInfo = formatTimingInfo(execution);
+    
+    // Progress indicator
+    const progressIcon = getProgressIcon(execution.status);
+    
+    row.innerHTML = `
+        <td class="task-id-col"></td>
+        <td class="task-name-col"></td>
+        <td class="subtask-col">
+            <span class="subtask-name">${execution.subtask_name}</span>
+            <div style="font-size: 0.75rem; color: #6c757d; margin-top: 2px;">
+                Order: ${execution.order} | Timeout: ${execution.timeout}s
+            </div>
+        </td>
+        <td class="client-col">
+            <div class="client-name">${execution.target_client}</div>
+            <div class="client-status ${clientStatus}">${clientStatus}</div>
+        </td>
+        <td class="status-col">
+            <span class="status-badge ${execution.status}">${execution.status}</span>
+        </td>
+        <td class="timing-col">
+            ${timingInfo}
+        </td>
+        <td class="progress-col">
+            <div class="progress-indicator ${execution.status}">
+                ${progressIcon}
+            </div>
+        </td>
+        <td class="actions-col">
+            <div class="row-actions">
+                ${execution.status === 'failed' && execution.error_message ? 
+                    `<button class="btn btn-small btn-danger" onclick="showExecutionError('${execution.subtask_name}', '${execution.target_client}', \`${execution.error_message.replace(/`/g, '\\`')}\`)" title="View Error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </button>` : ''
+                }
+                ${execution.result ? 
+                    `<button class="btn btn-small btn-info" onclick="showExecutionResult('${execution.subtask_name}', '${execution.target_client}', \`${execution.result.replace(/`/g, '\\`')}\`)" title="View Result">
+                        <i class="fas fa-info-circle"></i>
+                    </button>` : ''
+                }
+                ${execution.status === 'pending' && task.status !== 'completed' && task.status !== 'failed' && task.status !== 'cancelled' ? 
+                    `<button class="btn btn-small btn-warning" onclick="deleteSubtaskExecution(${task.id}, '${execution.subtask_name}', '${execution.target_client}')" title="Delete Pending Subtask">
+                        <i class="fas fa-trash"></i>
+                    </button>` : ''
+                }
+            </div>
+        </td>
+    `;
+    
+    return row;
+}
+
+// Calculate task statistics
+function calculateTaskStatistics(task) {
+    const executions = generateSubtaskExecutions(task);
+    
+    const stats = {
+        totalExecutions: executions.length,
+        completed: executions.filter(e => e.status === 'completed').length,
+        running: executions.filter(e => e.status === 'running').length,
+        failed: executions.filter(e => e.status === 'failed').length,
+        pending: executions.filter(e => e.status === 'pending').length
+    };
+    
+    stats.completionPercentage = stats.totalExecutions > 0 
+        ? Math.round((stats.completed / stats.totalExecutions) * 100) 
+        : 0;
+    
+    // Determine progress bar class
+    if (stats.failed > 0 && stats.completed > 0) {
+        stats.progressClass = 'mixed';
+    } else if (stats.running > 0) {
+        stats.progressClass = 'running';
+    } else if (stats.completed === stats.totalExecutions) {
+        stats.progressClass = 'completed';
+    } else if (stats.failed > 0) {
+        stats.progressClass = 'failed';
+    } else {
+        stats.progressClass = 'pending';
+    }
+    
+    return stats;
+}
+
+// Format timing information for display
+function formatTimingInfo(execution) {
+    if (!execution.started_at) {
+        return '<span class="timing-info">Not started</span>';
+    }
+    
+    let timingHtml = `<div class="timing-info">`;
+    
+    timingHtml += `<div><span class="timing-label">Started:</span> ${new Date(execution.started_at).toLocaleString()}</div>`;
+    
+    if (execution.completed_at) {
+        timingHtml += `<div><span class="timing-label">Completed:</span> ${new Date(execution.completed_at).toLocaleString()}</div>`;
+    }
+    
+    if (execution.execution_time) {
+        timingHtml += `<div><span class="timing-label">Duration:</span><span class="execution-time">${execution.execution_time.toFixed(2)}s</span></div>`;
+    }
+    
+    timingHtml += '</div>';
+    
+    return timingHtml;
+}
+
+// Get progress icon for status
+function getProgressIcon(status) {
+    switch (status) {
+        case 'pending':
+            return '⏳';
+        case 'running':
+            return '⚡';
+        case 'completed':
+            return '✓';
+        case 'failed':
+            return '✗';
+        case 'cancelled':
+            return '⊘';
+        default:
+            return '?';
+    }
+}
+
+// Toggle task group visibility
+function toggleTaskGroup(taskId) {
+    const executionRows = document.querySelectorAll(`.task-${taskId}-executions`);
+    const toggleIcon = document.getElementById(`toggle-icon-${taskId}`);
+    
+    const isCollapsed = executionRows[0] && executionRows[0].classList.contains('collapsed');
+    
+    executionRows.forEach(row => {
+        if (isCollapsed) {
+            row.classList.remove('collapsed');
+        } else {
+            row.classList.add('collapsed');
+        }
+    });
+    
+    if (toggleIcon) {
+        toggleIcon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+    }
+}
+
+// Show execution error details
+function showExecutionError(subtaskName, targetClient, errorMessage) {
+    showNotification('Execution Error', 
+        `Error in ${subtaskName} on ${targetClient}:\n\n${errorMessage}`, 'error');
+}
+
+// Show execution result details
+function showExecutionResult(subtaskName, targetClient, result) {
+    showNotification('Execution Result', 
+        `Result from ${subtaskName} on ${targetClient}:\n\n${result}`, 'info');
+}
+
+// Filter tasks based on current filters  
+function filterTasks() {
+    const statusFilter = document.getElementById('statusFilter')?.value || '';
+    const clientFilter = document.getElementById('clientFilter')?.value || '';
+    const searchInput = document.getElementById('searchInput')?.value || '';
+    
+    filteredTasks = allTasks.filter(task => {
+        // Status filter
+        if (statusFilter && task.status !== statusFilter) {
+            return false;
+        }
+        
+        // Client filter - check if task has any subtasks or executions on the specified client
+        if (clientFilter) {
+            const hasTargetClient = task.subtasks && task.subtasks.some(st => st.target_client === clientFilter) ||
+                                   task.target_clients && task.target_clients.includes(clientFilter) ||
+                                   task.target_client === clientFilter;
+            if (!hasTargetClient) {
+                return false;
+            }
+        }
+        
+        // Search filter
+        if (searchInput) {
+            const searchTerm = searchInput.toLowerCase();
+            const matchesName = task.name.toLowerCase().includes(searchTerm);
+            const matchesCommand = task.command && task.command.toLowerCase().includes(searchTerm);
+            const matchesSubtask = task.subtasks && task.subtasks.some(st => 
+                st.name.toLowerCase().includes(searchTerm)
+            );
+            
+            if (!matchesName && !matchesCommand && !matchesSubtask) {
+                return false;
+            }
+        }
+        
+        return true;
+    });
+    
+    tasksCurrentPage = 1;
+}
+
+// Toggle task group visibility
+function toggleTaskGroup(taskId) {
+    const subtaskRows = document.querySelectorAll(`[data-task-id="${taskId}"].subtask-execution-row`);
+    const toggleIcon = document.querySelector(`[data-task-id="${taskId}"] .toggle-subtasks i`);
+    
+    if (!toggleIcon) return;
+    
+    const isCollapsed = toggleIcon.classList.contains('fa-chevron-down');
+    
+    subtaskRows.forEach(row => {
+        row.style.display = isCollapsed ? 'table-row' : 'none';
+    });
+    
+    toggleIcon.classList.toggle('fa-chevron-down', !isCollapsed);
+    toggleIcon.classList.toggle('fa-chevron-right', isCollapsed);
+}
+
+// Show execution error details
+function showExecutionError(error) {
+    const modal = document.createElement('div');
+    modal.className = 'modal modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Execution Error</h3>
+                <button class="btn-close" onclick="this.closest('.modal').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="error-details">${error}</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Close</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// Show execution result details
+function showExecutionResult(result) {
+    const modal = document.createElement('div');
+    modal.className = 'modal modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Execution Result</h3>
+                <button class="btn-close" onclick="this.closest('.modal').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="result-details">${result}</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Close</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// Format execution time
+function formatExecutionTime(startTime, endTime) {
+    if (!startTime) return '-';
+    
+    const start = new Date(startTime);
+    if (!endTime) {
+        return `Started: ${start.toLocaleString()}`;
+    }
+    
+    const end = new Date(endTime);
+    const duration = end - start;
+    const seconds = Math.floor(duration / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    let durationStr = '';
+    if (hours > 0) {
+        durationStr = `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+        durationStr = `${minutes}m ${seconds % 60}s`;
+    } else {
+        durationStr = `${seconds}s`;
+    }
+    
+    return `${durationStr} (${start.toLocaleString()} - ${end.toLocaleString()})`;
+}
+
+// Get status class for styling
+function getStatusClass(status) {
+    const statusMap = {
+        'pending': 'status-pending',
+        'running': 'status-running',
+        'completed': 'status-completed',
+        'failed': 'status-failed',
+        'cancelled': 'status-cancelled',
+        'paused': 'status-paused'
+    };
+    return statusMap[status] || 'status-unknown';
+}
+
+// Calculate task progress percentage
+function calculateTaskProgress(executions) {
+    if (!executions || executions.length === 0) return 0;
+    
+    const completed = executions.filter(exec => 
+        exec.status === 'completed' || exec.status === 'failed'
+    ).length;
+    
+    return Math.round((completed / executions.length) * 100);
+}
+
+// Update task statistics
+function updateTasksStats() {
+    const totalTasks = allTasks.length;
+    const filteredCount = filteredTasks.length;
+    
+    // Update counters
+    const totalElement = document.getElementById('totalTasks');
+    const filteredElement = document.getElementById('filteredTasks');
+    
+    if (totalElement) totalElement.textContent = totalTasks;
+    if (filteredElement) filteredElement.textContent = filteredCount;
+    
+    // Calculate status distribution
+    const statusCounts = {};
+    allTasks.forEach(task => {
+        statusCounts[task.status] = (statusCounts[task.status] || 0) + 1;
+    });
+    
+    // Update status badges
+    Object.keys(statusCounts).forEach(status => {
+        const element = document.getElementById(`${status}Tasks`);
+        if (element) {
+            element.textContent = statusCounts[status];
+        }
+    });
+}
+
+// API helper functions
+async function apiGet(url) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        return { success: true, data: data };
+    } catch (error) {
+        console.error('API GET error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function apiPost(url, data) {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        return { success: true, data: result };
+    } catch (error) {
+        console.error('API POST error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Update pagination for enhanced view
 function updatePagination() {
     const totalPages = Math.ceil(filteredTasks.length / tasksItemsPerPage);
     const pagination = document.getElementById('pagination');
+
+    if (!pagination) return;
 
     pagination.innerHTML = '';
 
@@ -500,36 +1124,77 @@ function updatePagination() {
 
     // Previous button
     const prevButton = document.createElement('button');
-    prevButton.textContent = 'Previous';
+    prevButton.className = 'btn btn-secondary';
+    prevButton.innerHTML = '<i class="fas fa-chevron-left"></i> Previous';
     prevButton.disabled = tasksCurrentPage === 1;
     prevButton.onclick = () => {
         if (tasksCurrentPage > 1) {
             tasksCurrentPage--;
-            renderTasks();
+            renderEnhancedTasks();
         }
     };
     pagination.appendChild(prevButton);
 
-    // Page numbers
-    for (let i = 1; i <= totalPages; i++) {
+    // Page numbers (show max 5 pages around current)
+    const startPage = Math.max(1, tasksCurrentPage - 2);
+    const endPage = Math.min(totalPages, tasksCurrentPage + 2);
+    
+    if (startPage > 1) {
+        const firstButton = document.createElement('button');
+        firstButton.className = 'btn btn-outline-secondary';
+        firstButton.textContent = '1';
+        firstButton.onclick = () => {
+            tasksCurrentPage = 1;
+            renderEnhancedTasks();
+        };
+        pagination.appendChild(firstButton);
+        
+        if (startPage > 2) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '...';
+            ellipsis.className = 'pagination-ellipsis';
+            pagination.appendChild(ellipsis);
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
         const pageButton = document.createElement('button');
+        pageButton.className = i === tasksCurrentPage ? 'btn btn-primary' : 'btn btn-outline-secondary';
         pageButton.textContent = i;
-        pageButton.className = i === tasksCurrentPage ? 'active' : '';
         pageButton.onclick = () => {
             tasksCurrentPage = i;
-            renderTasks();
+            renderEnhancedTasks();
         };
         pagination.appendChild(pageButton);
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsis = document.createElement('span');
+            ellipsis.textContent = '...';
+            ellipsis.className = 'pagination-ellipsis';
+            pagination.appendChild(ellipsis);
+        }
+        
+        const lastButton = document.createElement('button');
+        lastButton.className = 'btn btn-outline-secondary';
+        lastButton.textContent = totalPages;
+        lastButton.onclick = () => {
+            tasksCurrentPage = totalPages;
+            renderEnhancedTasks();
+        };
+        pagination.appendChild(lastButton);
     }
 
     // Next button
     const nextButton = document.createElement('button');
-    nextButton.textContent = 'Next';
+    nextButton.className = 'btn btn-secondary';
+    nextButton.innerHTML = 'Next <i class="fas fa-chevron-right"></i>';
     nextButton.disabled = tasksCurrentPage === totalPages;
     nextButton.onclick = () => {
         if (tasksCurrentPage < totalPages) {
             tasksCurrentPage++;
-            renderTasks();
+            renderEnhancedTasks();
         }
     };
     pagination.appendChild(nextButton);
@@ -537,20 +1202,64 @@ function updatePagination() {
 
 // Delete task
 async function deleteTask(taskId) {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+    // Get task info for better confirmation message
+    const task = allTasks.find(t => t.id === taskId);
+    const taskName = task ? task.name : `Task ${taskId}`;
+    
+    if (!confirm(`Are you sure you want to delete "${taskName}"?\n\nThis will permanently delete:\n• The task itself\n• All execution history\n• All subtask records\n\nThis action cannot be undone.`)) {
+        return;
+    }
 
     try {
         const response = await apiDelete(`/api/tasks/${taskId}`);
 
         if (response.success) {
-            showNotification('Task deleted successfully', 'success');
+            showNotification('Task Deleted', response.message || 'Task deleted successfully', 'success');
             await refreshTasks();
         } else {
-            showNotification(response.error || 'Failed to delete task', 'error');
+            showNotification('Delete Failed', response.error || 'Failed to delete task', 'error');
         }
     } catch (error) {
         console.error('Failed to delete task:', error);
-        showNotification('Failed to delete task', 'error');
+        showNotification('Delete Error', 'Failed to delete task', 'error');
+    }
+}
+
+// Delete subtask execution that hasn't started yet
+async function deleteSubtaskExecution(taskId, subtaskName, targetClient) {
+    if (!confirm(`Are you sure you want to delete the pending subtask "${subtaskName}" for client "${targetClient}"?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/subtasks/${encodeURIComponent(subtaskName)}/delete`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                target_client: targetClient
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification(`Subtask "${subtaskName}" deleted successfully`, 'success');
+            
+            // Check if all subtasks were deleted
+            if (result.remaining_subtasks === 0) {
+                showNotification('All subtasks deleted - task has been cancelled', 'info');
+            }
+            
+            // Refresh the task list to show updated state
+            await refreshTasks();
+        } else {
+            showNotification(result.error || 'Failed to delete subtask', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to delete subtask:', error);
+        showNotification('Failed to delete subtask', 'error');
     }
 }
 
@@ -620,7 +1329,7 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
         // Create execution status map for quick lookup
         const executionMap = {};
         executions.forEach(exec => {
-            const key = `${exec.subtask_name}_${exec.target_machine}`;
+            const key = `${exec.subtask_name}_${exec.target_client}`;
             executionMap[key] = exec;
         });
 
@@ -672,7 +1381,7 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
         `;
 
         task.subtasks.forEach((subtask, index) => {
-            const executionKey = `${subtask.name}_${subtask.target_machine}`;
+            const executionKey = `${subtask.name}_${subtask.target_client}`;
             const execution = executionMap[executionKey];
             
             // Determine status and timing
@@ -695,8 +1404,8 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
                     <div class="subtask-detail-content">
                         <div class="detail-grid">
                             <div class="detail-item">
-                                <label>Target Machine:</label>
-                                <span>${subtask.target_machine}</span>
+                                <label>Target Client:</label>
+                                <span>${subtask.target_client}</span>
                             </div>
                             <div class="detail-item">
                                 <label>Timeout:</label>
@@ -751,8 +1460,8 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
                 </div>
                 <div class="detail-grid">
                     <div class="detail-item">
-                        <label>Target Machine:</label>
-                        <span>${task.target_machine || 'Any available'}</span>
+                        <label>Target Client:</label>
+                        <span>${task.target_client || 'Any available'}</span>
                     </div>
                 </div>
             </div>
@@ -777,6 +1486,29 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
                         </div>
                     ` : ''}
                 </div>
+            </div>
+        `;
+    }
+
+    // Add action buttons for completed or failed tasks
+    if (task.status === 'completed' || task.status === 'failed') {
+        detailsHtml += `
+            <div class="task-detail-section">
+                <h4>Actions</h4>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="generateTaskReport(${task.id})">
+                        <i class="fas fa-file-alt"></i> Generate Report
+                    </button>
+                    <button class="btn btn-secondary" onclick="sendTaskNotification(${task.id})">
+                        <i class="fas fa-envelope"></i> Send Email Notification
+                    </button>
+                </div>
+                <p class="help-text">
+                    <small>
+                        • Generate Report: Creates a detailed HTML report with all subtask results<br>
+                        • Send Email: Sends notification email with attached report (requires email configuration)
+                    </small>
+                </p>
             </div>
         `;
     }
@@ -837,7 +1569,7 @@ async function loadTaskForEdit(taskId) {
 
             // Load subtasks (always subtask-based now)
             if (task.subtasks && task.subtasks.length > 0) {
-                // Group subtasks by name and order to handle multiple machines per subtask
+                // Group subtasks by name and order to handle multiple clients per subtask
                 const subtaskGroups = {};
                 task.subtasks.forEach(subtask => {
                     const key = `${subtask.name}_${subtask.order}`;
@@ -845,10 +1577,10 @@ async function loadTaskForEdit(taskId) {
                         subtaskGroups[key] = {
                             name: subtask.name,
                             order: subtask.order,
-                            machines: []
+                            clients: []
                         };
                     }
-                    subtaskGroups[key].machines.push(subtask.target_machine);
+                    subtaskGroups[key].clients.push(subtask.target_client);
                 });
 
                 // Create subtask rows for each group
@@ -858,18 +1590,16 @@ async function loadTaskForEdit(taskId) {
                     const subtaskRow = subtaskRows[subtaskRows.length - 1];
 
                     // Set subtask name
-                    subtaskRow.querySelector('.subtask-name').value = group.name;
-
-                    // Select the appropriate machines
-                    group.machines.forEach(machineName => {
-                        const machineCheckbox = subtaskRow.querySelector(`.machine-checkbox[value="${machineName}"]`);
-                        if (machineCheckbox) {
-                            machineCheckbox.checked = true;
+                    subtaskRow.querySelector('.subtask-name').value = group.name;                    // Select the appropriate clients
+                    group.clients.forEach(clientName => {
+                        const clientCheckbox = subtaskRow.querySelector(`.client-checkbox[value="${clientName}"]`);
+                        if (clientCheckbox) {
+                            clientCheckbox.checked = true;
                         }
                     });
-
-                    // Update machine selection state
-                    updateMachineSelection(subtaskRow.querySelector('.machine-checkbox'));
+                    
+                    // Update client selection state
+                    updateClientSelection(subtaskRow.querySelector('.client-checkbox'));
 
                     // Update description
                     updateSubtaskDescription(subtaskRow.querySelector('.subtask-name'));
@@ -888,6 +1618,23 @@ async function loadTaskForEdit(taskId) {
             }
 
             toggleScheduleOptions();
+
+            // Set email notification information
+            const sendEmailCheckbox = document.getElementById('sendEmail');
+            const emailRecipientsField = document.getElementById('emailRecipients');
+            
+            if (task.send_email) {
+                sendEmailCheckbox.checked = true;
+                if (task.email_recipients) {
+                    emailRecipientsField.value = task.email_recipients;
+                }
+            } else {
+                sendEmailCheckbox.checked = false;
+                emailRecipientsField.value = '';
+            }
+            
+            toggleEmailRecipients();
+            
         } else {
             showNotification(response.error || 'Failed to load task data', 'error');
         }
@@ -897,9 +1644,50 @@ async function loadTaskForEdit(taskId) {
     }
 }
 
-// Populate machine filter dropdown
-function populateMachineFilter() {
-    // Implementation for machine filter if needed
+// Populate client filter dropdown
+function populateClientFilter() {
+    const clientFilter = document.getElementById('clientFilter');
+    if (!clientFilter) return;
+    
+    // Clear existing options (except the "All Clients" option)
+    clientFilter.innerHTML = '<option value="">All Clients</option>';
+    
+    // Get unique client names from tasks
+    const clientNames = new Set();
+    
+    allTasks.forEach(task => {
+        // Add target clients from subtasks
+        if (task.subtasks) {
+            task.subtasks.forEach(subtask => {
+                if (subtask.target_client && subtask.target_client !== 'any_available') {
+                    clientNames.add(subtask.target_client);
+                }
+            });
+        }
+        
+        // Add target clients from legacy task format
+        if (task.target_clients) {
+            task.target_clients.forEach(client => {
+                if (client && client !== 'any_available') {
+                    clientNames.add(client);
+                }
+            });
+        }
+        
+        // Add single target client
+        if (task.target_client && task.target_client !== 'any_available') {
+            clientNames.add(task.target_client);
+        }
+    });
+    
+    // Sort client names and add to dropdown
+    const sortedClients = Array.from(clientNames).sort();
+    sortedClients.forEach(clientName => {
+        const option = document.createElement('option');
+        option.value = clientName;
+        option.textContent = clientName;
+        clientFilter.appendChild(option);
+    });
 }
 
 // Utility functions for API calls
@@ -955,4 +1743,49 @@ function showNotification(message, type = 'info') {
             notification.remove();
         }
     }, 5000);
+}
+
+// Generate manual report for a task
+async function generateTaskReport(taskId) {
+    try {
+        showNotification('Report Generation', 'Generating report...', 'info');
+        
+        const response = await apiPost(`/api/tasks/${taskId}/generate-report?force=true`);
+        
+        if (response.success) {
+            showNotification('Report Generated', 
+                `Report generated successfully: ${response.report_path}`, 'success');
+        } else {
+            showNotification('Report Generation Failed', 
+                response.error || 'Unknown error', 'error');
+        }
+    } catch (error) {
+        console.error('Error generating report:', error);
+        showNotification('Error', 'Failed to generate report', 'error');
+    }
+}
+
+// Send email notification for a task
+async function sendTaskNotification(taskId) {
+    try {
+        showNotification('Email Notification', 'Sending email notification...', 'info');
+        
+        const response = await apiPost(`/api/tasks/${taskId}/send-notification`);
+        
+        if (response.success) {
+            showNotification('Email Sent', 
+                'Email notification sent successfully', 'success');
+        } else {
+            const errorMsg = response.error || 'Unknown error';
+            if (errorMsg.toLowerCase().includes('not configured')) {
+                showNotification('Email Not Configured', 
+                    'Email notifications are not configured. Check server logs for setup instructions.', 'warning');
+            } else {
+                showNotification('Email Failed', errorMsg, 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Error sending email notification:', error);
+        showNotification('Error', 'Failed to send email notification', 'error');
+    }
 }

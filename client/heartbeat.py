@@ -1,6 +1,6 @@
 """
 Heartbeat manager
-Responsible for sending periodic heartbeats to the server to maintain machine online status
+Responsible for sending periodic heartbeats to the server to maintain client online status
 """
 import time
 import threading
@@ -11,17 +11,17 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class HeartbeatManager:
-    def __init__(self, server_url: str, machine_name: str, get_interval_func=None):
+    def __init__(self, server_url: str, client_name: str, get_interval_func=None):
         """
         Initialize heartbeat manager
         
         Args:
             server_url: Server URL
-            machine_name: Machine name
+            client_name: client name
             get_interval_func: Function to get heartbeat interval dynamically (if None, defaults to 60)
         """
         self.server_url = server_url
-        self.machine_name = machine_name
+        self.client_name = client_name
         self.get_interval_func = get_interval_func
         self.running = False
         self.thread = None
@@ -93,19 +93,19 @@ class HeartbeatManager:
         """Send heartbeat to server"""
         try:
             heartbeat_data = {
-                'machine_name': self.machine_name,
+                'client_name': self.client_name,
                 'status': 'online',
                 'timestamp': datetime.now().isoformat()
             }
             
             response = requests.post(
-                f"{self.server_url}/api/machines/heartbeat",
+                f"{self.server_url}/api/clients/heartbeat",
                 json=heartbeat_data,
                 timeout=10
             )
             
             if response.status_code == 200:
-                logger.debug(f"Heartbeat sent successfully: {self.machine_name}")
+                logger.debug(f"Heartbeat sent successfully: {self.client_name}")
                 return True
             else:
                 logger.warning(f"Heartbeat send failed: {response.status_code} - {response.text}")
@@ -125,19 +125,19 @@ class HeartbeatManager:
         """Send offline status"""
         try:
             offline_data = {
-                'machine_name': self.machine_name,
+                'client_name': self.client_name,
                 'status': 'offline',
                 'timestamp': datetime.now().isoformat()
             }
             
             response = requests.post(
-                f"{self.server_url}/api/machines/heartbeat",
+                f"{self.server_url}/api/clients/heartbeat",
                 json=offline_data,
                 timeout=5  # Shorter timeout
             )
             
             if response.status_code == 200:
-                logger.info(f"Offline status sent successfully: {self.machine_name}")
+                logger.info(f"Offline status sent successfully: {self.client_name}")
             else:
                 logger.warning(f"Offline status send failed: {response.status_code}")
                 
@@ -148,7 +148,7 @@ class HeartbeatManager:
         """Get heartbeat status"""
         return {
             'running': self.running,
-            'machine_name': self.machine_name,
+            'client_name': self.client_name,
             'interval': self.interval,
             'last_heartbeat': self.last_heartbeat.isoformat() if self.last_heartbeat else None,
             'error_count': self.error_count,
@@ -159,3 +159,4 @@ class HeartbeatManager:
         """Force send heartbeat once"""
         logger.info("Force send heartbeat")
         return self._send_heartbeat()
+

@@ -12,7 +12,7 @@ set "SCRIPT_DIR=%~dp0"
 
 REM Default values
 set "SERVER_URL=http://localhost:5000"
-for /f "tokens=*" %%i in ('hostname') do set "MACHINE_NAME=%%i"
+for /f "tokens=*" %%i in ('hostname') do set "CLIENT_NAME=%%i"
 set "INSTALL_DIR=%USERPROFILE%\.task_client"
 
 REM Parse command line arguments
@@ -24,8 +24,8 @@ if "%~1"=="--server-url" (
     shift
     goto :parse_args
 )
-if "%~1"=="--machine-name" (
-    set "MACHINE_NAME=%~2"
+if "%~1"=="--client-name" (
+    set "CLIENT_NAME=%~2"
     shift
     shift
     goto :parse_args
@@ -41,13 +41,13 @@ if "%~1"=="--help" (
     echo.
     echo Options:
     echo   --server-url URL    Server URL ^(default: http://localhost:5000^)
-    echo   --machine-name NAME Machine name ^(default: hostname^)
+    echo   --client-name NAME Client name ^(default: hostname^)
     echo   --install-dir DIR   Installation directory ^(default: %%USERPROFILE%%\.task_client^)
     echo   --help              Show this help message
     echo.
     echo Examples:
-    echo   %0 --server-url http://192.168.1.100:5000 --machine-name worker-01
-    echo   %0 --machine-name gpu-server
+    echo   %0 --server-url http://192.168.1.100:5000 --client-name worker-01
+    echo   %0 --client-name gpu-server
     exit /b 0
 )
 echo Unknown option: %~1
@@ -58,7 +58,7 @@ exit /b 1
 
 echo Configuration:
 echo   Server URL: %SERVER_URL%
-echo   Machine Name: %MACHINE_NAME%
+echo   Client name: %CLIENT_NAME%
 echo   Install Directory: %INSTALL_DIR%
 echo.
 
@@ -99,7 +99,7 @@ if exist "%INSTALL_DIR%\config.json" (
 
 REM Install client
 echo 🔧 Installing Task Client...
-python "%SCRIPT_DIR%client_installer.py" install --server-url "%SERVER_URL%" --machine-name "%MACHINE_NAME%" --install-dir "%INSTALL_DIR%"
+python "%SCRIPT_DIR%client_installer.py" install --server-url "%SERVER_URL%" --client-name "%CLIENT_NAME%" --install-dir "%INSTALL_DIR%"
 
 if %errorlevel% equ 0 (
     echo.

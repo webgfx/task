@@ -22,7 +22,7 @@ sys.path.insert(0, parent_dir)   # For common modules
 
 # Import local modules (these will be copied to installation directory)
 try:
-    from common.system_info import get_system_info, get_system_summary, get_machine_name, get_server_url
+    from common.system_info import get_system_info, get_system_summary, get_client_name, get_server_url
     from common.config import ClientConfig
     from common.utils import setup_logging, get_local_ip
     from executor import TaskExecutor
@@ -53,15 +53,15 @@ class TaskClientRunner:
         self.server_url = config_data['server_url']
         
         # 获取机器名：优先级 config_data > client.cfg > 系统hostname
-        self.machine_name = self._get_machine_name(config_data, cfg_file_path)
+        self.client_name = self._get_client_name(config_data, cfg_file_path)
         self.local_ip = get_local_ip()
         
         # 验证机器名有效性
-        if not self.machine_name or self.machine_name.strip() == '':
-            raise ValueError("Machine name cannot be empty. Please configure machine_name in client.cfg or config.json")
+        if not self.client_name or self.client_name.strip() == '':
+            raise ValueError("Client name cannot be empty. Please configure client_name in client.cfg or config.json")
         
         # 记录机器名来源
-        logger.info(f"Using machine name: {self.machine_name}")
+        logger.info(f"Using client name: {self.client_name}")
         
         # Initialize configuration manager for client.cfg
         if cfg_file_path:
@@ -100,14 +100,14 @@ class TaskClientRunner:
                 sys.path.insert(0, current_dir)
             
             import subtask_executor
-            self.subtask_adapter = subtask_executor.TaskSubtaskAdapter(self.server_url, self.machine_name)
+            self.subtask_adapter = subtask_executor.TaskSubtaskAdapter(self.server_url, self.client_name)
             logger.info("Subtask executor initialized successfully")
         except Exception as e:
             logger.warning(f"Failed to import subtask executor: {e}")
             self.subtask_adapter = None
         
         # Initialize components with configuration from cfg file
-        self.heartbeat = HeartbeatManager(self.server_url, self.machine_name, get_heartbeat_interval)
+        self.heartbeat = HeartbeatManager(self.server_url, self.client_name, get_heartbeat_interval)
         
         # Initialize SocketIO client
         self.sio = socketio.Client()
@@ -116,7 +116,7 @@ class TaskClientRunner:
         # Configuration update thread
         self.config_update_thread = None
         
-        logger.info(f"Client runner initialized: {self.machine_name} ({self.local_ip}) -> {self.server_url}")
+        logger.info(f"Client runner initialized: {self.client_name} ({self.local_ip}) -> {self.server_url}")
         logger.info(f"Heartbeat interval: {get_heartbeat_interval()} seconds")
         logger.info(f"Configuration update interval: {self.config_update_interval} seconds")
         
@@ -125,11 +125,11 @@ class TaskClientRunner:
             logger.info("Configuration summary:")
             logger.info(self.cfg_manager.get_config_summary())
     
-    def _get_machine_name(self, config_data, cfg_file_path=None) -> str:
+    def _get_client_name(self, config_data, cfg_file_path=None) -> str:
         """
-        获取机器名，按优先级顺序：
-        1. config_data 中的 machine_name
-        2. client.cfg 中的 machine_name  
+        获取客户端名，按优先级顺序：
+        1. config_data 中的 client_name
+        2. client.cfg 中的 client_name  
         3. 系统 hostname
         
         Args:
@@ -137,13 +137,13 @@ class TaskClientRunner:
             cfg_file_path: client.cfg 文件路径
             
         Returns:
-            机器名字符串
+            客户端名字符串
         """
         # 首先尝试从 config_data 获取
-        machine_name = config_data.get('machine_name', '').strip()
-        if machine_name:
-            logger.debug(f"Machine name from config_data: {machine_name}")
-            return machine_name
+        client_name = config_data.get('client_name', '').strip()
+        if client_name:
+            logger.debug(f"Client name from config_data: {client_name}")
+            return client_name
         
         # 然后尝试从 client.cfg 获取
         try:
@@ -154,25 +154,25 @@ class TaskClientRunner:
                 cfg_path = os.path.join(runner_dir, 'client.cfg')
                 cfg_manager = get_config_manager(cfg_path if os.path.exists(cfg_path) else None)
             
-            machine_name = cfg_manager.get('DEFAULT', 'machine_name', '').strip()
-            if machine_name:
-                logger.debug(f"Machine name from client.cfg: {machine_name}")
-                return machine_name
+            client_name = cfg_manager.get('DEFAULT', 'client_name', '').strip()
+            if client_name:
+                logger.debug(f"Client name from client.cfg: {client_name}")
+                return client_name
         except Exception as e:
-            logger.warning(f"Failed to read machine name from client.cfg: {e}")
+            logger.warning(f"Failed to read client name from client.cfg: {e}")
         
         # 最后使用系统 hostname
         try:
-            machine_name = get_machine_name().strip()
-            if machine_name:
-                logger.debug(f"Machine name from system hostname: {machine_name}")
-                return machine_name
+            client_name = get_client_name().strip()
+            if client_name:
+                logger.debug(f"Client name from system hostname: {client_name}")
+                return client_name
         except Exception as e:
             logger.error(f"Failed to get system hostname: {e}")
         
         # 如果都失败了，返回默认值
-        logger.warning("Could not determine machine name, using default")
-        return f"unknown-{self.local_ip.replace('.', '-')}" if hasattr(self, 'local_ip') else "unknown-machine"
+        logger.warning("Could not determine client name, using default")
+        return f"unknown-{self.local_ip.replace('.', '-')}" if hasattr(self, 'local_ip') else "unknown-client"
     
     def _setup_socketio_handlers(self):
         """Setup SocketIO event handlers"""
@@ -180,8 +180,8 @@ class TaskClientRunner:
         @self.sio.event
         def connect():
             logger.info("Connected to server")
-            # Join machine-specific room using IP address instead of machine name
-            room_name = f"machine_{self.local_ip.replace('.', '_')}"
+            # Join client-specific room using IP address instead of client name
+            room_name = f"client_{self.local_ip.replace('.', '_')}"
             print(f"DEBUG: Joining room: {room_name}")
             self.sio.emit('join_room', {'room': room_name})
         
@@ -237,7 +237,7 @@ class TaskClientRunner:
         @self.sio.event
         def ping():
             """Respond to server ping"""
-            self.sio.emit('pong', {'machine_ip': self.local_ip, 'machine_name': self.machine_name})
+            self.sio.emit('pong', {'client_ip': self.local_ip, 'client_name': self.client_name})
         
         @self.sio.event
         def task_cancelled(data):
@@ -255,19 +255,19 @@ class TaskClientRunner:
                 logger.error(f"Failed to handle task cancellation: {e}")
         
         @self.sio.event
-        def machine_unregistered(data):
-            """Handle machine unregistration notification from server"""
+        def client_unregistered(data):
+            """Handle client unregistration notification from server"""
             try:
-                machine_name = data.get('machine_name')
-                reason = data.get('reason', 'Machine unregistered')
+                client_name = data.get('client_name')
+                reason = data.get('reason', 'client unregistered')
                 timestamp = data.get('timestamp')
                 
-                if machine_name == self.machine_name:
-                    logger.warning(f"This machine ({machine_name}) has been unregistered from the server")
+                if client_name == self.client_name:
+                    logger.warning(f"This client ({client_name}) has been unregistered from the server")
                     logger.warning(f"Reason: {reason}")
                     logger.warning(f"Timestamp: {timestamp}")
                     
-                    # Set machine to offline state
+                    # Set client to offline state
                     self.running = False
                     
                     # Stop heartbeat if running
@@ -279,15 +279,15 @@ class TaskClientRunner:
                         logger.info("Disconnecting from server due to unregistration")
                         self.sio.disconnect()
                     
-                    logger.error("CLIENT OFFLINE: Machine has been unregistered by administrator")
-                    logger.error("This client will now shut down. Please re-register the machine to continue.")
+                    logger.error("CLIENT OFFLINE: client has been unregistered by administrator")
+                    logger.error("This client will now shut down. Please re-register the client to continue.")
                     
                     # Exit the process gracefully
                     import os
                     os._exit(1)
                     
             except Exception as e:
-                logger.error(f"Failed to handle machine unregistration: {e}")
+                logger.error(f"Failed to handle client unregistration: {e}")
     
     def start(self):
         """Start client runtime"""
@@ -296,8 +296,8 @@ class TaskClientRunner:
             return
         
         try:
-            # Register machine with server
-            self._register_machine()
+            # Register client with server
+            self._register_client()
             
             # Connect to server
             self._connect_to_server()
@@ -332,7 +332,7 @@ class TaskClientRunner:
             self.config_update_thread.join(timeout=2)
         
         # Unregister from server
-        self._unregister_machine()
+        self._unregister_client()
         
         # Stop heartbeat
         if self.heartbeat:
@@ -348,20 +348,20 @@ class TaskClientRunner:
         
         logger.info("Client runtime stopped")
     
-    def _register_machine(self):
-        """Register machine with server including system information"""
+    def _register_client(self):
+        """Register client with server including system information"""
         try:
             logger.info("Collecting system information...")
             system_info = get_system_info()
             system_summary = get_system_summary()
             
-            # DEBUG: Log the exact machine name being used
-            logger.info(f"DEBUG: Registering machine with name: '{self.machine_name}'")
-            logger.info(f"DEBUG: Machine name type: {type(self.machine_name)}")
-            logger.info(f"DEBUG: Machine name length: {len(self.machine_name)}")
+            # DEBUG: Log the exact client name being used
+            logger.info(f"DEBUG: Registering client with name: '{self.client_name}'")
+            logger.info(f"DEBUG: client name type: {type(self.client_name)}")
+            logger.info(f"DEBUG: client name length: {len(self.client_name)}")
             
             registration_data = {
-                'name': self.machine_name,
+                'name': self.client_name,
                 'ip_address': self.local_ip,
                 'port': 8080,
                 'status': 'online',
@@ -380,50 +380,50 @@ class TaskClientRunner:
             logger.info(f"System summary: OS: {system_summary.get('os', 'Unknown')}")
             
             response = requests.post(
-                f"{self.server_url}/api/machines/register",
+                f"{self.server_url}/api/clients/register",
                 json=registration_data,
                 timeout=10
             )
             
             if response.status_code in [200, 201]:
-                logger.info(f"Machine registered successfully: {self.machine_name} ({self.local_ip})")
+                logger.info(f"client registered successfully: {self.client_name} ({self.local_ip})")
                 self.last_config_update = datetime.now()
             else:
-                logger.error(f"Machine registration failed: {response.status_code} - {response.text}")
+                logger.error(f"client registration failed: {response.status_code} - {response.text}")
                 
         except Exception as e:
-            logger.error(f"Failed to register machine: {e}")
+            logger.error(f"Failed to register client: {e}")
             raise
     
-    def _unregister_machine(self):
-        """Unregister machine from server"""
+    def _unregister_client(self):
+        """Unregister client from server"""
         try:
             unregistration_data = {
-                'name': self.machine_name,
+                'name': self.client_name,
                 'ip_address': self.local_ip,
                 'status': 'offline'
             }
             
             response = requests.post(
-                f"{self.server_url}/api/machines/unregister",
+                f"{self.server_url}/api/clients/unregister",
                 json=unregistration_data,
                 timeout=10
             )
             
             if response.status_code == 200:
-                logger.info(f"Machine unregistered successfully: {self.machine_name} ({self.local_ip})")
+                logger.info(f"client unregistered successfully: {self.client_name} ({self.local_ip})")
             else:
-                logger.warning(f"Machine unregistration failed: {response.status_code} - {response.text}")
+                logger.warning(f"client unregistration failed: {response.status_code} - {response.text}")
                 
         except Exception as e:
-            logger.error(f"Failed to unregister machine: {e}")
+            logger.error(f"Failed to unregister client: {e}")
     
     def _connect_to_server(self):
         """Connect to server"""
         try:
             print(f"DEBUG: Attempting to connect to {self.server_url}")
             print(f"DEBUG: Client IP: {self.local_ip}")
-            print(f"DEBUG: Machine name: {self.machine_name}")
+            print(f"DEBUG: client name: {self.client_name}")
             self.sio.connect(self.server_url, wait_timeout=10)
             print("DEBUG: SocketIO connection successful")
             logger.info("Connected to server WebSocket")
@@ -466,7 +466,7 @@ class TaskClientRunner:
                         break
                     
                     # 更新配置信息
-                    self._update_machine_config()
+                    self._update_client_config()
                     
                 except Exception as e:
                     logger.error(f"Configuration update error: {e}")
@@ -475,17 +475,17 @@ class TaskClientRunner:
         self.config_update_thread.start()
         logger.info(f"Started configuration update thread (interval: {self.config_update_interval}s)")
     
-    def _update_machine_config(self):
+    def _update_client_config(self):
         """更新机器配置信息到服务器"""
         try:
-            logger.info("Updating machine configuration...")
+            logger.info("Updating client configuration...")
             
             # 重新收集系统信息
             system_info = get_system_info()
             system_summary = get_system_summary()
             
             update_data = {
-                'name': self.machine_name,
+                'name': self.client_name,
                 'ip_address': self.local_ip,
                 'port': 8080,
                 # 更新的系统信息
@@ -498,13 +498,13 @@ class TaskClientRunner:
             }
             
             response = requests.post(
-                f"{self.server_url}/api/machines/update_config",
+                f"{self.server_url}/api/clients/update_config",
                 json=update_data,
                 timeout=10
             )
             
             if response.status_code == 200:
-                logger.info(f"Machine configuration updated successfully: {self.machine_name} ({self.local_ip})")
+                logger.info(f"client configuration updated successfully: {self.client_name} ({self.local_ip})")
                 self.last_config_update = datetime.now()
                 
                 # 记录更新的系统信息摘要
@@ -513,10 +513,10 @@ class TaskClientRunner:
                     logger.info(f"  Updated Memory: {system_summary.get('memory', 'Unknown')}")
                     logger.info(f"  Updated GPU: {system_summary.get('gpu', 'Unknown')}")
             else:
-                logger.error(f"Machine configuration update failed: {response.status_code} - {response.text}")
+                logger.error(f"client configuration update failed: {response.status_code} - {response.text}")
                 
         except Exception as e:
-            logger.error(f"Failed to update machine configuration: {e}")
+            logger.error(f"Failed to update client configuration: {e}")
     
     def _execute_subtask_task(self, task_id, task_name, task_data):
         """Execute subtask-based task"""
@@ -689,8 +689,8 @@ class TaskClientRunner:
         try:
             data = {
                 'task_id': task_id,
-                'machine_name': self.machine_name,
-                'machine_ip': self.local_ip,
+                'client_name': self.client_name,
+                'client_ip': self.local_ip,
             }
             
             response = requests.post(
@@ -710,8 +710,8 @@ class TaskClientRunner:
         try:
             data = {
                 'task_id': task_id,
-                'machine_name': self.machine_name,
-                'machine_ip': self.local_ip,
+                'client_name': self.client_name,
+                'client_ip': self.local_ip,
                 'success': success,
                 'message': message
             }
@@ -753,8 +753,8 @@ class TaskClientRunner:
         try:
             data = {
                 'task_id': task_id,
-                'machine_name': self.machine_name,
-                'machine_ip': self.local_ip,
+                'client_name': self.client_name,
+                'client_ip': self.local_ip,
                 'subtask_result': subtask_result
             }
             
@@ -777,8 +777,8 @@ class TaskClientRunner:
         try:
             data = {
                 'task_id': task_id,
-                'machine_name': self.machine_name,
-                'machine_ip': self.local_ip,
+                'client_name': self.client_name,
+                'client_ip': self.local_ip,
                 'success': result.get('success', False),
                 'output': result.get('output', ''),
                 'error': result.get('error', ''),
@@ -818,8 +818,8 @@ def main():
     # Optional arguments for override
     parser.add_argument('--config', 
                        help='Configuration file path (optional)')
-    parser.add_argument('--machine-name', 
-                       help='Override machine name (optional)')
+    parser.add_argument('--client-name', 
+                       help='Override client name (optional)')
     parser.add_argument('--server-url', 
                        help='Override server URL (optional)')
     parser.add_argument('--cfg', 
@@ -853,8 +853,8 @@ def main():
         cfg_manager = get_config_manager(cfg_file)
     
     try:
-        # Get machine name automatically
-        machine_name = args.machine_name if args.machine_name else get_machine_name()
+        # Get client name automatically
+        client_name = args.client_name if args.client_name else get_client_name()
         
         # Get server URL - check client.cfg first, then common.cfg
         server_url = args.server_url
@@ -884,12 +884,12 @@ def main():
             if not server_url:
                 server_url = get_server_url()
         
-        print(f"Auto-detected machine name: {machine_name}")
+        print(f"Auto-detected client name: {client_name}")
         print(f"Auto-detected server URL: {server_url}")
         
         # Create configuration
         config = {
-            'machine_name': machine_name,
+            'client_name': client_name,
             'server_url': server_url,
             'log_level': 'INFO'
         }
@@ -939,3 +939,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

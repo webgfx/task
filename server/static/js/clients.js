@@ -1,17 +1,17 @@
 /**
- * Machine Management page JavaScript
+ * Client Management page JavaScript
  */
 
-let machines = [];
+let clients = [];
 
 // Initialize after page load
 document.addEventListener('DOMContentLoaded', function() {
-    initializeMachinesPage();
+    initializeClientsPage();
 });
 
-// Initialize machine page
-async function initializeMachinesPage() {
-    await refreshMachines();
+// Initialize client page
+async function initializeClientsPage() {
+    await refreshClients();
     setupEventListeners();
 }
 
@@ -19,41 +19,44 @@ async function initializeMachinesPage() {
 function setupEventListeners() {
     // Close modal when clicking outside
     window.addEventListener('click', function(e) {
-        const detailModal = document.getElementById('machineDetailModal');
+        const detailModal = document.getElementById('clientDetailModal');
         if (e.target === detailModal) {
-            closeMachineDetailModal();
+            closeClientDetailModal();
         }
     });
 }
 
-// Refresh machine list
-async function refreshMachines() {
+// Refresh client list
+async function refreshClients() {
     try {
-        showLoading(document.getElementById('machineGrid'));
-        const response = await apiGet('/api/machines');
-        machines = response.data || [];
-        displayMachines();
+        showLoading(document.getElementById('clientGrid'));
+        const response = await apiGet('/api/clients');
+        clients = response.data || [];
+        displayClients();
         
         // Update connection counts
         updateConnectionStats();
     } catch (error) {
-        console.error('Refresh machine list failed:', error);
+        console.error('Refresh client list failed:', error);
         showNotification('Refresh Failed', error.message, 'error');
     } finally {
-        hideLoading(document.getElementById('machineGrid'));
+        hideLoading(document.getElementById('clientGrid'));
     }
 }
 
-// Make refreshMachines globally available
-window.refreshMachines = refreshMachines;
+// Make refreshClients globally available
+window.refreshClients = refreshClients;
+
+// For backward compatibility, keep the old function name
+window.refreshClients = refreshClients;
 
 // Update connection statistics
 function updateConnectionStats() {
     const stats = {
-        total: machines.length,
-        online: machines.filter(m => m.status === 'online').length,
-        offline: machines.filter(m => m.status === 'offline').length,
-        busy: machines.filter(m => m.status === 'busy').length
+        total: clients.length,
+        online: clients.filter(m => m.status === 'online').length,
+        offline: clients.filter(m => m.status === 'offline').length,
+        busy: clients.filter(m => m.status === 'busy').length
     };
     
     // Update header if stats element exists
@@ -77,75 +80,89 @@ function updateConnectionStats() {
     }
 }
 
-// Filter machines based on search and status
-function filterMachines() {
-    const statusFilter = document.getElementById('statusFilter').value;
-    const searchInput = document.getElementById('searchInput').value.toLowerCase();
+// Filter clients based on search and status  
+function filterClients() {
+    const statusFilter = document.getElementById('statusFilter');
+    const searchInput = document.getElementById('searchInput');
     
-    let filteredMachines = machines;
+    // Check if elements exist to avoid null reference errors
+    if (!statusFilter || !searchInput) {
+        console.error('Filter elements not found');
+        return;
+    }
+    
+    const statusValue = statusFilter.value;
+    const searchValue = searchInput.value.toLowerCase();
+    
+    let filteredClients = clients;
     
     // Apply status filter
-    if (statusFilter) {
-        filteredMachines = filteredMachines.filter(machine => machine.status === statusFilter);
+    if (statusValue) {
+        filteredClients = filteredClients.filter(client => client.status === statusValue);
     }
     
     // Apply search filter
-    if (searchInput) {
-        filteredMachines = filteredMachines.filter(machine => 
-            machine.name.toLowerCase().includes(searchInput) ||
-            machine.ip_address.toLowerCase().includes(searchInput) ||
-            (machine.system_summary && (
-                machine.system_summary.os?.toLowerCase().includes(searchInput) ||
-                machine.system_summary.cpu?.toLowerCase().includes(searchInput) ||
-                machine.system_summary.hostname?.toLowerCase().includes(searchInput)
+    if (searchValue) {
+        filteredClients = filteredClients.filter(client => 
+            client.name.toLowerCase().includes(searchValue) ||
+            client.ip_address.toLowerCase().includes(searchValue) ||
+            (client.system_summary && (
+                client.system_summary.os?.toLowerCase().includes(searchValue) ||
+                client.system_summary.cpu?.toLowerCase().includes(searchValue) ||
+                client.system_summary.hostname?.toLowerCase().includes(searchValue)
             ))
         );
     }
     
-    // Update machines array for display
-    const originalMachines = machines;
-    machines = filteredMachines;
-    displayMachines();
-    machines = originalMachines;
+    // Update clients array for display
+    const originalClients = clients;
+    clients = filteredClients;
+    displayClients();
+    clients = originalClients;
 }
 
-// Display machines
-function displayMachines() {
-    const container = document.getElementById('machineGrid');
+// Display clients
+function displayClients() {
+    const container = document.getElementById('clientGrid');
     
-    if (machines.length === 0) {
+    if (clients.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-server" style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
                 <h3>No Registered Clients</h3>
-                <p>Please start client processes to register machines</p>
+                <p>Please start client processes to register clients</p>
                 <div class="empty-actions">
-                    <code>python client/client.py --machine-name your-machine-name</code>
+                    <code>python client/client.py --client-name your-client-name</code>
                 </div>
             </div>
         `;
         return;
     }
     
-    const html = machines.map(machine => createMachineCard(machine)).join('');
+    const html = clients.map(client => createClientCard(client)).join('');
     container.innerHTML = html;
 }
 
-// Create Machine Card with enhanced system information display
-function createMachineCard(machine) {
-    const statusIcon = getStatusIcon(machine.status);
-    const lastHeartbeat = machine.last_heartbeat ? formatRelativeTime(machine.last_heartbeat) : 'Never';
-    const systemSummary = machine.system_summary || {};
+// For backward compatibility
+function displayClients() {
+    displayClients();
+}
+
+// Create Client Card with enhanced system information display
+function createClientCard(client) {
+    const statusIcon = getStatusIcon(client.status);
+    const lastHeartbeat = client.last_heartbeat ? formatRelativeTime(client.last_heartbeat) : 'Never';
+    const systemSummary = client.system_summary || {};
     
     // Format detailed system information
     const systemInfo = [];
     
-    // Hostname (from machine name or system summary)
-    const hostname = machine.name || systemSummary.hostname || 'Unknown Host';
+    // Hostname (from client name or system summary)
+    const hostname = client.name || systemSummary.hostname || 'Unknown Host';
     
     // OS Information (detailed version)
-    if (machine.os_info) {
-        const os = machine.os_info;
+    if (client.os_info) {
+        const os = client.os_info;
         let osDisplay = os.detailed_version || os.system || 'Unknown OS';
         if (!os.detailed_version && os.release) osDisplay += ` ${os.release}`;
         systemInfo.push(`<i class="fas fa-desktop"></i><span>OS: ${osDisplay}</span>`);
@@ -154,8 +171,8 @@ function createMachineCard(machine) {
     }
     
     // CPU Information
-    if (machine.cpu_info) {
-        const cpu = machine.cpu_info;
+    if (client.cpu_info) {
+        const cpu = client.cpu_info;
         let cpuDisplay = cpu.processor || 'Unknown CPU';
         if (cpu.cpu_count_logical) {
             cpuDisplay += ` (${cpu.cpu_count_logical} cores)`;
@@ -169,8 +186,8 @@ function createMachineCard(machine) {
     }
     
     // Memory Information (only show total)
-    if (machine.memory_info) {
-        const mem = machine.memory_info;
+    if (client.memory_info) {
+        const mem = client.memory_info;
         if (mem.total) {
             systemInfo.push(`<i class="fas fa-memory"></i><span>Memory: ${formatBytes(mem.total)}</span>`);
         }
@@ -179,8 +196,8 @@ function createMachineCard(machine) {
     }
     
     // GPU Information with model and driver version
-    if (machine.gpu_info && machine.gpu_info.length > 0) {
-        const gpus = machine.gpu_info;
+    if (client.gpu_info && client.gpu_info.length > 0) {
+        const gpus = client.gpu_info;
         if (gpus.length === 1) {
             const gpu = gpus[0];
             let gpuDisplay = gpu.model || gpu.name || 'Unknown GPU';
@@ -196,22 +213,22 @@ function createMachineCard(machine) {
     }
     
     return `
-        <div class="machine-card" onclick="viewMachineDetail('${machine.name}')">
-            <div class="machine-header">
-                <div class="machine-title">
-                    <div class="machine-name">
+        <div class="client-card" onclick="viewClientDetail('${client.name}')">
+            <div class="client-header">
+                <div class="client-title">
+                    <div class="client-name">
                         ${statusIcon}
-                        ${escapeHtml(machine.name)}
+                        ${escapeHtml(client.name)}
                     </div>
-                    ${getMachineStatusBadge(machine.status)}
+                    ${getClientStatusBadge(client.status)}
                 </div>
             </div>
             
-            <div class="machine-body">
-                <div class="machine-info">
+            <div class="client-body">
+                <div class="client-info">
                     <div class="info-item">
                         <i class="fas fa-network-wired"></i>
-                        <span>IP Address: ${machine.ip_address}:${machine.port}</span>
+                        <span>IP Address: ${client.ip_address}:${client.port}</span>
                     </div>
                     <div class="info-item">
                         <i class="fas fa-server"></i>
@@ -221,10 +238,16 @@ function createMachineCard(machine) {
                         <i class="fas fa-heartbeat"></i>
                         <span>Last Heartbeat: ${lastHeartbeat}</span>
                     </div>
-                    ${machine.current_task_id ? `
-                    <div class="info-item">
+                    ${client.current_task_id ? `
+                    <div class="info-item current-task">
                         <i class="fas fa-tasks"></i>
-                        <span>Current Task: #${machine.current_task_id}</span>
+                        <span>Current Task: #${client.current_task_id}</span>
+                    </div>
+                    ` : ''}
+                    ${client.current_subtask_id ? `
+                    <div class="info-item current-subtask">
+                        <i class="fas fa-cog"></i>
+                        <span>Current Subtask: ${escapeHtml(client.current_subtask_id)}</span>
                     </div>
                     ` : ''}
                     ${systemInfo.length > 0 ? systemInfo.map(info => `
@@ -234,15 +257,15 @@ function createMachineCard(machine) {
                     `).join('') : ''}
                 </div>
                 
-                <div class="machine-actions">
-                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); pingMachine('${machine.name}')" title="Ping Test">
+                <div class="client-actions">
+                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); pingClient('${client.name}')" title="Ping Test">
                         <i class="fas fa-satellite-dish"></i>
                     </button>
-                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); viewMachineTasks('${machine.name}')" title="View Tasks">
+                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); viewClientTasks('${client.name}')" title="View Tasks">
                         <i class="fas fa-list"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); unregisterMachine('${machine.name}')" title="Unregister Client">
-                        <i class="fas fa-user-minus"></i>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); unregisterClient('${client.name}')" title="Remove Client">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
@@ -261,8 +284,8 @@ function getStatusIcon(status) {
     return iconMap[status] || '<i class="fas fa-circle text-secondary"></i>';
 }
 
-// Get machine status badge
-function getMachineStatusBadge(status) {
+// Get client status badge
+function getClientStatusBadge(status) {
     const badgeClass = {
         'online': 'badge-success',
         'offline': 'badge-danger',
@@ -272,50 +295,50 @@ function getMachineStatusBadge(status) {
     return `<span class="badge ${badgeClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
 }
 
-// View machine details
-async function viewMachineDetail(machineName) {
+// View client details
+async function viewClientDetail(clientName) {
     try {
-        const machine = machines.find(m => m.name === machineName);
-        if (!machine) {
-            showNotification('Error', 'Machine not found', 'error');
+        const client = clients.find(m => m.name === clientName);
+        if (!client) {
+            showNotification('Error', 'Client not found', 'error');
             return;
         }
         
-        // Get machine tasks
+        // Get client tasks
         const tasksResponse = await apiGet('/api/tasks');
         const allTasks = tasksResponse.data || [];
-        const machineTasks = allTasks.filter(task => 
-            task.target_machines && task.target_machines.includes(machineName)
+        const clientTasks = allTasks.filter(task => 
+            task.target_clients && task.target_clients.includes(clientName)
         );
         
-        showMachineDetailModal(machine, machineTasks);
+        showClientDetailModal(client, clientTasks);
     } catch (error) {
-        console.error('View machine detail failed:', error);
+        console.error('View client detail failed:', error);
         showNotification('Error', error.message, 'error');
     }
 }
 
-// Show machine details modal
-function showMachineDetailModal(machine, tasks) {
-    const modal = document.getElementById('machineDetailModal');
-    const content = document.getElementById('machineDetailContent');
+// Show client details modal
+function showClientDetailModal(client, tasks) {
+    const modal = document.getElementById('clientDetailModal');
+    const content = document.getElementById('clientDetailContent');
     
     const onlineTasks = tasks.filter(task => task.status === 'running');
     const completedTasks = tasks.filter(task => task.status === 'completed');
     const failedTasks = tasks.filter(task => task.status === 'failed');
-    const systemSummary = machine.system_summary || {};
+    const systemSummary = client.system_summary || {};
     
     // Format detailed system information
     function formatSystemDetails() {
-        if (!machine.cpu_info && !machine.memory_info && !machine.gpu_info && !machine.os_info) {
+        if (!client.cpu_info && !client.memory_info && !client.gpu_info && !client.os_info) {
             return '<p style="color: #6c757d;">No detailed system information available</p>';
         }
         
         let details = '';
         
         // CPU Information
-        if (machine.cpu_info) {
-            const cpu = machine.cpu_info;
+        if (client.cpu_info) {
+            const cpu = client.cpu_info;
             details += `
                 <div class="detail-subsection">
                     <h5><i class="fas fa-microchip"></i> CPU Information</h5>
@@ -331,8 +354,8 @@ function showMachineDetailModal(machine, tasks) {
         }
         
         // Memory Information
-        if (machine.memory_info) {
-            const mem = machine.memory_info;
+        if (client.memory_info) {
+            const mem = client.memory_info;
             details += `
                 <div class="detail-subsection">
                     <h5><i class="fas fa-memory"></i> Memory Information</h5>
@@ -345,12 +368,12 @@ function showMachineDetailModal(machine, tasks) {
         }
         
         // GPU Information
-        if (machine.gpu_info && machine.gpu_info.length > 0) {
+        if (client.gpu_info && client.gpu_info.length > 0) {
             details += `
                 <div class="detail-subsection">
                     <h5><i class="fas fa-tv"></i> GPU Information</h5>
             `;
-            machine.gpu_info.forEach((gpu, index) => {
+            client.gpu_info.forEach((gpu, index) => {
                 details += `
                     <div class="detail-grid">
                         <div class="detail-item"><label>GPU ${index + 1} Model:</label><span>${gpu.model || gpu.name || 'Unknown'}</span></div>
@@ -364,8 +387,8 @@ function showMachineDetailModal(machine, tasks) {
         }
         
         // Operating System
-        if (machine.os_info) {
-            const os = machine.os_info;
+        if (client.os_info) {
+            const os = client.os_info;
             details += `
                 <div class="detail-subsection">
                     <h5><i class="fas fa-desktop"></i> Operating System</h5>
@@ -383,29 +406,29 @@ function showMachineDetailModal(machine, tasks) {
     }
     
     const html = `
-        <div class="machine-detail">
+        <div class="client-detail">
             <div class="detail-section">
-                <h4>Machine Information</h4>
+                <h4>Client Information</h4>
                 <div class="detail-grid">
                     <div class="detail-item">
-                        <label>Machine Name:</label>
-                        <span>${escapeHtml(machine.name)}</span>
+                        <label>Client Name:</label>
+                        <span>${escapeHtml(client.name)}</span>
                     </div>
                     <div class="detail-item">
                         <label>Hostname:</label>
-                        <span>${escapeHtml(systemSummary.hostname || machine.name || 'Unknown')}</span>
+                        <span>${escapeHtml(systemSummary.hostname || client.name || 'Unknown')}</span>
                     </div>
                     <div class="detail-item">
                         <label>Status:</label>
-                        <span>${getMachineStatusBadge(machine.status)}</span>
+                        <span>${getClientStatusBadge(client.status)}</span>
                     </div>
                     <div class="detail-item">
                         <label>IP Address:</label>
-                        <span>${machine.ip_address}:${machine.port}</span>
+                        <span>${client.ip_address}:${client.port}</span>
                     </div>
                     <div class="detail-item">
                         <label>Last Heartbeat:</label>
-                        <span>${machine.last_heartbeat ? formatRelativeTime(machine.last_heartbeat) : 'Never'}</span>
+                        <span>${client.last_heartbeat ? formatRelativeTime(client.last_heartbeat) : 'Never'}</span>
                     </div>
                 </div>
             </div>
@@ -446,7 +469,7 @@ function showMachineDetailModal(machine, tasks) {
                             </div>
                         `).join('')}
                     </div>
-                ` : '<p style="color: #6c757d;">No tasks assigned to this machine</p>'}
+                ` : '<p style="color: #6c757d;">No tasks assigned to this client</p>'}
             </div>
             
             <div class="detail-section">
@@ -460,55 +483,55 @@ function showMachineDetailModal(machine, tasks) {
     modal.style.display = 'block';
 }
 
-// Close machine details modal
-function closeMachineDetailModal() {
-    const modal = document.getElementById('machineDetailModal');
+// Close client details modal
+function closeClientDetailModal() {
+    const modal = document.getElementById('clientDetailModal');
     modal.style.display = 'none';
 }
 
-// View machine tasks
-async function viewMachineTasks(machineName) {
+// View client tasks
+async function viewClientTasks(clientName) {
     try {
         const tasksResponse = await apiGet('/api/tasks');
         const allTasks = tasksResponse.data || [];
-        const machineTasks = allTasks.filter(task => 
-            task.target_machines && task.target_machines.includes(machineName)
+        const clientTasks = allTasks.filter(task => 
+            task.target_clients && task.target_clients.includes(clientName)
         );
         
-        showNotification('Info', `Found ${machineTasks.length} tasks for ${machineName}`, 'info');
+        showNotification('Info', `Found ${clientTasks.length} tasks for ${clientName}`, 'info');
     } catch (error) {
-        console.error('View machine tasks failed:', error);
+        console.error('View client tasks failed:', error);
         showNotification('Error', error.message, 'error');
     }
 }
 
-// Ping machine
-async function pingMachine(machineName) {
+// Ping client
+async function pingClient(clientName) {
     try {
-        showNotification('Info', `Pinging ${machineName}...`, 'info');
+        showNotification('Info', `Pinging ${clientName}...`, 'info');
         
-        // This would typically make an API call to ping the machine
+        // This would typically make an API call to ping the client
         setTimeout(() => {
-            showNotification('Success', `${machineName} is reachable`, 'success');
+            showNotification('Success', `${clientName} is reachable`, 'success');
         }, 1000);
     } catch (error) {
-        console.error('Ping machine failed:', error);
+        console.error('Ping client failed:', error);
         showNotification('Error', error.message, 'error');
     }
 }
 
-// Unregister machine
-async function unregisterMachine(machineName) {
+// Unregister client
+async function unregisterClient(clientName) {
     try {
-        // Get machine info for better confirmation dialog
-        const machine = machines.find(m => m.name === machineName);
-        const currentTasks = machine && machine.current_task_id ? `\n- Has active task #${machine.current_task_id}` : '';
+        // Get client info for better confirmation dialog
+        const client = clients.find(m => m.name === clientName);
+        const currentTasks = client && client.current_task_id ? `\n- Has active task #${client.current_task_id}` : '';
         
         // Show detailed confirmation dialog
-        const confirmMessage = `Are you sure you want to unregister client "${machineName}"?
+        const confirmMessage = `Are you sure you want to unregister client "${clientName}"?
 
 This will:
-- Mark the client as OFFLINE
+- PERMANENTLY remove the client from the database
 - Remove it from active task assignments${currentTasks}
 - Stop receiving heartbeats from this client
 - Client can re-register automatically if still running
@@ -519,32 +542,29 @@ This action cannot be undone. Continue?`;
             return;
         }
         
-        showNotification('Info', `Unregistering ${machineName}...`, 'info');
+        showNotification('Info', `Unregistering ${clientName}...`, 'info');
         
-        // Call the unregister API
-        const response = await fetch('/api/machines/unregister', {
-            method: 'POST',
+        // Call the DELETE API to permanently remove the client
+        const response = await fetch(`/api/clients/${encodeURIComponent(clientName)}`, {
+            method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: machineName
-            })
+            }
         });
         
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Success', `Client ${machineName} has been unregistered successfully`, 'success');
-            // Refresh the machine list to reflect changes
-            await refreshMachines();
+            showNotification('Success', `Client ${clientName} has been unregistered and removed from database`, 'success');
+            // Refresh the client list to reflect changes
+            await refreshClients();
         } else {
             throw new Error(result.error || 'Failed to unregister client');
         }
         
     } catch (error) {
-        console.error('Unregister machine failed:', error);
-        showNotification('Error', `Failed to unregister ${machineName}: ${error.message}`, 'error');
+        console.error('Unregister client failed:', error);
+        showNotification('Error', `Failed to unregister ${clientName}: ${error.message}`, 'error');
     }
 }
 

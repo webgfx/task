@@ -2,22 +2,22 @@
 
 ## Project Overview
 
-This is a distributed task management and execution system built with Flask and SQLite, supporting web interface management, multi-machine distributed execution, and real-time monitoring.
+This is a distributed task management and execution system built with Flask and SQLite, supporting web interface management, multi-client distributed execution, and real-time monitoring.
 
 ### Key Features
-- 🌐 **Web Interface Management** - Intuitive task and machine management interface
-- 🔄 **Multi-machine Distributed Execution** - Tasks can be distributed across multiple client machines
+- 🌐 **Web Interface Management** - Intuitive task and client management interface
+- 🔄 **Multi-client Distributed Execution** - Tasks can be distributed across multiple client clients
 - 📊 **Real-time Monitoring** - WebSocket-based real-time status updates
 - 📋 **Subtask Support** - Complex tasks can be broken down into subtasks
 - 🕐 **Flexible Scheduling** - Support for immediate execution, scheduled execution, and cron expressions
-- 🔐 **Machine Name Based Identity** - Uses machine names as unique identifiers instead of IP addresses
+- 🔐 **Client Name Based Identity** - Uses client names as unique identifiers instead of IP addresses
 
 ## Architecture
 
 ### Server Components (`server/`)
 - **`app.py`** - Flask main application with SocketIO support
-- **`api.py`** - REST API endpoints for task and machine management
-- **`database.py`** - SQLite database operations and machine management
+- **`api.py`** - REST API endpoints for task and client management
+- **`database.py`** - SQLite database operations and client management
 - **`scheduler.py`** - Task scheduling and execution coordination
 - **`templates/`** - HTML templates for web interface
 - **`static/`** - CSS and JavaScript files for frontend
@@ -31,7 +31,7 @@ This is a distributed task management and execution system built with Flask and 
 - **`heartbeat.py`** - Client health monitoring
 
 ### Common Components (`common/`)
-- **`models.py`** - Data models (Task, Machine, SubtaskDefinition)
+- **`models.py`** - Data models (Task, Client, SubtaskDefinition)
 - **`config.py`** - Configuration management
 - **`subtasks.py`** - Predefined subtask definitions
 - **`utils.py`** - Utility functions
@@ -78,9 +78,9 @@ project/
 - Handle exceptions gracefully with appropriate error messages
 
 ### Database Design
-- **Machine Identity**: Use `machine_name` as primary identifier, NOT IP addresses
-- **Unique Constraints**: Machine names must be unique across the system
-- **Foreign Keys**: Use machine names for referencing machines in tasks
+- **Client Identity**: Use `client_name` as primary identifier, NOT IP addresses
+- **Unique Constraints**: Client names must be unique across the system
+- **Foreign Keys**: Use client names for referencing clients in tasks
 - **Data Models**: Always use the models from `common/models.py`
 
 ### Frontend Development
@@ -101,16 +101,16 @@ project/
 
 ## Key Design Patterns
 
-### Machine Management
+### Client Management
 ```python
-# Always use machine name as identifier
-machine = database.get_machine_by_name(machine_name)
-if not machine:
-    # Handle machine not found
+# Always use client name as identifier
+client = database.get_client_by_name(client_name)
+if not client:
+    # Handle client not found
     
-# Use the Machine model methods
-unique_id = machine.get_unique_id()  # Returns machine.name
-is_same = machine.is_same_machine(other_machine)
+# Use the Client model methods
+unique_id = client.get_unique_id()  # Returns client.name
+is_same = client.is_same_client(other_client)
 ```
 
 ### Task Creation with Subtasks
@@ -125,7 +125,7 @@ task_data = {
             'order': 0
         }
     ],
-    'machines': ['machine1', 'machine2']  # Use machine names
+    'clients': ['client1', 'client2']  # Use client names
 }
 ```
 
@@ -174,11 +174,11 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 
 ## Important Considerations
 
-### Machine Identity
-- **CRITICAL**: Always use machine names as unique identifiers
-- IP addresses can change, machine names are stable
-- Implement proper validation for machine name uniqueness
-- Use `machine.get_unique_id()` method consistently
+### Client Identity
+- **CRITICAL**: Always use client names as unique identifiers
+- IP addresses can change, client names are stable
+- Implement proper validation for client name uniqueness
+- Use `client.get_unique_id()` method consistently
 
 ### Python 3.13 Compatibility
 - Use compatible versions of dependencies:
@@ -221,12 +221,12 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 - **Temporary Tests**: Place intermediate and debug tests in `ignore/temp_tests/`
 - Test API endpoints with various input scenarios
 - Test frontend JavaScript with null/undefined values
-- Test machine registration and task distribution flows
+- Test client registration and task distribution flows
 - Include error scenario testing
 - Use descriptive test names and clear assertions
 
 ## Common Patterns to Avoid
-- ❌ Don't use IP addresses as machine identifiers
+- ❌ Don't use IP addresses as client identifiers
 - ❌ Don't show unnecessary connection success notifications
 - ❌ Don't access DOM elements without null checks
 - ❌ Don't use print() for logging in production code
@@ -247,7 +247,7 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 - Check server logs in `server/logs/`
 - Monitor WebSocket connections in network tab
 - Use database browser for SQLite debugging
-- Test with multiple client machines for distributed scenarios
+- Test with multiple client hosts for distributed scenarios
 
 ---
 

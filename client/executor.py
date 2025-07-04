@@ -211,3 +211,4 @@ def get_command_template(template_name: str) -> Optional[str]:
 def list_command_templates() -> Dict[str, str]:
     """List all command templates"""
     return COMMAND_TEMPLATES.copy()
+

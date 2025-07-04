@@ -7,7 +7,7 @@ This document defines the official test scenarios for the Distributed Task Manag
 ### Prerequisites
 - Python 3.13 with required dependencies installed
 - Server running on `http://localhost:5000`
-- At least one client machine connected and registered
+- At least one client client connected and registered
 - Web browser for UI testing
 - Network connectivity between server and clients
 
@@ -24,7 +24,7 @@ Before running any test scenario, verify:
 
 **Scenario ID**: `single-subtask-single-client-now`
 
-**Description**: Verify that a single subtask can be created and executed immediately on one client machine.
+**Description**: Verify that a single subtask can be created and executed immediately on one client client.
 
 **Objective**: Test the basic task creation, distribution, and execution workflow with minimal complexity.
 
@@ -42,7 +42,7 @@ Before running any test scenario, verify:
 - [ ] Fill in task details:
   - **Task Name**: `Test Single Hostname Task`
   - **Subtasks**: Select `get_hostname` from predefined subtasks
-  - **Target Machines**: Select one connected client
+  - **Target Clients**: Select one connected client
   - **Execution**: Set to "Execute Now" (immediate execution)
 - [ ] Click "Create Task" button
 - [ ] Verify task appears in task list with "pending" status
@@ -51,7 +51,7 @@ Before running any test scenario, verify:
 - [ ] Navigate to task details page by clicking "View Details"
 - [ ] Verify task shows:
   - Status: "running" or "completed"
-  - Selected client machine in execution overview
+  - Selected client client in execution overview
   - Subtask `get_hostname` with order 0
 - [ ] Monitor real-time updates via WebSocket
 - [ ] Wait for task completion (should complete within 30 seconds)
@@ -79,7 +79,7 @@ Before running any test scenario, verify:
 
 **Task Status**: `completed`
 **Subtask Status**: `completed`
-**Subtask Result**: Contains valid hostname (e.g., client machine name)
+**Subtask Result**: Contains valid hostname (e.g., client client name)
 **Execution Time**: < 30 seconds
 **Error Count**: 0
 **Log Entries**: All major events logged correctly

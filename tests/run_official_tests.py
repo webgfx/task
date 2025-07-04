@@ -38,33 +38,33 @@ class TestExecutor:
             self.log(f"❌ Cannot connect to server: {e}", "ERROR")
             return False
     
-    def get_online_machines(self):
-        """Get list of online machines"""
+    def get_online_clients(self):
+        """Get list of online clients"""
         try:
-            response = requests.get(f"{self.base_url}/api/machines")
+            response = requests.get(f"{self.base_url}/api/clients")
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
-                    online_machines = [m for m in data['data'] if m['status'] == 'online']
-                    self.log(f"✅ Found {len(online_machines)} online machines")
-                    return online_machines
+                    online_clients = [m for m in data['data'] if m['status'] == 'online']
+                    self.log(f"✅ Found {len(online_clients)} online clients")
+                    return online_clients
                 else:
                     self.log(f"❌ API error: {data.get('error', 'Unknown error')}", "ERROR")
                     return []
             else:
-                self.log(f"❌ Failed to get machines: {response.status_code}", "ERROR")
+                self.log(f"❌ Failed to get clients: {response.status_code}", "ERROR")
                 return []
         except Exception as e:
-            self.log(f"❌ Error getting machines: {e}", "ERROR")
+            self.log(f"❌ Error getting clients: {e}", "ERROR")
             return []
     
-    def create_task(self, task_name, subtasks, target_machines):
+    def create_task(self, task_name, subtasks, target_clients):
         """Create a new task"""
         try:
             task_data = {
                 "name": task_name,
                 "subtasks": subtasks,
-                "target_machines": target_machines,
+                "target_clients": target_clients,
                 "execution_type": "now"
             }
             
@@ -136,15 +136,15 @@ class TestExecutor:
         if not self.verify_server_running():
             return False
         
-        # Step 2: Check for online machines
-        online_machines = self.get_online_machines()
-        if not online_machines:
-            self.log("❌ No online machines found. Please start at least one client.", "ERROR")
+        # Step 2: Check for online clients
+        online_clients = self.get_online_clients()
+        if not online_clients:
+            self.log("❌ No online clients found. Please start at least one client.", "ERROR")
             return False
         
-        # Use the first online machine
-        target_machine = online_machines[0]['name']
-        self.log(f"Using target machine: {target_machine}")
+        # Use the first online client
+        target_client = online_clients[0]['name']
+        self.log(f"Using target client: {target_client}")
         
         # Step 3: Create task with get_hostname subtask
         subtasks = [
@@ -158,7 +158,7 @@ class TestExecutor:
         task_id = self.create_task(
             task_name="Test Single Hostname Task",
             subtasks=subtasks,
-            target_machines=[target_machine]
+            target_clients=[target_client]
         )
         
         if not task_id:
@@ -233,3 +233,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

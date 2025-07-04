@@ -1,17 +1,21 @@
 # Distributed Task Management System
 
-A distributed task management and execution system based on Flask and SQLite, supporting web interface management, multi-machine distributed execution, and real-time status updates.
+A distributed task management and execution system based on Flask and SQLite, supporting web int2. **Client Management**
+   - 🖥️ Automatic discovery and registration of clients
+   - 💓 Real-time heartbeat status monitoring
+   - 📈 Client performance and status display
+   - 🏷️ Client tag classification managemente management, multi-client distributed execution, and real-time status updates.
 
 ## ✨ Features
 
-- 🌐 **Web Interface Management** - Intuitive task and machine management interface
+- 🌐 **Web Interface Management** - Intuitive task and client management interface
 - 📋 **Task Scheduling** - Support for scheduled tasks, instant tasks, and recurring tasks
-- 🖥️ **Distributed Execution** - Multi-machine parallel task execution
+- 🖥️ **Distributed Execution** - Multi-client parallel task execution
 - 💾 **Data Persistence** - SQLite database storage, no additional configuration required
 - 🔄 **Real-time Status Updates** - WebSocket real-time status updates and log viewing
 - 📡 **API Interface** - Complete RESTful API support
 - 🤖 **Client Process** - Automatic registration, heartbeat, and task execution
-- 🏷️ **Tag Management** - Support for task and machine tag classification
+- 🏷️ **Tag Management** - Support for task and client tag classification
 
 ## 🛠️ Technology Stack
 
@@ -46,7 +50,7 @@ task/
 │   ├── templates/         # HTML templates
 │   │   ├── index.html     # Home page
 │   │   ├── tasks.html     # Task management
-│   │   ├── machines.html  # Machine management
+│   │   ├── clients.html   # Client management
 │   │   └── logs.html      # Log management
 │   └── static/            # Static resources
 │       ├── css/style.css  # Style files
@@ -107,7 +111,7 @@ start.bat
 ./start.sh
 ```
 
-#### 3. Start Client Process (on target execution machines)
+#### 3. Start Client Process (on target execution clients)
 ```bash
 python -m client.client
 # or
@@ -122,21 +126,21 @@ Open browser and visit: http://localhost:5000
 ### Main Pages
 - **Home** (`/`) - System overview and quick operations
 - **Task Management** (`/tasks`) - Create, edit, and monitor tasks
-- **Machine Management** (`/machines`) - View machine status and management
+- **Client Management** (`/clients`) - View client status and management
 - **Log Management** (`/logs`) - View system logs and communication history
 
 ### Core Functions
 1. **Task Management**
    - 📝 Create scheduled and instant tasks
-   - 🎯 Specify target execution machines
+   - 🎯 Specify target execution clients
    - ⏰ Set execution time and retry strategies
    - 📊 Real-time view of execution status and logs
 
-2. **Machine Management**
-   - 🖥️ Automatic discovery and registration of machines
+2. **Client Management**
+   - 🖥️ Automatic discovery and registration of clients
    - 💗 Real-time heartbeat monitoring
-   - 📈 Machine performance and status display
-   - 🏷️ Machine tag classification management
+   - 📈 Client performance and status display
+   - 🏷️ Client tag classification management
 
 ## 📡 API Documentation
 
@@ -151,14 +155,14 @@ Open browser and visit: http://localhost:5000
 - `PUT /api/tasks/{id}` - Update task information
 - `DELETE /api/tasks/{id}` - Delete task
 
-### Machine Management
-- `GET /api/machines` - Get machine list
-- `POST /api/machines/register` - Register new machine
-- `PUT /api/machines/{id}/heartbeat` - Update machine heartbeat
+### Client Management
+- `GET /api/clients` - Get client list
+- `POST /api/clients/register` - Register new client
+- `PUT /api/clients/{id}/heartbeat` - Update client heartbeat
 
 ### WebSocket Events
 - `task_status_changed` - Task status change
-- `machine_status_changed` - Machine status change
+- `client_status_changed` - Client status change
 - `task_log` - Task execution log
 
 ## 🔧 Configuration
@@ -277,11 +281,11 @@ For detailed service documentation, see [WINDOWS_SERVICE_GUIDE.md](WINDOWS_SERVI
 
 ### **Manual Deployment (Development/Testing)**
 
-Deployment steps on target machines:
+Deployment steps on target clients:
 
 1. **Copy project files**
 ```bash
-scp -r task/ user@target-machine:/opt/task-client/
+scp -r task/ user@target-client:/opt/task-client/
 ```
 
 2. **Install dependencies**
@@ -294,7 +298,7 @@ Modify `SERVER_URL` in `.env` file
 
 4. **Start client process**
 ```bash
-python -m client.client --server-url http://server:5000 --machine-name client-machine
+python -m client.client --server-url http://server:5000 --client-name client-host
 ```
 
 ### Auto-start on boot
@@ -312,7 +316,7 @@ service_manager.bat start
 #### **Windows Task Scheduler (Alternative)**
 ```batch
 # Using task scheduler for non-service deployment
-schtasks /create /tn "TaskClient" /tr "python C:\path\to\client\client.py --server-url http://server:5000 --machine-name client" /sc onstart
+schtasks /create /tn "TaskClient" /tr "python C:\path\to\client\client.py --server-url http://server:5000 --client-name client" /sc onstart
 ```
 
 #### **Linux System**
@@ -327,7 +331,7 @@ After=network.target
 Type=simple
 User=taskuser
 WorkingDirectory=/opt/task-client
-ExecStart=/usr/bin/python3 -m client.client --server-url http://server:5000 --machine-name client
+ExecStart=/usr/bin/python3 -m client.client --server-url http://server:5000 --client-name client
 Restart=always
 RestartSec=10
 
@@ -351,7 +355,7 @@ from datetime import datetime, timedelta
 task_data = {
     "name": "System Backup Task",
     "command": "tar -czf /backup/system-$(date +%Y%m%d).tar.gz /etc /home",
-    "target_machines": ["server-001", "server-002"],
+    "target_clients": ["server-001", "server-002"],
     "scheduled_time": (datetime.now() + timedelta(hours=1)).isoformat(),
     "timeout": 3600,
     "retry_count": 2,
@@ -424,7 +428,7 @@ netstat -ano | findstr :5000
 
 **Q: Task execution failed**
 - Check if command syntax is correct
-- Confirm target machine is online
+- Confirm target client is online
 - View task execution logs for detailed errors
 
 **Q: Database operation failed**

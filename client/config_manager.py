@@ -49,7 +49,7 @@ class ClientConfigManager:
         """创建默认配置"""
         self.config['DEFAULT'] = {
             'server_url': 'http://localhost:5000',
-            'machine_name': '',
+            'client_name': '',
             # Note: heartbeat_interval is now in common.cfg
             'config_update_interval': '600',
             'log_level': 'INFO',
@@ -259,7 +259,7 @@ class ClientConfigManager:
         
         # 基本配置
         summary.append(f"Server URL: {self.get('DEFAULT', 'server_url', 'N/A')}")
-        summary.append(f"Machine Name: {self.get('DEFAULT', 'machine_name', 'N/A')}")
+        summary.append(f"client Name: {self.get('DEFAULT', 'client_name', 'N/A')}")
         summary.append(f"Heartbeat Interval: {get_heartbeat_interval()} seconds (from common.cfg)")
         summary.append(f"Config Update Interval: {self.get_int('DEFAULT', 'config_update_interval', 600)} seconds")
         summary.append(f"Log Level: {self.get('DEFAULT', 'log_level', 'INFO')}")
@@ -326,9 +326,9 @@ def get_server_url() -> str:
     """获取服务器URL"""
     return get_config_manager().get('DEFAULT', 'server_url', 'http://localhost:5000')
 
-def get_machine_name() -> str:
+def get_client_name() -> str:
     """获取机器名"""
-    return get_config_manager().get('DEFAULT', 'machine_name', '')
+    return get_config_manager().get('DEFAULT', 'client_name', '')
 
 def get_config_update_interval() -> int:
     """获取配置更新间隔（秒）"""
@@ -353,3 +353,4 @@ def get_system_info_update_interval() -> int:
 def is_debug_mode() -> bool:
     """是否开启调试模式"""
     return get_config_manager().get_boolean('ADVANCED', 'debug_mode', False)
+

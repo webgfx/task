@@ -165,6 +165,16 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-warning {
+    background-color: #fd7e14;
+    color: white;
+}
+
+.btn-warning:hover {
+    background-color: #e55a00;
+    transform: translateY(-2px);
+}
+
 .btn-success {
     background-color: #28a745;
     color: white;
@@ -328,22 +338,22 @@ body {
     color: #383d41;
 }
 
-/* Machine grid */
-.machine-grid {
+/* Client grid */
+.client-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 20px;
     padding: 25px;
 }
 
-.machines-grid {
+.clients-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 25px;
     padding: 30px;
 }
 
-.machine-card {
+.client-card {
     background: white;
     border-radius: 12px;
     padding: 25px;
@@ -352,52 +362,89 @@ body {
     cursor: pointer;
 }
 
-.machine-card:hover {
+.client-card:hover {
     transform: translateY(-5px);
 }
 
-.machine-header {
+.client-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
 }
 
-.machine-name {
+.client-name {
     font-size: 1.2rem;
     font-weight: 600;
     color: #2c3e50;
 }
 
-.machine-status {
+.client-status {
     padding: 4px 12px;
     border-radius: 20px;
     font-size: 0.75rem;
     font-weight: 600;
 }
 
-.machine-online {
+.client-online {
     background-color: #d4edda;
     color: #155724;
 }
 
-.machine-offline {
+.client-offline {
     background-color: #f8d7da;
     color: #721c24;
 }
 
-.machine-busy {
+.client-busy {
     background-color: #fff3cd;
     color: #856404;
 }
 
-.machine-info {
+.client-info {
     color: #6c757d;
     font-size: 0.9rem;
 }
 
-.machine-info div {
+.client-info div {
     margin-bottom: 8px;
+}
+
+.client-info .info-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.client-info .info-item i {
+    width: 16px;
+    margin-right: 8px;
+    color: #6c757d;
+}
+
+.client-info .current-task {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+}
+
+.client-info .current-task i {
+    color: #2196f3;
+}
+
+.client-info .current-subtask {
+    background-color: #f3e5f5;
+    border-left: 4px solid #9c27b0;
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin: 4px 0;
+    font-size: 0.85rem;
+}
+
+.client-info .current-subtask i {
+    color: #9c27b0;
 }
 
 /* Table styles */
@@ -492,12 +539,16 @@ body {
     border-radius: 12px;
     width: 90%;
     max-width: 600px;
+    max-height: 80vh;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     animation: modalSlideIn 0.3s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-large {
     max-width: 800px;
+    max-height: 85vh;
 }
 
 @keyframes modalSlideIn {
@@ -540,6 +591,9 @@ body {
 
 .modal-body {
     padding: 25px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .modal-footer {
@@ -600,7 +654,8 @@ body {
 .notifications {
     position: fixed;
     top: 20px;
-    right: 20px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 3000;
 }
 
@@ -618,11 +673,11 @@ body {
 @keyframes notificationSlideIn {
     from {
         opacity: 0;
-        transform: translateX(100%);
+        transform: translateX(-50%) translateY(-20px);
     }
     to {
         opacity: 1;
-        transform: translateX(0);
+        transform: translateX(-50%) translateY(0);
     }
 }
 
@@ -796,6 +851,12 @@ body {
     .modal-content {
         width: 95%;
         margin: 10% auto;
+        max-height: 90vh;
+    }
+    
+    #taskDetailContent,
+    #clientDetailContent {
+        max-height: 50vh;
     }
 }
 
@@ -983,4 +1044,402 @@ body {
     .overview-stats {
         grid-template-columns: repeat(2, 1fr);
     }
+}
+
+/* Detail content specific styles */
+#taskDetailContent,
+#clientDetailContent {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+/* Scrollbar styling for detail content */
+#taskDetailContent::-webkit-scrollbar,
+#clientDetailContent::-webkit-scrollbar {
+    width: 8px;
+}
+
+#taskDetailContent::-webkit-scrollbar-track,
+#clientDetailContent::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+#taskDetailContent::-webkit-scrollbar-thumb,
+#clientDetailContent::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+#taskDetailContent::-webkit-scrollbar-thumb:hover,
+#clientDetailContent::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* Subtask Result Information Styles */
+.subtask-result-info {
+    background-color: #f8f9fa;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+}
+
+.result-type {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.result-description {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Action Buttons Styles */
+.action-buttons {
+    margin: 10px 0;
+}
+
+.action-buttons .btn {
+    margin-right: 10px;
+    margin-bottom: 5px;
+}
+
+.help-text {
+    margin-top: 10px;
+    color: #6c757d;
+}
+
+/* Email Notification Checkbox Styles */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: normal;
+    margin-bottom: 5px;
+    user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.checkbox-label .checkmark {
+    margin-left: 5px;
+}
+
+#emailRecipientsGroup {
+    margin-top: 15px;
+}
+
+#emailRecipientsGroup .help-text {
+    margin-top: 5px;
+    font-size: 0.9em;
+    color: #6c757d;
+    line-height: 1.4;
+}
+
+/* Enhanced Task Table Styles for Subtask-Client View */
+.enhanced-task-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.enhanced-task-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.enhanced-task-table .task-id-col { width: 8%; }
+.enhanced-task-table .task-name-col { width: 20%; }
+.enhanced-task-table .subtask-col { width: 18%; }
+.enhanced-task-table .client-col { width: 15%; }
+.enhanced-task-table .status-col { width: 12%; }
+.enhanced-task-table .timing-col { width: 15%; }
+.enhanced-task-table .progress-col { width: 8%; }
+.enhanced-task-table .actions-col { width: 4%; }
+
+/* Task Group Rows */
+.task-group-row {
+    background: #f8f9fa;
+    border-left: 4px solid #007bff;
+    font-weight: 600;
+}
+
+.task-group-row td {
+    padding: 12px 8px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.task-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-group-title {
+    font-size: 1rem;
+    color: #007bff;
+}
+
+.task-group-summary {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: normal;
+}
+
+.task-group-actions {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.collapse-toggle {
+    background: none;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+.collapse-toggle:hover {
+    background-color: #e7f3ff;
+}
+
+.task-group-progress {
+    width: 100px;
+    height: 6px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 2px 0;
+}
+
+.task-group-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.task-group-progress-fill.completed { background-color: #28a745; }
+.task-group-progress-fill.running { background-color: #007bff; }
+.task-group-progress-fill.failed { background-color: #dc3545; }
+.task-group-progress-fill.mixed { background: linear-gradient(90deg, #28a745 0%, #007bff 50%, #dc3545 100%); }
+
+/* Subtask Execution Rows */
+.subtask-execution-row {
+    background: white;
+    border-left: 2px solid #e9ecef;
+    transition: background-color 0.2s;
+}
+
+.subtask-execution-row:hover {
+    background-color: #f8f9fa;
+}
+
+.subtask-execution-row td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9rem;
+}
+
+.subtask-execution-row.collapsed {
+    display: none;
+}
+
+/* Subtask name styling */
+.subtask-name {
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+/* Client name styling */
+.client-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+.client-status {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.client-status.online { color: #28a745; }
+.client-status.offline { color: #dc3545; }
+.client-status.busy { color: #ffc107; }
+
+/* Enhanced status badges */
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    display: inline-block;
+    min-width: 70px;
+    text-align: center;
+}
+
+.status-badge.pending {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.status-badge.running {
+    background-color: #cce7ff;
+    color: #0056b3;
+    border: 1px solid #66c0ff;
+    animation: pulse 2s infinite;
+}
+
+.status-badge.completed {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #28a745;
+}
+
+.status-badge.failed {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #dc3545;
+}
+
+.status-badge.cancelled {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Timing information */
+.timing-info {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.timing-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.execution-time {
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-left: 4px;
+}
+
+/* Progress indicators */
+.progress-indicator {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: white;
+    margin: 0 auto;
+}
+
+.progress-indicator.pending {
+    background-color: #6c757d;
+}
+
+.progress-indicator.running {
+    background-color: #007bff;
+    animation: spin 2s linear infinite;
+}
+
+.progress-indicator.completed {
+    background-color: #28a745;
+}
+
+.progress-indicator.failed {
+    background-color: #dc3545;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Action buttons for rows */
+.row-actions {
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+}
+
+.row-actions .btn {
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    min-width: auto;
+}
+
+/* Responsive design for enhanced table */
+@media (max-width: 1200px) {
+    .enhanced-task-table .task-name-col { width: 18%; }
+    .enhanced-task-table .subtask-col { width: 16%; }
+    .enhanced-task-table .timing-col { width: 12%; }
+}
+
+@media (max-width: 992px) {
+    .enhanced-task-table {
+        font-size: 0.85rem;
+    }
+    
+    .enhanced-task-table .task-name-col { width: 25%; }
+    .enhanced-task-table .subtask-col { width: 20%; }
+    .enhanced-task-table .client-col { width: 15%; }
+    .enhanced-task-table .timing-col { display: none; }
+    .enhanced-task-table .progress-col { width: 10%; }
+}
+
+@media (max-width: 768px) {
+    .enhanced-task-table .task-id-col { display: none; }
+    .enhanced-task-table .task-name-col { width: 30%; }
+    .enhanced-task-table .subtask-col { width: 25%; }
+    .enhanced-task-table .client-col { width: 20%; }
+    .enhanced-task-table .status-col { width: 15%; }
+    .enhanced-task-table .progress-col { display: none; }
+    .enhanced-task-table .actions-col { width: 10%; }
+}
+
+/* No tasks message styling */
+.no-tasks-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.no-tasks-message i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    color: #dee2e6;
 }

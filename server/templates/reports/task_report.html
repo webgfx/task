@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Execution Report - {{ task.name }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header .subtitle {
+            margin-top: 10px;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            text-align: center;
+        }
+        .summary-card.success {
+            border-left-color: #28a745;
+        }
+        .summary-card.warning {
+            border-left-color: #ffc107;
+        }
+        .summary-card.error {
+            border-left-color: #dc3545;
+        }
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .summary-card p {
+            margin: 0;
+            color: #666;
+            font-weight: 500;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .client-results {
+            margin-bottom: 25px;
+        }
+        .client-header {
+            background: #e9ecef;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid #dee2e6;
+        }
+        .client-header h3 {
+            margin: 0;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-badge.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-badge.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-badge.warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .subtasks {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        .subtask {
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .subtask:last-child {
+            border-bottom: none;
+        }
+        .subtask-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .subtask-name {
+            font-weight: bold;
+            color: #495057;
+        }
+        .subtask-time {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .subtask-result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+            margin-top: 10px;
+        }
+        .subtask-result.success {
+            border-left-color: #28a745;
+            background: #f0fff4;
+        }
+        .subtask-result.error {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+        .result-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .task-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .info-value {
+            color: #6c757d;
+            text-align: right;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .header h1 {
+                font-size: 2em;
+            }
+            .summary {
+                grid-template-columns: 1fr;
+            }
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ task.name }}</h1>
+            <div class="subtitle">Task Execution Report</div>
+        </div>
+        
+        <div class="content">
+            <!-- Task Summary -->
+            <div class="summary">
+                <div class="summary-card {% if overall_status == 'completed' %}success{% elif overall_status == 'failed' %}error{% else %}warning{% endif %}">
+                    <h3>{{ overall_status|title }}</h3>
+                    <p>Overall Status</p>
+                </div>
+                <div class="summary-card">
+                    <h3>{{ total_clients }}</h3>
+                    <p>Total Clients</p>
+                </div>
+                <div class="summary-card success">
+                    <h3>{{ successful_clients }}</h3>
+                    <p>Successful</p>
+                </div>
+                {% if failed_clients > 0 %}
+                <div class="summary-card error">
+                    <h3>{{ failed_clients }}</h3>
+                    <p>Failed</p>
+                </div>
+                {% endif %}
+                <div class="summary-card">
+                    <h3>{{ total_subtasks }}</h3>
+                    <p>Total Subtasks</p>
+                </div>
+                <div class="summary-card success">
+                    <h3>{{ successful_subtasks }}</h3>
+                    <p>Successful Subtasks</p>
+                </div>
+                {% if failed_subtasks > 0 %}
+                <div class="summary-card error">
+                    <h3>{{ failed_subtasks }}</h3>
+                    <p>Failed Subtasks</p>
+                </div>
+                {% endif %}
+                <div class="summary-card">
+                    <h3>{{ execution_time }}</h3>
+                    <p>Total Time</p>
+                </div>
+            </div>
+            
+            <!-- Task Information -->
+            <div class="section">
+                <h2>Task Information</h2>
+                <div class="task-info">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Task ID:</span>
+                            <span class="info-value">{{ task.id }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Task Name:</span>
+                            <span class="info-value">{{ task.name }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Created:</span>
+                            <span class="info-value">{{ task.created_at or 'N/A' }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Started:</span>
+                            <span class="info-value">{{ task.started_at or 'N/A' }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Completed:</span>
+                            <span class="info-value">{{ task.completed_at or 'N/A' }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Report Generated:</span>
+                            <span class="info-value">{{ generation_time }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Client Results -->
+            <div class="section">
+                <h2>Execution Results by Client</h2>
+                {% for client_name, client_data in client_results.items() %}
+                <div class="client-results">
+                    <div class="client-header">
+                        <h3>
+                            {{ client_name }}
+                            <span class="status-badge {% if client_data.overall_success %}success{% else %}error{% endif %}">
+                                {% if client_data.overall_success %}Success{% else %}Failed{% endif %}
+                            </span>
+                        </h3>
+                    </div>
+                    <div class="subtasks">
+                        {% for subtask in client_data.subtasks %}
+                        <div class="subtask">
+                            <div class="subtask-header">
+                                <span class="subtask-name">{{ subtask.subtask_name }}</span>
+                                <span class="subtask-time">
+                                    {% if subtask.execution_time %}{{ "%.2f"|format(subtask.execution_time) }}s{% endif %}
+                                </span>
+                            </div>
+                            {% if subtask.status == 'completed' %}
+                            <div class="subtask-result success">
+                                <strong>Result:</strong>
+                                <div class="result-content">{{ subtask.result or 'No result data' }}</div>
+                            </div>
+                            {% elif subtask.status == 'failed' %}
+                            <div class="subtask-result error">
+                                <strong>Error:</strong>
+                                <div class="result-content">{{ subtask.error_message or 'Unknown error' }}</div>
+                            </div>
+                            {% else %}
+                            <div class="subtask-result">
+                                <strong>Status:</strong> {{ subtask.status|title }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="footer">
+            Generated by Distributed Task Management System on {{ generation_time }}
+        </div>
+    </div>
+</body>
+</html>

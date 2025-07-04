@@ -6,13 +6,13 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_socketio import emit
 
-from common.models import Task, Machine, TaskStatus, MachineStatus, SubtaskDefinition
+from common.models import Task, Client, TaskStatus, ClientStatus, SubtaskDefinition
 from common.utils import parse_datetime, validate_cron_expression
 from common.subtasks import list_subtasks, get_subtask, execute_subtask
 
 logger = logging.getLogger(__name__)
 
-def create_api_blueprint(database, socketio):
+def create_api_blueprint(database, socketio, result_collector=None):
     """Create API blueprint"""
     api = Blueprint('api', __name__)
 
@@ -32,7 +32,7 @@ def create_api_blueprint(database, socketio):
 
     @api.route('/tasks', methods=['POST'])
     def create_task():
-        """Create new task with support for subtasks and multiple machines"""
+        """Create new task with support for subtasks and multiple clients"""
         try:
             data = request.get_json()
 
@@ -57,10 +57,10 @@ def create_api_blueprint(database, socketio):
                             'error': f'Subtask {i+1}: name is required'
                         }), 400
 
-                    if not subtask_data.get('target_machine'):
+                    if not subtask_data.get('target_client'):
                         return jsonify({
                             'success': False,
-                            'error': f'Subtask {i+1}: target_machine is required'
+                            'error': f'Subtask {i+1}: target_client is required'
                         }), 400
 
                     # Check if subtask exists in registry
@@ -72,7 +72,7 @@ def create_api_blueprint(database, socketio):
 
                     subtask = SubtaskDefinition(
                         name=subtask_data['name'],
-                        target_machine=subtask_data['target_machine'],
+                        target_client=subtask_data['target_client'],
                         order=subtask_data.get('order', i),
                         args=subtask_data.get('args', []),
                         kwargs=subtask_data.get('kwargs', {}),
@@ -130,28 +130,30 @@ def create_api_blueprint(database, socketio):
                 }), 400
 
             # 处理目标机器列表（可能来自legacy字段或subtasks）
-            target_machines = data.get('target_machines', [])
-            if not target_machines and data.get('target_machine'):
-                target_machines = [data.get('target_machine')]
+            target_clients = data.get('target_clients', [])
+            if not target_clients and data.get('target_client'):
+                target_clients = [data.get('target_client')]
 
             # 如果使用subtasks，从subtasks中提取所有目标机器
             if subtasks:
-                subtask_machines = list(set(s.target_machine for s in subtasks))
-                target_machines.extend(subtask_machines)
-                target_machines = list(set(target_machines))  # Remove duplicates
+                subtask_clients = list(set(s.target_client for s in subtasks))
+                target_clients.extend(subtask_clients)
+                target_clients = list(set(target_clients))  # Remove duplicates
 
             # Create task object
             task = Task(
                 name=data['name'],
                 command=data.get('command', ''),  # 保持向后兼容
-                target_machines=target_machines,
+                target_clients=target_clients,
                 commands=data.get('commands', []),
                 execution_order=data.get('execution_order', []),
                 subtasks=subtasks,
                 schedule_time=parse_datetime(data.get('schedule_time')),
                 cron_expression=cron_expr,
-                target_machine=data.get('target_machine'),  # 保持向后兼容
-                max_retries=3  # Default value, not configurable from UI
+                target_client=data.get('target_client'),  # 保持向后兼容
+                max_retries=3,  # Default value, not configurable from UI
+                send_email=data.get('send_email', False),
+                email_recipients=data.get('email_recipients')
             )
 
             # Save to database
@@ -162,9 +164,9 @@ def create_api_blueprint(database, socketio):
             socketio.emit('task_created', task.to_dict())
 
             if subtasks:
-                logger.info(f"Created task: {task.name} with {len(subtasks)} subtasks for {len(target_machines)} machines")
+                logger.info(f"Created task: {task.name} with {len(subtasks)} subtasks for {len(target_clients)} clients")
             else:
-                logger.info(f"Created task: {task.name} with {len(task.commands)} commands for {len(target_machines)} machines")
+                logger.info(f"Created task: {task.name} with {len(task.commands)} commands for {len(target_clients)} clients")
 
             return jsonify({
                 'success': True,
@@ -212,8 +214,8 @@ def create_api_blueprint(database, socketio):
                 task.name = data['name']
             if 'command' in data:
                 task.command = data['command']
-            if 'target_machines' in data:
-                task.target_machines = data['target_machines']
+            if 'target_clients' in data:
+                task.target_clients = data['target_clients']
             if 'commands' in data:
                 task.commands = data['commands']
             if 'execution_order' in data:
@@ -228,10 +230,14 @@ def create_api_blueprint(database, socketio):
                         'error': 'Invalid cron expression format'
                     }), 400
                 task.cron_expression = cron_expr
-            if 'target_machine' in data:
-                task.target_machine = data['target_machine']
+            if 'target_client' in data:
+                task.target_client = data['target_client']
             if 'max_retries' in data:
                 task.max_retries = data['max_retries']
+            if 'send_email' in data:
+                task.send_email = data['send_email']
+            if 'email_recipients' in data:
+                task.email_recipients = data['email_recipients']
 
             # Save update
             database.update_task(task)
@@ -250,7 +256,7 @@ def create_api_blueprint(database, socketio):
 
     @api.route('/tasks/<int:task_id>', methods=['DELETE'])
     def delete_task(task_id):
-        """Delete task"""
+        """Delete task and all related execution records"""
         try:
             task = database.get_task(task_id)
             if not task:
@@ -259,15 +265,29 @@ def create_api_blueprint(database, socketio):
                     'error': 'Task does not exist'
                 }), 404
 
-            database.delete_task(task_id)
+            # Check if task is currently running
+            if task.status in [TaskStatus.RUNNING]:
+                return jsonify({
+                    'success': False,
+                    'error': f'Cannot delete task while it is {task.status.value}. Please cancel the task first.'
+                }), 400
 
-            # Broadcast task deletion event
-            socketio.emit('task_deleted', {'id': task_id})
-
-            return jsonify({'success': True})
+            success = database.delete_task(task_id)
+            
+            if success:
+                # Note: WebSocket emission is now handled in the database method
+                return jsonify({
+                    'success': True,
+                    'message': f'Task "{task.name}" deleted successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Task could not be deleted'
+                }), 500
 
         except Exception as e:
-            logger.error(f"Delete taskFailed: {e}")
+            logger.error(f"Delete task failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/tasks/<int:task_id>/cancel', methods=['POST'])
@@ -306,6 +326,99 @@ def create_api_blueprint(database, socketio):
             logger.error(f"Cancel taskFailed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @api.route('/tasks/<int:task_id>/subtasks/<subtask_name>/delete', methods=['DELETE'])
+    def delete_subtask(task_id, subtask_name):
+        """Delete a specific subtask that hasn't started execution yet"""
+        try:
+            data = request.get_json() or {}
+            target_client = data.get('target_client')
+            
+            if not target_client:
+                return jsonify({
+                    'success': False,
+                    'error': 'target_client parameter is required'
+                }), 400
+
+            # Get the task
+            task = database.get_task(task_id)
+            if not task:
+                return jsonify({
+                    'success': False,
+                    'error': 'Task does not exist'
+                }), 404
+
+            # Check if task is in a state where subtasks can be deleted
+            if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+                return jsonify({
+                    'success': False,
+                    'error': f'Cannot delete subtasks from task with status: {task.status.value}'
+                }), 400
+
+            # Find the subtask to delete
+            subtask_to_delete = None
+            for subtask in task.subtasks:
+                if subtask.name == subtask_name and subtask.target_client == target_client:
+                    subtask_to_delete = subtask
+                    break
+
+            if not subtask_to_delete:
+                return jsonify({
+                    'success': False,
+                    'error': f'Subtask "{subtask_name}" for client "{target_client}" not found in task'
+                }), 404
+
+            # Check if subtask has already started execution
+            executions = database.get_subtask_executions_by_client(task_id, target_client)
+            for execution in executions:
+                if (execution.subtask_name == subtask_name and 
+                    execution.status in [TaskStatus.RUNNING, TaskStatus.COMPLETED, TaskStatus.FAILED]):
+                    return jsonify({
+                        'success': False,
+                        'error': f'Cannot delete subtask "{subtask_name}" - it has already started execution (status: {execution.status.value})'
+                    }), 400
+
+            # Remove the subtask from the task
+            task.subtasks = [s for s in task.subtasks 
+                           if not (s.name == subtask_name and s.target_client == target_client)]
+            
+            # Update target_clients list if no more subtasks target this client
+            remaining_clients = set(s.target_client for s in task.subtasks)
+            task.target_clients = [m for m in task.target_clients if m in remaining_clients]
+
+            # If no subtasks remain, set task status to cancelled
+            if not task.subtasks:
+                task.status = TaskStatus.CANCELLED
+                task.error_message = "All subtasks were deleted"
+                task.completed_at = datetime.now()
+
+            # Update the task in database
+            database.update_task(task)
+
+            # Remove any pending subtask execution records for this subtask
+            database.delete_pending_subtask_executions(task_id, subtask_name, target_client)
+
+            logger.info(f"SUBTASK_DELETION: Deleted subtask '{subtask_name}' from task {task_id} for client '{target_client}'")
+
+            # Broadcast subtask deletion event
+            socketio.emit('subtask_deleted', {
+                'task_id': task_id,
+                'subtask_name': subtask_name,
+                'target_client': target_client,
+                'deleted_at': datetime.now().isoformat(),
+                'remaining_subtasks': len(task.subtasks)
+            })
+
+            return jsonify({
+                'success': True,
+                'message': f'Subtask "{subtask_name}" deleted successfully',
+                'remaining_subtasks': len(task.subtasks),
+                'task_status': task.status.value
+            })
+
+        except Exception as e:
+            logger.error(f"Delete subtask failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @api.route('/tasks/<int:task_id>/executions', methods=['GET'])
     def get_task_executions(task_id):
         """Get task execution records"""
@@ -332,30 +445,43 @@ def create_api_blueprint(database, socketio):
             logger.error(f"Get subtask execution records failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/tasks/<int:task_id>/subtask-executions/<machine_name>', methods=['GET'])
-    def get_subtask_executions_by_machine(task_id, machine_name):
-        """Get subtask execution records for a specific task and machine"""
+    @api.route('/tasks/<int:task_id>/subtask-executions/<client_name>', methods=['GET'])
+    def get_subtask_executions_by_client(task_id, client_name):
+        """Get subtask execution records for a specific task and client"""
         try:
-            executions = database.get_subtask_executions_by_machine(task_id, machine_name)
+            executions = database.get_subtask_executions_by_client(task_id, client_name)
             return jsonify({
                 'success': True,
                 'data': [exec.to_dict() for exec in executions]
             })
         except Exception as e:
-            logger.error(f"Get subtask execution records by machine failed: {e}")
+            logger.error(f"Get subtask execution records by client failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/tasks/<int:task_id>/subtask-executions', methods=['POST'])
     def update_subtask_execution(task_id):
         """Update subtask execution status (called by client)"""
-        print(f"PRINT DEBUG: update_subtask_execution called for task {task_id}")
         try:
-            logger.info(f"DEBUG: update_subtask_execution called for task {task_id}")
             data = request.get_json()
-            logger.info(f"DEBUG: Received data: {data}")
+            
+            # Enhanced logging for subtask execution status
+            subtask_name = data.get('subtask_name')
+            target_client = data.get('target_client')
+            status = data.get('status')
+            execution_time = data.get('execution_time')
+            result = data.get('result')
+            error_message = data.get('error_message')
+            
+            logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' on '{target_client}' - Status: {status}")
+            if execution_time:
+                logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' execution time: {execution_time}s")
+            if result:
+                logger.debug(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' result: {result[:200]}{'...' if len(str(result)) > 200 else ''}")
+            if error_message:
+                logger.warning(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' error: {error_message}")
 
             # Validate required fields
-            required_fields = ['subtask_name', 'target_machine', 'status']
+            required_fields = ['subtask_name', 'target_client', 'status']
             for field in required_fields:
                 if field not in data:
                     return jsonify({
@@ -364,7 +490,7 @@ def create_api_blueprint(database, socketio):
                     }), 400
 
             # Find or create subtask execution record
-            executions = database.get_subtask_executions_by_machine(task_id, data['target_machine'])
+            executions = database.get_subtask_executions_by_client(task_id, data['target_client'])
             execution = None
 
             for exec in executions:
@@ -375,14 +501,27 @@ def create_api_blueprint(database, socketio):
             if not execution:
                 # Create new execution record
                 from common.models import SubtaskExecution
+                
+                # Find the subtask definition to get the subtask_id
+                task = database.get_task(task_id)
+                subtask_id = None
+                if task and task.subtasks:
+                    for subtask_def in task.subtasks:
+                        if (subtask_def.name == data['subtask_name'] and 
+                            subtask_def.target_client == data['target_client']):
+                            subtask_id = subtask_def.subtask_id
+                            break
+                
                 execution = SubtaskExecution(
                     task_id=task_id,
+                    subtask_id=subtask_id or f"{data.get('order', 0)}_{data['subtask_name']}",  # Fallback ID
                     subtask_name=data['subtask_name'],
                     subtask_order=data.get('order', 0),
-                    target_machine=data['target_machine'],
+                    target_client=data['target_client'],
                     status=TaskStatus(data['status'])
                 )
                 execution.id = database.create_subtask_execution(execution)
+                logger.info(f"SUBTASK_EXECUTION: Created new execution record for Task {task_id} - '{subtask_name}' on '{target_client}'")
 
             # Update execution status
             execution.status = TaskStatus(data['status'])
@@ -392,19 +531,73 @@ def create_api_blueprint(database, socketio):
 
             if data['status'] in ['completed', 'failed']:
                 execution.completed_at = datetime.now()
+                logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' on '{target_client}' completed at {execution.completed_at.isoformat()}")
 
             database.update_subtask_execution(execution)
 
+            # Update client's current subtask status
+            if data['status'] == 'running':
+                # Client started working on this subtask
+                # Find the subtask definition to get the subtask_id
+                task = database.get_task(task_id)
+                if task and task.subtasks:
+                    for subtask_def in task.subtasks:
+                        if (subtask_def.name == data['subtask_name'] and 
+                            subtask_def.target_client == data['target_client']):
+                            database.update_client_current_task(
+                                data['target_client'], 
+                                task_id, 
+                                subtask_def.subtask_id
+                            )
+                            break
+            elif data['status'] in ['completed', 'failed']:
+                # Client finished this subtask, check if there are more subtasks for this client
+                task = database.get_task(task_id)
+                if task and task.subtasks:
+                    remaining_subtasks = [
+                        s for s in task.subtasks 
+                        if (s.target_client == data['target_client'] and 
+                            s.order > data.get('order', 0))
+                    ]
+                    if remaining_subtasks:
+                        # Move to next subtask
+                        next_subtask = min(remaining_subtasks, key=lambda x: x.order)
+                        database.update_client_current_task(
+                            data['target_client'], 
+                            task_id, 
+                            next_subtask.subtask_id
+                        )
+                    else:
+                        # No more subtasks, clear current task
+                        database.update_client_current_task(data['target_client'], None, None)
+                        # Set client back to online
+                        database.update_client_heartbeat_by_name(data['target_client'], ClientStatus.ONLINE)
+
             # Check if all subtasks are completed and update overall task status
-            logger.info(f"DEBUG: About to call check_and_update_task_completion for task {task_id}")
-            check_and_update_task_completion(task_id)
-            logger.info(f"DEBUG: Finished calling check_and_update_task_completion for task {task_id}")
+            logger.debug(f"SUBTASK_EXECUTION: Checking task completion for task {task_id}")
+            
+            # Notify result collector about subtask completion
+            if result_collector and data['status'] in ['completed', 'failed']:
+                result_collector.on_subtask_completion(
+                    task_id=task_id,
+                    client_name=data['target_client'],
+                    subtask_name=data['subtask_name'],
+                    subtask_status=TaskStatus(data['status']),
+                    result=data.get('result'),
+                    error_message=data.get('error_message'),
+                    execution_time=data.get('execution_time')
+                )
+            else:
+                # Fallback to original completion check
+                check_and_update_task_completion(task_id)
+            
+            logger.info(f"DEBUG: Finished processing subtask completion for task {task_id}")
 
             # Broadcast subtask status update
             socketio.emit('subtask_updated', {
                 'task_id': task_id,
                 'subtask_name': data['subtask_name'],
-                'target_machine': data['target_machine'],
+                'target_client': data['target_client'],
                 'status': data['status'],
                 'result': data.get('result'),
                 'error_message': data.get('error_message'),
@@ -513,28 +706,6 @@ def create_api_blueprint(database, socketio):
         except Exception as e:
             logger.error(f"Get subtask info for {subtask_name} failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
-        """Get all available subtasks"""
-        try:
-            subtasks = list_subtasks()
-            subtask_info = []
-
-            for subtask_name in subtasks:
-                subtask_func = get_subtask(subtask_name)
-                if subtask_func:
-                    doc = subtask_func.__doc__ or f"Subtask: {subtask_name}"
-                    subtask_info.append({
-                        'name': subtask_name,
-                        'description': doc.strip().split('\n')[0] if doc else f"Subtask: {subtask_name}",
-                        'full_doc': doc.strip() if doc else None
-                    })
-
-            return jsonify({
-                'success': True,
-                'data': subtask_info
-            })
-        except Exception as e:
-            logger.error(f"Get subtasks failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/subtasks/<subtask_name>/test', methods=['POST'])
     def test_subtask(subtask_name):
@@ -558,51 +729,51 @@ def create_api_blueprint(database, socketio):
             logger.error(f"Test subtask {subtask_name} failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    # Machine ManagementAPI
-    @api.route('/machines', methods=['GET'])
-    def get_machines():
-        """Get all machines"""
+    # Client Management API
+    @api.route('/clients', methods=['GET'])
+    def get_clients():
+        """Get all clients"""
         try:
-            machines = database.get_all_machines()
+            clients = database.get_all_clients()
             return jsonify({
                 'success': True,
-                'data': [machine.to_dict() for machine in machines]
+                'data': [client.to_dict() for client in clients]
             })
         except Exception as e:
-            logger.error(f"Get machine listFailed: {e}")
+            logger.error(f"Get client list failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/register', methods=['POST'])
-    def register_machine():
-        """Register machines with system information (using machine name as primary identifier)"""
+    @api.route('/clients/register', methods=['POST'])
+    def register_client():
+        """Register clients with system information (using client name as primary identifier)"""
         try:
             data = request.get_json()
 
             if not data.get('name') or not data.get('ip_address'):
                 return jsonify({
                     'success': False,
-                    'error': 'Machine name and IP address cannot be empty'
+                    'error': 'Client name and IP address cannot be empty'
                 }), 400
 
-            # 检查是否已存在相同名称或IP的机器
-            existing_machine_by_name = database.get_machine_by_name(data['name'])
-            existing_machine_by_ip = database.get_machine_by_ip(data['ip_address'])
+            # Check if client with same name or IP already exists
+            existing_client_by_name = database.get_client_by_name(data['name'])
+            existing_client_by_ip = database.get_client_by_ip(data['ip_address'])
 
-            # 如果存在同名但不同IP的机器，返回错误
-            if existing_machine_by_name and existing_machine_by_name.ip_address != data['ip_address']:
+            # If client exists with same name but different IP, return error
+            if existing_client_by_name and existing_client_by_name.ip_address != data['ip_address']:
                 return jsonify({
                     'success': False,
-                    'error': f'Machine name "{data["name"]}" already exists with different IP address'
+                    'error': f'Client name "{data["name"]}" already exists with different IP address'
                 }), 400
 
-            # 使用现有机器记录（如果存在）或创建新记录
-            existing_machine = existing_machine_by_name or existing_machine_by_ip
+            # Use existing client record (if exists) or create new record
+            existing_client = existing_client_by_name or existing_client_by_ip
 
-            machine = Machine(
+            client = Client(
                 name=data['name'],
                 ip_address=data['ip_address'],
                 port=data.get('port', 8080),
-                status=MachineStatus.ONLINE,
+                status=ClientStatus.ONLINE,
                 # System information
                 cpu_info=data.get('cpu_info'),
                 memory_info=data.get('memory_info'),
@@ -612,90 +783,93 @@ def create_api_blueprint(database, socketio):
                 system_summary=data.get('system_summary')
             )
 
-            database.register_machine(machine)
+            database.register_client(client)
 
-            # Log machine registration
+            # Log client registration
             client_ip = request.environ.get('REMOTE_ADDR', data['ip_address'])
-            if existing_machine:
+            if existing_client:
                 database.log_client_action(
-                    client_ip=machine.ip_address,
-                    client_name=machine.name,
-                    action='MACHINE_UPDATE',
-                    message=f"Machine {machine.name} updated registration",
+                    client_ip=client.ip_address,
+                    client_name=client.name,
+                    action='CLIENT_UPDATE',
+                    message=f"Client {client.name} updated registration",
                     data={
-                        'system_summary': machine.system_summary
+                        'system_summary': client.system_summary
                     }
                 )
             else:
                 database.log_client_action(
-                    client_ip=machine.ip_address,
-                    client_name=machine.name,
-                    action='MACHINE_REGISTER',
-                    message=f"New machine {machine.name} registered",
+                    client_ip=client.ip_address,
+                    client_name=client.name,
+                    action='CLIENT_REGISTER',
+                    message=f"New client {client.name} registered",
                     data={
-                        'system_summary': machine.system_summary
+                        'system_summary': client.system_summary
                     }
                 )
 
-            # Log system information for debugging
-            if machine.system_summary:
-                if existing_machine:
-                    logger.info(f"Updated existing machine {machine.name} ({machine.ip_address}):")
-                else:
-                    logger.info(f"Registered new machine {machine.name} ({machine.ip_address}):")
-                logger.info(f"  CPU: {machine.system_summary.get('cpu', 'Unknown')}")
-                logger.info(f"  Memory: {machine.system_summary.get('memory', 'Unknown')}")
-                logger.info(f"  GPU: {machine.system_summary.get('gpu', 'Unknown')}")
-                logger.info(f"  OS: {machine.system_summary.get('os', 'Unknown')}")
+            # Enhanced logging for client registration
+            if existing_client:
+                logger.info(f"CLIENT_REGISTRATION: Updated existing client '{client.name}' ({client.ip_address})")
+            else:
+                logger.info(f"CLIENT_REGISTRATION: New client '{client.name}' registered from {client.ip_address}")
+            
+            # Log system information
+            if client.system_summary:
+                logger.info(f"CLIENT_REGISTRATION: Client '{client.name}' system info:")
+                logger.info(f"  CPU: {client.system_summary.get('cpu', 'Unknown')}")
+                logger.info(f"  Memory: {client.system_summary.get('memory', 'Unknown')}")
+                logger.info(f"  GPU: {client.system_summary.get('gpu', 'Unknown')}")
+                logger.info(f"  OS: {client.system_summary.get('os', 'Unknown')}")
 
-            # Broadcast machine registration event
-            socketio.emit('machine_registered', machine.to_dict())
+            # Broadcast client registration event
+            socketio.emit('client_registered', client.to_dict())
 
             return jsonify({
                 'success': True,
-                'data': machine.to_dict()
+                'data': client.to_dict()
             }), 201
 
         except Exception as e:
-            logger.error(f"Registered machinesFailed: {e}")
+            logger.error(f"Register client failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/update_config', methods=['POST'])
-    def update_machine_config():
-        """Update machine configuration information"""
+    @api.route('/clients/update_config', methods=['POST'])
+    def update_client_config():
+        """Update client configuration information"""
         try:
             data = request.get_json()
-            machine_name = data.get('name')
+            client_name = data.get('name')
             ip_address = data.get('ip_address')
 
-            # 优先使用机器名，向后兼容IP地址
-            if machine_name:
-                existing_machine = database.get_machine_by_name(machine_name)
-                if not existing_machine:
+            # Prioritize client name, fallback to IP address for backward compatibility
+            if client_name:
+                existing_client = database.get_client_by_name(client_name)
+                if not existing_client:
                     return jsonify({
                         'success': False,
-                        'error': f'Machine "{machine_name}" not found'
+                        'error': f'Client "{client_name}" not found'
                     }), 404
             elif ip_address:
-                existing_machine = database.get_machine_by_ip(ip_address)
-                if not existing_machine:
+                existing_client = database.get_client_by_ip(ip_address)
+                if not existing_client:
                     return jsonify({
                         'success': False,
-                        'error': 'Machine not found'
+                        'error': 'Client not found'
                     }), 404
             else:
                 return jsonify({
                     'success': False,
-                    'error': 'Machine name or IP address is required'
+                    'error': 'Client name or IP address is required'
                 }), 400
 
-            # 更新机器信息
-            machine = Machine(
-                name=data.get('name', existing_machine.name),
-                ip_address=data.get('ip_address', existing_machine.ip_address),
-                port=data.get('port', existing_machine.port),
-                status=existing_machine.status,  # 保持现有状态
-                # 更新系统信息
+            # Update client information
+            client = Client(
+                name=data.get('name', existing_client.name),
+                ip_address=data.get('ip_address', existing_client.ip_address),
+                port=data.get('port', existing_client.port),
+                status=existing_client.status,  # Keep existing status
+                # Update system information
                 cpu_info=data.get('cpu_info'),
                 memory_info=data.get('memory_info'),
                 gpu_info=data.get('gpu_info'),
@@ -704,100 +878,105 @@ def create_api_blueprint(database, socketio):
                 system_summary=data.get('system_summary')
             )
 
-            database.update_machine_config(machine)
+            database.update_client_config(client)
 
             # Log updated system information
-            if machine.system_summary:
-                logger.info(f"Updated machine config for {machine.name} ({machine.ip_address}):")
-                logger.info(f"  CPU: {machine.system_summary.get('cpu', 'Unknown')}")
-                logger.info(f"  Memory: {machine.system_summary.get('memory', 'Unknown')}")
-                logger.info(f"  GPU: {machine.system_summary.get('gpu', 'Unknown')}")
-                logger.info(f"  OS: {machine.system_summary.get('os', 'Unknown')}")
+            if client.system_summary:
+                logger.info(f"Updated client config for {client.name} ({client.ip_address}):")
+                logger.info(f"  CPU: {client.system_summary.get('cpu', 'Unknown')}")
+                logger.info(f"  Memory: {client.system_summary.get('memory', 'Unknown')}")
+                logger.info(f"  GPU: {client.system_summary.get('gpu', 'Unknown')}")
+                logger.info(f"  OS: {client.system_summary.get('os', 'Unknown')}")
 
-            # Broadcast machine update event
-            socketio.emit('machine_config_updated', machine.to_dict())
+            # Broadcast client update event
+            socketio.emit('client_config_updated', client.to_dict())
 
             return jsonify({
                 'success': True,
-                'data': machine.to_dict()
+                'data': client.to_dict()
             })
 
         except Exception as e:
-            logger.error(f"Update machine config failed: {e}")
+            logger.error(f"Update client config failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/unregister', methods=['POST'])
-    def unregister_machine():
-        """Unregister machine using machine name as primary identifier"""
+    @api.route('/clients/unregister', methods=['POST'])
+    def unregister_client():
+        """Unregister client using client name as primary identifier"""
         try:
             data = request.get_json()
-            machine_name = data.get('name')
-            ip_address = data.get('ip_address')  # 向后兼容
+            client_name = data.get('name')
+            ip_address = data.get('ip_address')  # Backward compatibility
 
-            # 优先使用机器名，如果没有则使用IP
-            if machine_name:
-                # 通过机器名注销
-                database.update_machine_heartbeat_by_name(machine_name, MachineStatus.OFFLINE)
+            # Prioritize client name, fallback to IP if not provided
+            if client_name:
+                # Unregister by client name
+                database.update_client_heartbeat_by_name(client_name, ClientStatus.OFFLINE)
 
-                # 获取机器信息用于广播
-                machine = database.get_machine_by_name(machine_name)
-                actual_ip = machine.ip_address if machine else (ip_address or 'unknown')
+                # Get client information for broadcast
+                client = database.get_client_by_name(client_name)
+                actual_ip = client.ip_address if client else (ip_address or 'unknown')
             elif ip_address:
-                # 向后兼容：通过IP注销
-                database.update_machine_heartbeat(ip_address, MachineStatus.OFFLINE)
+                # Backward compatibility: unregister by IP
+                database.update_client_heartbeat(ip_address, ClientStatus.OFFLINE)
                 actual_ip = ip_address
-                machine_name = data.get('name', 'Unknown')
+                client_name = data.get('name', 'Unknown')
             else:
                 return jsonify({
                     'success': False,
-                    'error': 'Machine name or IP address is required'
+                    'error': 'Client name or IP address is required'
                 }), 400
 
-            # Broadcast machine unregistration event
-            socketio.emit('machine_unregistered', {
+            # Broadcast client unregistration event
+            socketio.emit('client_unregistered', {
                 'ip_address': actual_ip,
-                'machine_name': machine_name,
+                'client_name': client_name,
                 'status': 'offline',
                 'timestamp': datetime.now().isoformat()
             })
 
-            logger.info(f"Machine unregistered: {machine_name} ({actual_ip})")
+            logger.info(f"Client unregistered: {client_name} ({actual_ip})")
 
             return jsonify({
                 'success': True,
-                'message': f'Machine {machine_name} unregistered successfully'
+                'message': f'Client {client_name} unregistered successfully'
             })
 
         except Exception as e:
-            logger.error(f"Unregister machine failed: {e}")
+            logger.error(f"Unregister client failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/heartbeat', methods=['POST'])
-    def machine_heartbeat():
-        """Machine heartbeat using machine name as primary identifier"""
+    @api.route('/clients/heartbeat', methods=['POST'])
+    def client_heartbeat():
+        """Client heartbeat using client name as primary identifier"""
         try:
             data = request.get_json()
-            machine_name = data.get('machine_name')
+            client_name = data.get('client_name')
             status = data.get('status', 'online')
 
-            if not machine_name:
+            if not client_name:
                 return jsonify({
                     'success': False,
-                    'error': 'Machine name cannot be empty'
+                    'error': 'Client name cannot be empty'
                 }), 400
 
-            # Update heartbeat using machine name
-            machine_status = MachineStatus(status) if status else MachineStatus.ONLINE
-            database.update_machine_heartbeat_by_name(machine_name, machine_status)
+            # Update heartbeat using client name
+            client_status = ClientStatus(status) if status else ClientStatus.ONLINE
+            database.update_client_heartbeat_by_name(client_name, client_status)
 
-            # Get machine info for broadcast (optional)
-            machine = database.get_machine_by_name(machine_name)
-            ip_address = machine.ip_address if machine else 'unknown'
+            # Get client info for broadcast (optional)
+            client = database.get_client_by_name(client_name)
+            ip_address = client.ip_address if client else 'unknown'
+
+            # Enhanced logging for heartbeat
+            logger.info(f"HEARTBEAT: Client '{client_name}' ({ip_address}) heartbeat - Status: {status}")
+            if client:
+                logger.debug(f"HEARTBEAT: Client '{client_name}' last seen at {datetime.now().isoformat()}")
 
             # Broadcast heartbeat event
-            socketio.emit('machine_heartbeat', {
+            socketio.emit('client_heartbeat', {
                 'ip_address': ip_address,
-                'machine_name': machine_name,
+                'client_name': client_name,
                 'status': status,
                 'timestamp': datetime.now().isoformat()
             })
@@ -815,13 +994,13 @@ def create_api_blueprint(database, socketio):
         try:
             data = request.get_json()
             task_id = data.get('task_id')
-            machine_name = data.get('machine_name')  # 使用机器名作为主要标识
-            machine_ip = data.get('machine_ip')  # IP作为辅助信息
+            client_name = data.get('client_name')  # Using client name as primary identifier
+            client_ip = data.get('client_ip')  # IP as auxiliary information
 
-            if not task_id or not machine_name:
+            if not task_id or not client_name:
                 return jsonify({
                     'success': False,
-                    'error': 'Task ID and machine name cannot be empty'
+                    'error': 'Task ID and client name cannot be empty'
                 }), 400
 
             # Get task
@@ -832,28 +1011,35 @@ def create_api_blueprint(database, socketio):
                     'error': 'Task does not exist'
                 }), 404
 
-            # Get machine info by name
-            machine = database.get_machine_by_name(machine_name)
-            if not machine:
+            # Get client info by name
+            client = database.get_client_by_name(client_name)
+            if not client:
                 return jsonify({
                     'success': False,
-                    'error': f'Machine "{machine_name}" not found'
+                    'error': f'Client "{client_name}" not found'
                 }), 404
 
-            # Use machine's IP if not provided
-            if not machine_ip:
-                machine_ip = machine.ip_address
+            # Use client's IP if not provided
+            if not client_ip:
+                client_ip = client.ip_address
 
             # Update task status to running
             task.status = TaskStatus.RUNNING
             task.started_at = datetime.now()
             database.update_task(task)
 
+            # Enhanced logging for task scheduling to client
+            logger.info(f"TASK_SCHEDULING: Task {task_id} '{task.name}' scheduled to client '{client_name}' ({client_ip})")
+            logger.info(f"TASK_SCHEDULING: Task details - Subtasks: {len(task.subtasks) if task.subtasks else 0}, Status: {task.status.value}")
+            if task.subtasks:
+                for i, subtask in enumerate(task.subtasks):
+                    logger.debug(f"TASK_SCHEDULING: Task {task_id} Subtask {i+1}: '{subtask.name}' -> '{subtask.target_client}'")
+
             # Broadcast task start execution event
             socketio.emit('task_started', {
                 'task_id': task_id,
-                'machine_ip': machine_ip,
-                'machine_name': machine_name,
+                'client_ip': client_ip,
+                'client_name': client_name,
                 'started_at': task.started_at.isoformat()
             })
 
@@ -872,8 +1058,8 @@ def create_api_blueprint(database, socketio):
         try:
             data = request.get_json()
             task_id = data.get('task_id')
-            machine_name = data.get('machine_name')  # 使用机器名作为主要标识
-            machine_ip = data.get('machine_ip', 'Unknown')  # IP作为辅助信息
+            client_name = data.get('client_name')  # 使用机器名作为主要标识
+            client_ip = data.get('client_ip', 'Unknown')  # IP作为辅助信息
 
             # Support both old and new result formats
             if 'subtask_results' in data:
@@ -936,8 +1122,8 @@ def create_api_blueprint(database, socketio):
             # Broadcast task completion event
             socketio.emit('task_completed', {
                 'task_id': task_id,
-                'machine_ip': machine_ip,
-                'machine_name': machine_name,
+                'client_ip': client_ip,
+                'client_name': client_name,
                 'success': success,
                 'completed_at': task.completed_at.isoformat(),
                 'output': output,
@@ -956,8 +1142,8 @@ def create_api_blueprint(database, socketio):
         try:
             data = request.get_json()
             task_id = data.get('task_id')
-            machine_name = data.get('machine_name')  # 使用机器名作为主要标识
-            machine_ip = data.get('machine_ip', 'Unknown')  # IP作为辅助信息
+            client_name = data.get('client_name')  # 使用机器名作为主要标识
+            client_ip = data.get('client_ip', 'Unknown')  # IP作为辅助信息
             subtask_result = data.get('subtask_result', {})
 
             if not task_id:
@@ -983,8 +1169,8 @@ def create_api_blueprint(database, socketio):
             # Broadcast subtask completion event to connected clients
             socketio.emit('subtask_completed', {
                 'task_id': task_id,
-                'machine_ip': machine_ip,
-                'machine_name': machine_name,
+                'client_ip': client_ip,
+                'client_name': client_name,
                 'subtask_result': subtask_result
             })
 
@@ -994,6 +1180,96 @@ def create_api_blueprint(database, socketio):
 
         except Exception as e:
             logger.error(f"Failed to submit subtask result: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # Report Generation and Email Notification API
+    @api.route('/tasks/<int:task_id>/generate-report', methods=['POST'])
+    def generate_task_report(task_id):
+        """Generate HTML report for a specific task"""
+        try:
+            if not result_collector:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Result collector not available'
+                }), 503
+            
+            force = request.args.get('force', 'false').lower() == 'true'
+            report_path = result_collector.generate_report_for_task(task_id, force=force)
+            
+            if report_path:
+                return jsonify({
+                    'success': True,
+                    'report_path': report_path,
+                    'message': 'Report generated successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to generate report'
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"Generate task report failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/tasks/<int:task_id>/send-notification', methods=['POST'])
+    def send_task_notification(task_id):
+        """Send email notification for a specific task"""
+        try:
+            if not result_collector:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Result collector not available'
+                }), 503
+            
+            success = result_collector.send_manual_notification(task_id)
+            
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': 'Email notification sent successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to send email notification'
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"Send task notification failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/subtasks/definitions', methods=['GET'])
+    def get_subtask_definitions():
+        """Get subtask definitions with result specifications"""
+        try:
+            from common.subtasks import list_subtasks_with_definitions, get_subtask_result_definition
+            
+            definitions = list_subtasks_with_definitions()
+            
+            # Add result definitions to the response
+            result = {}
+            for name, info in definitions.items():
+                result_def = get_subtask_result_definition(name)
+                result[name] = {
+                    'description': info['function'],
+                    'result_definition': {
+                        'name': result_def.name,
+                        'description': result_def.description,
+                        'result_type': result_def.result_type,
+                        'required_fields': result_def.required_fields,
+                        'is_critical': result_def.is_critical,
+                        'format_hint': result_def.format_hint
+                    } if result_def else None
+                }
+            
+            return jsonify({
+                'success': True,
+                'data': result
+            })
+            
+        except Exception as e:
+            logger.error(f"Get subtask definitions failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     # Client Communication Logs API
@@ -1069,117 +1345,117 @@ def create_api_blueprint(database, socketio):
             logger.error(f"Failed to clear client logs: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/<machine_name>', methods=['GET'])
-    def get_machine_by_name(machine_name):
-        """Get machine by name (primary method)"""
+    @api.route('/clients/<client_name>', methods=['GET'])
+    def get_client_by_name(client_name):
+        """Get client by name (primary method)"""
         try:
-            machine = database.get_machine_by_name(machine_name)
-            if not machine:
+            client = database.get_client_by_name(client_name)
+            if not client:
                 return jsonify({
                     'success': False,
-                    'error': f'Machine "{machine_name}" not found'
+                    'error': f'Client "{client_name}" not found'
                 }), 404
 
             return jsonify({
                 'success': True,
-                'data': machine.to_dict()
+                'data': client.to_dict()
             })
         except Exception as e:
-            logger.error(f"Get machine by name failed: {e}")
+            logger.error(f"Get client by name failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/<machine_name>', methods=['DELETE'])
-    def delete_machine_by_name(machine_name):
-        """Delete machine by name (primary method - machine names are unique)"""
+    @api.route('/clients/<client_name>', methods=['DELETE'])
+    def delete_client_by_name(client_name):
+        """Delete client by name (primary method - client names are unique)"""
         try:
-            # Get machine details before deleting
-            machine = database.get_machine_by_name(machine_name)
-            if not machine:
+            # Get client details before deleting
+            client = database.get_client_by_name(client_name)
+            if not client:
                 return jsonify({
                     'success': False,
-                    'error': f'Machine "{machine_name}" not found'
+                    'error': f'Client "{client_name}" not found'
                 }), 404
 
-            # Notify the specific machine that it's being unregistered
-            room_name = f"machine_{machine.ip_address.replace('.', '_')}"
-            socketio.emit('machine_unregistered', {
-                'machine_name': machine_name,
-                'reason': 'Machine unregistered by administrator',
+            # Notify the specific client that it's being unregistered
+            room_name = f"client_{client.ip_address.replace('.', '_')}"
+            socketio.emit('client_unregistered', {
+                'client_name': client_name,
+                'reason': 'Client unregistered by administrator',
                 'timestamp': datetime.now().isoformat()
             }, room=room_name)
 
-            # Delete the machine from database
-            success = database.delete_machine(machine_name)
+            # Delete the client from database
+            success = database.delete_client(client_name)
             if not success:
                 return jsonify({
                     'success': False,
-                    'error': f'Failed to delete machine "{machine_name}"'
+                    'error': f'Failed to delete client "{client_name}"'
                 }), 500
 
-            # Broadcast general machine deletion event for UI updates
-            socketio.emit('machine_deleted', {
-                'machine_name': machine_name,
+            # Broadcast general client deletion event for UI updates
+            socketio.emit('client_deleted', {
+                'client_name': client_name,
                 'deleted_at': datetime.now().isoformat()
             })
 
-            logger.info(f"Machine unregistered and notified: {machine_name} ({machine.ip_address})")
+            logger.info(f"Client unregistered and notified: {client_name} ({client.ip_address})")
 
             return jsonify({
                 'success': True,
-                'message': f'Machine "{machine_name}" deleted successfully'
+                'message': f'Client "{client_name}" deleted successfully'
             })
 
         except Exception as e:
-            logger.error(f"Delete machine by name failed: {e}")
+            logger.error(f"Delete client by name failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/names', methods=['GET'])
-    def get_machine_names():
-        """Get all machine names"""
+    @api.route('/clients/names', methods=['GET'])
+    def get_client_names():
+        """Get all client names"""
         try:
-            # Check if only online machines are requested
+            # Check if only online clients are requested
             only_online = request.args.get('online', '').lower() == 'true'
             
             if only_online:
-                machine_names = database.get_online_machine_names()
+                client_names = database.get_online_client_names()
             else:
-                machine_names = database.get_machine_names()
+                client_names = database.get_client_names()
             
             return jsonify({
                 'success': True,
-                'data': machine_names
+                'data': client_names
             })
         except Exception as e:
-            logger.error(f"Get machine names failed: {e}")
+            logger.error(f"Get client names failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/machines/validate_name', methods=['POST'])
-    def validate_machine_name():
-        """Validate if machine name is available"""
+    @api.route('/clients/validate_name', methods=['POST'])
+    def validate_client_name():
+        """Validate if client name is available"""
         try:
             data = request.get_json()
-            machine_name = data.get('name')
+            client_name = data.get('name')
             
-            if not machine_name:
+            if not client_name:
                 return jsonify({
                     'success': False,
-                    'error': 'Machine name is required'
+                    'error': 'Client name is required'
                 }), 400
             
             # Check if name already exists
-            exists = database.machine_name_exists(machine_name)
+            exists = database.client_name_exists(client_name)
             
             return jsonify({
                 'success': True,
                 'data': {
-                    'name': machine_name,
+                    'name': client_name,
                     'available': not exists,
                     'exists': exists
                 }
             })
             
         except Exception as e:
-            logger.error(f"Validate machine name failed: {e}")
+            logger.error(f"Validate client name failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     def check_and_update_task_completion(task_id):
@@ -1190,76 +1466,66 @@ def create_api_blueprint(database, socketio):
             task_id: ID of the task to check
         """
         try:
-            logger.info(f"DEBUG: Starting completion check for task {task_id}")
-            
             # Get task and its subtasks
             task = database.get_task(task_id)
             if not task or not task.subtasks:
-                logger.warning(f"DEBUG: Task {task_id} not found or has no subtasks")
+                logger.warning(f"TASK_COMPLETION: Task {task_id} not found or has no subtasks")
                 return
             
             # Get all subtask executions for this task
             executions = database.get_subtask_executions(task_id)
-            logger.info(f"DEBUG: Found {len(executions)} subtask executions for task {task_id}")
+            logger.debug(f"TASK_COMPLETION: Found {len(executions)} subtask executions for task {task_id}")
             
             # Create a map of executed subtasks
             execution_map = {}
             for exec in executions:
-                key = f"{exec.subtask_name}_{exec.target_machine}"
+                key = f"{exec.subtask_name}_{exec.target_client}"
                 execution_map[key] = exec
-                logger.info(f"DEBUG: Execution {key}: status={exec.status}")
             
             # Check completion status
             total_subtasks = len(task.subtasks)
             completed_subtasks = 0
             failed_subtasks = 0
             
-            logger.info(f"DEBUG: Task {task_id} has {total_subtasks} subtasks to check")
-            
             for subtask in task.subtasks:
-                key = f"{subtask.name}_{subtask.target_machine}"
+                key = f"{subtask.name}_{subtask.target_client}"
                 execution = execution_map.get(key)
-                
-                logger.info(f"DEBUG: Checking subtask {key}, found execution: {execution is not None}")
                 
                 if execution:
                     if execution.status == TaskStatus.COMPLETED:
                         completed_subtasks += 1
-                        logger.info(f"DEBUG: Subtask {key} is COMPLETED")
                     elif execution.status == TaskStatus.FAILED:
                         failed_subtasks += 1
-                        logger.info(f"DEBUG: Subtask {key} is FAILED")
-                    else:
-                        logger.info(f"DEBUG: Subtask {key} has status: {execution.status}")
-                else:
-                    logger.info(f"DEBUG: Subtask {key} has no execution record")
             
             # Determine if task is complete
             all_subtasks_finished = (completed_subtasks + failed_subtasks) == total_subtasks
             
-            logger.info(f"DEBUG: Task {task_id} completion status - Total: {total_subtasks}, Completed: {completed_subtasks}, Failed: {failed_subtasks}")
-            logger.info(f"DEBUG: Task {task_id} - All finished: {all_subtasks_finished}, Current status: {task.status}")
+            logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' - Progress: {completed_subtasks}/{total_subtasks} completed, {failed_subtasks} failed")
             
             if all_subtasks_finished and task.status not in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
-                logger.info(f"DEBUG: Task {task_id} - Updating task status")
-                
                 # Update task status
                 task.completed_at = datetime.now()
                 
                 if failed_subtasks > 0:
                     task.status = TaskStatus.FAILED
                     task.error_message = f"{failed_subtasks} out of {total_subtasks} subtasks failed"
-                    logger.info(f"DEBUG: Task {task_id} - Set to FAILED")
+                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{task.name}' FAILED - {failed_subtasks}/{total_subtasks} subtasks failed")
                 else:
                     task.status = TaskStatus.COMPLETED
                     task.result = f"All {total_subtasks} subtasks completed successfully"
-                    logger.info(f"DEBUG: Task {task_id} - Set to COMPLETED")
+                    logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' COMPLETED successfully - All {total_subtasks} subtasks completed")
                 
                 update_success = database.update_task(task)
-                logger.info(f"DEBUG: Task {task_id} - Database update success: {update_success}")
+                
+                # Clear current task from all clients that were working on this task
+                target_clients = task.get_all_target_clients()
+                for client_name in target_clients:
+                    database.update_client_current_task(client_name, None, None)
+                    # Also update client status back to online if it was busy
+                    database.update_client_heartbeat_by_name(client_name, ClientStatus.ONLINE)
                 
                 # Broadcast task completion
-                logger.info(f"DEBUG: Task {task_id} - Emitting task_completed event")
+                logger.info(f"TASK_COMPLETION: Broadcasting completion event for task {task_id}")
                 socketio.emit('task_completed', {
                     'task_id': task_id,
                     'status': task.status.value,
@@ -1271,10 +1537,28 @@ def create_api_blueprint(database, socketio):
                     'result': task.result,
                     'error_message': task.error_message
                 })
-                
-                logger.info(f"Task {task_id} completed: {completed_subtasks}/{total_subtasks} subtasks successful")
         
         except Exception as e:
-            logger.error(f"Failed to check task completion for task {task_id}: {e}")
+            logger.error(f"TASK_COMPLETION: Failed to check task completion for task {task_id}: {e}")
+
+    @api.route('/test_update_client_task', methods=['POST'])
+    def test_update_client_task():
+        """Test endpoint to update client current task - for debugging only"""
+        try:
+            data = request.get_json()
+            client_name = data.get('client_name')
+            task_id = data.get('task_id')
+            subtask_id = data.get('subtask_id')
+            
+            success = database.update_client_current_task(client_name, task_id, subtask_id)
+            
+            return jsonify({
+                'success': success,
+                'message': f"Updated client '{client_name}' current task to {task_id}, subtask {subtask_id}"
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     return api
+

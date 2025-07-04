@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
 
-from common.models import Task, Machine, TaskExecution, TaskStatus, MachineStatus, SubtaskExecution, SubtaskDefinition
+from common.models import Task, Client, TaskExecution, TaskStatus, ClientStatus, SubtaskExecution, SubtaskDefinition
 from common.utils import parse_datetime
 
 logger = logging.getLogger(__name__)
@@ -30,12 +30,12 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     command TEXT NOT NULL,
-                    target_machines TEXT DEFAULT '[]',
+                    target_clients TEXT DEFAULT '[]',
                     commands TEXT DEFAULT '[]',
                     execution_order TEXT DEFAULT '[]',
                     schedule_time TEXT,
                     cron_expression TEXT,
-                    target_machine TEXT,
+                    target_client TEXT,
                     status TEXT DEFAULT 'pending',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     started_at TEXT,
@@ -47,9 +47,9 @@ class Database:
                 )
             ''')
 
-            # Create machines table (using machine name as primary key)
+            # Create clients table (using client name as primary key)
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS machines (
+                CREATE TABLE IF NOT EXISTS clients (
                     name TEXT PRIMARY KEY,
                     ip_address TEXT NOT NULL,
                     port INTEGER DEFAULT 8080,
@@ -68,15 +68,18 @@ class Database:
 
             # Migrate existing tables
             self._migrate_tasks_table(cursor)
-            self._migrate_machines_table(cursor)
-            self._migrate_machines_to_name_primary_key(cursor)
+            self._migrate_email_notification_fields(cursor)
+            self._migrate_clients_table(cursor)
+            self._migrate_clients_to_name_primary_key(cursor)
+            self._migrate_clients_to_clients(cursor)
+            self._migrate_subtask_ids(cursor)
 
             # Create task execution table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS task_executions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id INTEGER NOT NULL,
-                    machine_name TEXT NOT NULL,
+                    client_name TEXT NOT NULL,
                     started_at TEXT,
                     completed_at TEXT,
                     status TEXT DEFAULT 'pending',
@@ -84,7 +87,7 @@ class Database:
                     error_output TEXT,
                     exit_code INTEGER,
                     FOREIGN KEY (task_id) REFERENCES tasks (id),
-                    FOREIGN KEY (machine_name) REFERENCES machines (name)
+                    FOREIGN KEY (client_name) REFERENCES clients (name)
                 )
             ''')
 
@@ -95,7 +98,7 @@ class Database:
                     task_id INTEGER NOT NULL,
                     subtask_name TEXT NOT NULL,
                     subtask_order INTEGER NOT NULL,
-                    target_machine TEXT NOT NULL,
+                    target_client TEXT NOT NULL,
                     started_at TEXT,
                     completed_at TEXT,
                     status TEXT DEFAULT 'pending',
@@ -138,7 +141,7 @@ class Database:
             columns = [column[1] for column in cursor.fetchall()]
 
             new_columns = [
-                ('target_machines', 'TEXT DEFAULT \'[]\''),
+                ('target_clients', 'TEXT DEFAULT \'[]\''),
                 ('commands', 'TEXT DEFAULT \'[]\''),
                 ('execution_order', 'TEXT DEFAULT \'[]\'')
             ]
@@ -151,50 +154,79 @@ class Database:
         except Exception as e:
             logger.warning(f"Tasks table migration warning: {e}")
 
-    def _migrate_machines_table(self, cursor):
-        """Migrate machines table to add system information columns and change primary key"""
+    def _migrate_email_notification_fields(self, cursor):
+        """Migrate tasks table to add email notification fields"""
         try:
-            # Check if system info columns exist
-            cursor.execute("PRAGMA table_info(machines)")
+            # Check if email notification columns exist
+            cursor.execute("PRAGMA table_info(tasks)")
             columns = [column[1] for column in cursor.fetchall()]
 
-            # Check if we need to recreate table for primary key change
-            primary_key_columns = [col for col in cursor.fetchall() if col[5] == 1]  # pk column
-
-            new_columns = [
-                ('last_config_update', 'TEXT'),
-                ('cpu_info', 'TEXT'),
-                ('memory_info', 'TEXT'),
-                ('gpu_info', 'TEXT'),
-                ('os_info', 'TEXT'),
-                ('disk_info', 'TEXT'),
-                ('system_summary', 'TEXT')
+            email_columns = [
+                ('send_email', 'INTEGER DEFAULT 0'),  # SQLite uses INTEGER for boolean
+                ('email_recipients', 'TEXT')
             ]
 
-            for column_name, column_type in new_columns:
+            for column_name, column_def in email_columns:
                 if column_name not in columns:
-                    cursor.execute(f"ALTER TABLE machines ADD COLUMN {column_name} {column_type}")
-                    logger.info(f"Added column {column_name} to machines table")
+                    cursor.execute(f"ALTER TABLE tasks ADD COLUMN {column_name} {column_def}")
+                    logger.info(f"Added email notification column {column_name} to tasks table")
 
         except Exception as e:
-            logger.warning(f"Machines table migration warning: {e}")
+            logger.warning(f"Email notification fields migration warning: {e}")
 
-    def _migrate_machines_to_name_primary_key(self, cursor):
-        """Migration: change machines table primary key from ip_address to name"""
+    def _migrate_clients_table(self, cursor):
+        """Migrate clients table to add system information columns and change primary key"""
         try:
+            # Check if clients table exists and if system info columns exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
+            clients_exists = cursor.fetchone() is not None
+            
+            if clients_exists:
+                cursor.execute("PRAGMA table_info(clients)")
+                columns = [column[1] for column in cursor.fetchall()]
+
+                new_columns = [
+                    ('last_config_update', 'TEXT'),
+                    ('cpu_info', 'TEXT'),
+                    ('memory_info', 'TEXT'),
+                    ('gpu_info', 'TEXT'),
+                    ('os_info', 'TEXT'),
+                    ('disk_info', 'TEXT'),
+                    ('system_summary', 'TEXT')
+                ]
+
+                for column_name, column_type in new_columns:
+                    if column_name not in columns:
+                        cursor.execute(f"ALTER TABLE clients ADD COLUMN {column_name} {column_type}")
+                        logger.info(f"Added column {column_name} to clients table")
+
+        except Exception as e:
+            logger.warning(f"clients table migration warning: {e}")
+
+    def _migrate_clients_to_name_primary_key(self, cursor):
+        """Migration: change clients table primary key from ip_address to name"""
+        try:
+            # Check if clients table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
+            clients_exists = cursor.fetchone() is not None
+            
+            if not clients_exists:
+                logger.info("clients table doesn't exist - no primary key migration needed")
+                return
+                
             # Check if table exists and what its current structure is
-            cursor.execute("PRAGMA table_info(machines)")
+            cursor.execute("PRAGMA table_info(clients)")
             columns_info = cursor.fetchall()
             
             # Check if the primary key is currently ip_address
             primary_key_columns = [col for col in columns_info if col[5] == 1]  # pk column
             
             if primary_key_columns and primary_key_columns[0][1] == 'ip_address':
-                logger.info("Migrating machines table to use name as primary key...")
+                logger.info("Migrating clients table to use name as primary key...")
                 
                 # Create new table with name as primary key
                 cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS machines_new (
+                    CREATE TABLE IF NOT EXISTS clients_new (
                         name TEXT PRIMARY KEY,
                         ip_address TEXT NOT NULL,
                         port INTEGER DEFAULT 8080,
@@ -213,29 +245,75 @@ class Database:
                 
                 # Copy data from old table, handling potential duplicates by name
                 cursor.execute('''
-                    INSERT OR REPLACE INTO machines_new
+                    INSERT OR REPLACE INTO clients_new
                     SELECT name, ip_address, port, status, last_heartbeat,
                            last_config_update, current_task_id,
                            cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary
-                    FROM machines
+                    FROM clients
                     WHERE name IS NOT NULL AND name != ''
                 ''')
                 
                 # Drop old table and rename new table
-                cursor.execute('DROP TABLE machines')
-                cursor.execute('ALTER TABLE machines_new RENAME TO machines')
+                cursor.execute('DROP TABLE clients')
+                cursor.execute('ALTER TABLE clients_new RENAME TO clients')
                 
-                logger.info("Successfully migrated machines table to use name as primary key")
+                logger.info("Successfully migrated clients table to use name as primary key")
             else:
-                logger.info("Machines table already uses name as primary key or doesn't exist")
+                logger.info("clients table already uses name as primary key")
                 
         except Exception as e:
-            logger.warning(f"Machines table primary key migration warning: {e}")
+            logger.warning(f"clients table primary key migration warning: {e}")
 
-    def _migrate_machines_primary_key(self, cursor):
+    def _migrate_clients_primary_key(self, cursor):
         """Legacy migration function - kept for backward compatibility"""
-        # This function is now handled by _migrate_machines_to_name_primary_key
+        # This function is now handled by _migrate_clients_to_name_primary_key
         pass
+
+    def _migrate_clients_to_clients(self, cursor):
+        """Migration: rename clients table to clients"""
+        try:
+            # Check if clients table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
+            clients_exists = cursor.fetchone() is not None
+            
+            # Check if clients table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
+            clients_exists = cursor.fetchone() is not None
+            
+            if clients_exists and clients_exists:
+                logger.info("Both clients and clients tables exist, copying data from clients to clients...")
+                
+                # Copy data from clients to clients, mapping columns correctly
+                cursor.execute('''
+                    INSERT OR REPLACE INTO clients
+                    (name, ip_address, port, status, last_heartbeat, last_config_update,
+                     current_task_id, cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary)
+                    SELECT name, ip_address, port, status, last_heartbeat, last_config_update,
+                           current_task_id, cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary
+                    FROM clients
+                ''')
+                
+                # Check how many records were copied
+                cursor.execute("SELECT COUNT(*) FROM clients")
+                clients_count = cursor.fetchone()[0]
+                
+                # Drop the old clients table
+                cursor.execute('DROP TABLE clients')
+                
+                logger.info(f"Successfully migrated {clients_count} records from clients to clients and removed clients table")
+                
+            elif clients_exists and not clients_exists:
+                logger.info("Migrating clients table to clients table...")
+                
+                # Rename clients table to clients
+                cursor.execute('ALTER TABLE clients RENAME TO clients')
+                
+                logger.info("Successfully migrated clients table to clients table")
+            else:
+                logger.info("Clients table already exists or clients table doesn't exist - no migration needed")
+                
+        except Exception as e:
+            logger.warning(f"clients to clients table migration warning: {e}")
 
     @contextmanager
     def get_connection(self):
@@ -257,19 +335,21 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO tasks (name, command, target_machines, commands, execution_order,
-                                 subtasks, schedule_time, cron_expression, target_machine, status,
-                                 created_at, max_retries)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (name, command, target_clients, commands, execution_order,
+                                 subtasks, schedule_time, cron_expression, target_client, status,
+                                 created_at, max_retries, send_email, email_recipients)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 task.name, task.command,
-                json.dumps(task.target_machines) if task.target_machines else '[]',
+                json.dumps(task.target_clients) if task.target_clients else '[]',
                 json.dumps(task.commands) if task.commands else '[]',
                 json.dumps(task.execution_order) if task.execution_order else '[]',
                 json.dumps([s.to_dict() for s in task.subtasks]) if task.subtasks else '[]',
                 task.schedule_time.isoformat() if task.schedule_time else None,
-                task.cron_expression, task.target_machine, task.status.value,
-                datetime.now().isoformat(), task.max_retries
+                task.cron_expression, task.target_client, task.status.value,
+                datetime.now().isoformat(), task.max_retries,
+                1 if task.send_email else 0,  # Convert boolean to integer for SQLite
+                task.email_recipients
             ))
             task_id = cursor.lastrowid
             conn.commit()
@@ -299,33 +379,69 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE tasks SET name=?, command=?, target_machines=?, commands=?,
+                UPDATE tasks SET name=?, command=?, target_clients=?, commands=?,
                                execution_order=?, subtasks=?, schedule_time=?, cron_expression=?,
-                               target_machine=?, status=?, started_at=?, completed_at=?,
-                               result=?, error_message=?, retry_count=?, max_retries=?
+                               target_client=?, status=?, started_at=?, completed_at=?,
+                               result=?, error_message=?, retry_count=?, max_retries=?,
+                               send_email=?, email_recipients=?
                 WHERE id=?
             ''', (
                 task.name, task.command,
-                json.dumps(task.target_machines) if task.target_machines else '[]',
+                json.dumps(task.target_clients) if task.target_clients else '[]',
                 json.dumps(task.commands) if task.commands else '[]',
                 json.dumps(task.execution_order) if task.execution_order else '[]',
                 json.dumps([s.to_dict() for s in task.subtasks]) if task.subtasks else '[]',
                 task.schedule_time.isoformat() if task.schedule_time else None,
-                task.cron_expression, task.target_machine, task.status.value,
+                task.cron_expression, task.target_client, task.status.value,
                 task.started_at.isoformat() if task.started_at else None,
                 task.completed_at.isoformat() if task.completed_at else None,
                 task.result, task.error_message, task.retry_count, task.max_retries,
+                1 if task.send_email else 0,  # Convert boolean to integer
+                task.email_recipients,
                 task.id
             ))
             conn.commit()
 
     def delete_task(self, task_id: int):
-        """Delete task"""
+        """Delete task and all related execution records"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # First, get task info for logging
+            cursor.execute('SELECT name FROM tasks WHERE id = ?', (task_id,))
+            task_row = cursor.fetchone()
+            task_name = task_row[0] if task_row else f"ID:{task_id}"
+            
+            # Delete subtask executions first (child records)
+            cursor.execute('DELETE FROM subtask_executions WHERE task_id = ?', (task_id,))
+            subtask_deleted = cursor.rowcount
+            
+            # Delete task executions (child records)
+            cursor.execute('DELETE FROM task_executions WHERE task_id = ?', (task_id,))
+            execution_deleted = cursor.rowcount
+            
+            # Finally delete the task itself (parent record)
             cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
+            task_deleted = cursor.rowcount
+            
             conn.commit()
-            logger.info(f"Deleted task ID: {task_id}")
+            
+            if task_deleted > 0:
+                logger.info(f"Deleted task '{task_name}' (ID: {task_id}) with {execution_deleted} task executions and {subtask_deleted} subtask executions")
+                
+                # Broadcast task deletion via WebSocket if available
+                if self.socketio:
+                    self.socketio.emit('task_deleted', {
+                        'task_id': task_id,
+                        'task_name': task_name,
+                        'execution_records_deleted': execution_deleted,
+                        'subtask_records_deleted': subtask_deleted
+                    })
+                
+                return True
+            else:
+                logger.warning(f"Task with ID {task_id} not found for deletion")
+                return False
 
     def get_pending_tasks(self) -> List[Task]:
         """Get pending tasks"""
@@ -339,54 +455,55 @@ class Database:
             rows = cursor.fetchall()
             return [self._row_to_task(row) for row in rows]
 
-    # Machine-related operations
-    def register_machine(self, machine: Machine):
-        """Register or update machine with system information (using machine name as unique identifier)"""
+    # Client-related operations
+    def register_client(self, client: Client):
+        """Register or update client with system information (using client name as unique identifier)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
             # 验证机器名的唯一性
-            if not self._validate_machine_name_uniqueness(machine.name, machine.ip_address):
-                raise ValueError(f"Machine name '{machine.name}' conflicts with existing machine on different IP")
+            if not self._validate_client_name_uniqueness(client.name, client.ip_address):
+                raise ValueError(f"Client name '{client.name}' conflicts with existing client on different IP")
             
             cursor.execute('''
-                INSERT OR REPLACE INTO machines
-                (name, ip_address, port, status, last_heartbeat, last_config_update,
+                INSERT OR REPLACE INTO clients
+                (name, ip_address, port, status, last_heartbeat, last_config_update, current_task_id, current_subtask_id,
                  cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                machine.name, machine.ip_address, machine.port,
-                machine.status.value, datetime.now().isoformat(), datetime.now().isoformat(),
-                json.dumps(machine.cpu_info) if machine.cpu_info else None,
-                json.dumps(machine.memory_info) if machine.memory_info else None,
-                json.dumps(machine.gpu_info) if machine.gpu_info else None,
-                json.dumps(machine.os_info) if machine.os_info else None,
-                json.dumps(machine.disk_info) if machine.disk_info else None,
-                json.dumps(machine.system_summary) if machine.system_summary else None
+                client.name, client.ip_address, client.port,
+                client.status.value, datetime.now().isoformat(), datetime.now().isoformat(),
+                client.current_task_id, client.current_subtask_id,
+                json.dumps(client.cpu_info) if client.cpu_info else None,
+                json.dumps(client.memory_info) if client.memory_info else None,
+                json.dumps(client.gpu_info) if client.gpu_info else None,
+                json.dumps(client.os_info) if client.os_info else None,
+                json.dumps(client.disk_info) if client.disk_info else None,
+                json.dumps(client.system_summary) if client.system_summary else None
             ))
             conn.commit()
-            logger.info(f"Registered machine: {machine.name} ({machine.ip_address})")
-            if machine.system_summary:
-                logger.info(f"  System: {machine.system_summary.get('os', 'Unknown')}")
-                logger.info(f"  CPU: {machine.system_summary.get('cpu', 'Unknown')}")
-                logger.info(f"  Memory: {machine.system_summary.get('memory', 'Unknown')}")
+            logger.info(f"Registered client: {client.name} ({client.ip_address})")
+            if client.system_summary:
+                logger.info(f"  System: {client.system_summary.get('os', 'Unknown')}")
+                logger.info(f"  CPU: {client.system_summary.get('cpu', 'Unknown')}")
+                logger.info(f"  Memory: {client.system_summary.get('memory', 'Unknown')}")
 
-    def machine_name_exists(self, machine_name: str) -> bool:
+    def client_name_exists(self, client_name: str) -> bool:
         """
         检查机器名是否已存在
         
         Args:
-            machine_name: 要检查的机器名
+            client_name: 要检查的机器名
             
         Returns:
             True if exists, False otherwise
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT 1 FROM machines WHERE name = ?', (machine_name,))
+            cursor.execute('SELECT 1 FROM clients WHERE name = ?', (client_name,))
             return cursor.fetchone() is not None
 
-    def get_machine_names(self) -> List[str]:
+    def get_client_names(self) -> List[str]:
         """
         获取所有机器名列表
         
@@ -395,11 +512,11 @@ class Database:
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT name FROM machines ORDER BY name')
+            cursor.execute('SELECT name FROM clients ORDER BY name')
             rows = cursor.fetchall()
             return [row[0] for row in rows]
 
-    def get_online_machine_names(self) -> List[str]:
+    def get_online_client_names(self) -> List[str]:
         """
         获取所有在线机器名列表
         
@@ -409,151 +526,151 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT name FROM machines
+                SELECT name FROM clients
                 WHERE status = 'online'
                 ORDER BY last_heartbeat DESC
             ''')
             rows = cursor.fetchall()
             return [row[0] for row in rows]
 
-    def _validate_machine_name_uniqueness(self, machine_name: str, machine_ip: str) -> bool:
+    def _validate_client_name_uniqueness(self, client_name: str, client_ip: str) -> bool:
         """
-        验证机器名的唯一性
-        确保同一机器名不会分配给不同的IP地址
+        验证客户端名的唯一性
+        确保同一客户端名不会分配给不同的IP地址
         
         Args:
-            machine_name: 要验证的机器名
-            machine_ip: 机器的IP地址
+            client_name: 要验证的客户端名
+            client_ip: 客户端的IP地址
             
         Returns:
             True if unique or belongs to same IP, False if conflicts
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT ip_address FROM machines WHERE name = ?', (machine_name,))
+            cursor.execute('SELECT ip_address FROM clients WHERE name = ?', (client_name,))
             result = cursor.fetchone()
             
             if result is None:
-                # 新机器名，允许注册
+                # 新客户端名，允许注册
                 return True
             
             # 检查是否为同一IP地址
             existing_ip = result[0]
-            return existing_ip == machine_ip
+            return existing_ip == client_ip
 
-    def update_machine_heartbeat(self, ip_address: str, status: MachineStatus = None):
-        """Update machine heartbeat (using IP as identifier)"""
+    def update_client_heartbeat(self, ip_address: str, status: ClientStatus = None):
+        """Update client heartbeat (using IP as identifier)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if status:
                 cursor.execute('''
-                    UPDATE machines SET last_heartbeat = ?, status = ?
+                    UPDATE clients SET last_heartbeat = ?, status = ?
                     WHERE ip_address = ?
                 ''', (datetime.now().isoformat(), status.value, ip_address))
             else:
                 cursor.execute('''
-                    UPDATE machines SET last_heartbeat = ?
+                    UPDATE clients SET last_heartbeat = ?
                     WHERE ip_address = ?
                 ''', (datetime.now().isoformat(), ip_address))
             conn.commit()
 
-    def update_machine_heartbeat_by_name(self, machine_name: str, status: MachineStatus = None):
-        """Update machine heartbeat (using machine name as identifier)"""
+    def update_client_heartbeat_by_name(self, client_name: str, status: ClientStatus = None):
+        """Update client heartbeat (using client name as identifier)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if status:
                 cursor.execute('''
-                    UPDATE machines SET last_heartbeat = ?, status = ?
+                    UPDATE clients SET last_heartbeat = ?, status = ?
                     WHERE name = ?
-                ''', (datetime.now().isoformat(), status.value, machine_name))
+                ''', (datetime.now().isoformat(), status.value, client_name))
             else:
                 cursor.execute('''
-                    UPDATE machines SET last_heartbeat = ?
+                    UPDATE clients SET last_heartbeat = ?
                     WHERE name = ?
-                ''', (datetime.now().isoformat(), machine_name))
+                ''', (datetime.now().isoformat(), client_name))
             conn.commit()
 
-    def update_machine_config(self, machine: Machine):
-        """Update machine configuration information"""
+    def update_client_config(self, client: Client):
+        """Update client configuration information"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE machines SET
+                UPDATE clients SET
                     ip_address=?, port=?, last_config_update=?,
                     cpu_info=?, memory_info=?, gpu_info=?, os_info=?,
                     disk_info=?, system_summary=?
                 WHERE name=?
             ''', (
-                machine.ip_address, machine.port, datetime.now().isoformat(),
-                json.dumps(machine.cpu_info) if machine.cpu_info else None,
-                json.dumps(machine.memory_info) if machine.memory_info else None,
-                json.dumps(machine.gpu_info) if machine.gpu_info else None,
-                json.dumps(machine.os_info) if machine.os_info else None,
-                json.dumps(machine.disk_info) if machine.disk_info else None,
-                json.dumps(machine.system_summary) if machine.system_summary else None,
-                machine.name
+                client.ip_address, client.port, datetime.now().isoformat(),
+                json.dumps(client.cpu_info) if client.cpu_info else None,
+                json.dumps(client.memory_info) if client.memory_info else None,
+                json.dumps(client.gpu_info) if client.gpu_info else None,
+                json.dumps(client.os_info) if client.os_info else None,
+                json.dumps(client.disk_info) if client.disk_info else None,
+                json.dumps(client.system_summary) if client.system_summary else None,
+                client.name
             ))
             conn.commit()
-            logger.info(f"Updated machine config: {machine.name} ({machine.ip_address})")
+            logger.info(f"Updated client config: {client.name} ({client.ip_address})")
 
-    def get_machine_by_ip(self, ip_address: str) -> Optional[Machine]:
-        """Get machine by IP address (for backward compatibility, not recommended as primary method)"""
+    def get_client_by_ip(self, ip_address: str) -> Optional[Client]:
+        """Get client by IP address (for backward compatibility, not recommended as primary method)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM machines WHERE ip_address = ?', (ip_address,))
+            cursor.execute('SELECT * FROM clients WHERE ip_address = ?', (ip_address,))
             row = cursor.fetchone()
             if row:
-                return self._row_to_machine(row)
+                return self._row_to_client(row)
             return None
 
-    def get_machine_by_name(self, machine_name: str) -> Optional[Machine]:
-        """Get machine by name (primary method - machine names are unique)"""
+    def get_client_by_name(self, client_name: str) -> Optional[Client]:
+        """Get client by name (primary method - client names are unique)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM machines WHERE name = ?', (machine_name,))
+            cursor.execute('SELECT * FROM clients WHERE name = ?', (client_name,))
             row = cursor.fetchone()
             if row:
-                return self._row_to_machine(row)
+                return self._row_to_client(row)
             return None
 
-    def get_all_machines(self) -> List[Machine]:
-        """Get all machines with computed status"""
+    def get_all_clients(self) -> List[Client]:
+        """Get all clients with computed status"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM machines')
+            cursor.execute('SELECT * FROM clients')
             rows = cursor.fetchall()
-            machines = [self._row_to_machine(row) for row in rows]
+            clients = [self._row_to_client(row) for row in rows]
             
             # Update status based on heartbeat timing
             current_time = datetime.now()
             from common.config import Config
-            offline_threshold = timedelta(seconds=Config.MACHINE_TIMEOUT)  # Use configured timeout for offline detection
+            offline_threshold = timedelta(seconds=Config.CLIENT_TIMEOUT)  # Use configured timeout for offline detection
             
-            for machine in machines:
-                if machine.last_heartbeat is None:
+            for client in clients:
+                if client.last_heartbeat is None:
                     # Never sent heartbeat, mark as offline
-                    machine.status = MachineStatus.OFFLINE
+                    client.status = ClientStatus.OFFLINE
                 else:
-                    time_since_heartbeat = current_time - machine.last_heartbeat
+                    time_since_heartbeat = current_time - client.last_heartbeat
                     if time_since_heartbeat > offline_threshold:
-                        machine.status = MachineStatus.OFFLINE
-                    elif machine.status == MachineStatus.OFFLINE:
+                        client.status = ClientStatus.OFFLINE
+                    elif client.status == ClientStatus.OFFLINE:
                         # If previously offline but within threshold, mark as online
-                        machine.status = MachineStatus.ONLINE
+                        client.status = ClientStatus.ONLINE
             
-            return machines
+            return clients
 
-    def get_online_machines(self) -> List[Machine]:
-        """Get Online Machines"""
+    def get_online_clients(self) -> List[Client]:
+        """Get Online clients"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM machines
+                SELECT * FROM clients
                 WHERE status = 'online'
                 ORDER BY last_heartbeat DESC
             ''')
             rows = cursor.fetchall()
-            return [self._row_to_machine(row) for row in rows]
+            return [self._row_to_client(row) for row in rows]
 
     # Task execution related operations
     def create_task_execution(self, execution: TaskExecution) -> int:
@@ -562,10 +679,10 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO task_executions
-                (task_id, machine_name, started_at, status)
+                (task_id, client_name, started_at, status)
                 VALUES (?, ?, ?, ?)
             ''', (
-                execution.task_id, execution.machine_name,
+                execution.task_id, execution.client_name,
                 datetime.now().isoformat(), execution.status.value
             ))
             execution_id = cursor.lastrowid
@@ -606,11 +723,11 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO subtask_executions
-                (task_id, subtask_name, subtask_order, target_machine, started_at, status)
+                (task_id, subtask_name, subtask_order, target_client, started_at, status)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 execution.task_id, execution.subtask_name, execution.subtask_order,
-                execution.target_machine, datetime.now().isoformat(), execution.status.value
+                execution.target_client, datetime.now().isoformat(), execution.status.value
             ))
             execution_id = cursor.lastrowid
             conn.commit()
@@ -643,15 +760,15 @@ class Database:
             rows = cursor.fetchall()
             return [self._row_to_subtask_execution(row) for row in rows]
 
-    def get_subtask_executions_by_machine(self, task_id: int, machine_name: str) -> List[SubtaskExecution]:
-        """Get subtask execution records for a specific task and machine"""
+    def get_subtask_executions_by_client(self, task_id: int, client_name: str) -> List[SubtaskExecution]:
+        """Get subtask execution records for a specific task and client"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT * FROM subtask_executions
-                WHERE task_id = ? AND target_machine = ?
+                WHERE task_id = ? AND target_client = ?
                 ORDER BY subtask_order ASC, started_at ASC
-            ''', (task_id, machine_name))
+            ''', (task_id, client_name))
             rows = cursor.fetchall()
             return [self._row_to_subtask_execution(row) for row in rows]
 
@@ -672,7 +789,7 @@ class Database:
             except (KeyError, IndexError):
                 return default
 
-        target_machines = safe_json_parse(safe_get('target_machines'), [])
+        target_clients = safe_json_parse(safe_get('target_clients'), [])
         commands = safe_json_parse(safe_get('commands'), [])
         execution_order = safe_json_parse(safe_get('execution_order'), [])
 
@@ -683,7 +800,7 @@ class Database:
             try:
                 subtask = SubtaskDefinition(
                     name=subtask_dict.get('name', ''),
-                    target_machine=subtask_dict.get('target_machine', ''),
+                    target_client=subtask_dict.get('target_client', ''),
                     order=subtask_dict.get('order', 0),
                     args=subtask_dict.get('args', []),
                     kwargs=subtask_dict.get('kwargs', {}),
@@ -699,13 +816,13 @@ class Database:
             id=row['id'],
             name=row['name'],
             command=row['command'],
-            target_machines=target_machines,
+            target_clients=target_clients,
             commands=commands,
             execution_order=execution_order,
             subtasks=subtasks,
             schedule_time=parse_datetime(row['schedule_time']),
             cron_expression=row['cron_expression'],
-            target_machine=row['target_machine'],
+            target_client=row['target_client'],
             status=TaskStatus(row['status']),
             created_at=parse_datetime(row['created_at']),
             started_at=parse_datetime(row['started_at']),
@@ -713,13 +830,15 @@ class Database:
             result=row['result'],
             error_message=row['error_message'],
             retry_count=row['retry_count'],
-            max_retries=row['max_retries']
+            max_retries=row['max_retries'],
+            send_email=bool(safe_get('send_email', 0)),  # Convert integer back to boolean
+            email_recipients=safe_get('email_recipients')
         )
 
         return task
 
-    def _row_to_machine(self, row) -> Machine:
-        """Convert database row to Machine object"""# Parse system information JSON fields
+    def _row_to_client(self, row) -> Client:
+        """Convert database row to client object"""# Parse system information JSON fields
         def safe_json_parse(field_value):
             try:
                 return json.loads(field_value) if field_value else None
@@ -733,14 +852,15 @@ class Database:
             except (KeyError, IndexError):
                 return default
 
-        return Machine(
+        return Client(
             name=row['name'],
             ip_address=row['ip_address'],
             port=row['port'],
-            status=MachineStatus(row['status']),
+            status=ClientStatus(row['status']),
             last_heartbeat=parse_datetime(row['last_heartbeat']),
             last_config_update=parse_datetime(safe_get('last_config_update')),
             current_task_id=safe_get('current_task_id'),
+            current_subtask_id=safe_get('current_subtask_id'),
             cpu_info=safe_json_parse(safe_get('cpu_info')),
             memory_info=safe_json_parse(safe_get('memory_info')),
             gpu_info=safe_json_parse(safe_get('gpu_info')),
@@ -838,7 +958,7 @@ class Database:
         return TaskExecution(
             id=row['id'],
             task_id=row['task_id'],
-            machine_name=row['machine_name'],
+            client_name=row['client_name'],
             started_at=parse_datetime(row['started_at']),
             completed_at=parse_datetime(row['completed_at']),
             status=TaskStatus(row['status']),
@@ -854,7 +974,7 @@ class Database:
             task_id=row['task_id'],
             subtask_name=row['subtask_name'],
             subtask_order=row['subtask_order'],
-            target_machine=row['target_machine'],
+            target_client=row['target_client'],
             started_at=parse_datetime(row['started_at']),
             completed_at=parse_datetime(row['completed_at']),
             status=TaskStatus(row['status']),
@@ -863,47 +983,47 @@ class Database:
             execution_time=row['execution_time']
         )
 
-    def delete_machine(self, machine_name: str) -> bool:
-        """Delete machine by name (primary method - machine names are unique)"""
+    def delete_client(self, client_name: str) -> bool:
+        """Delete client by name (primary method - client names are unique)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            # Check if machine exists and get its details
-            cursor.execute('SELECT ip_address FROM machines WHERE name = ?', (machine_name,))
+            # Check if client exists and get its details
+            cursor.execute('SELECT ip_address FROM clients WHERE name = ?', (client_name,))
             result = cursor.fetchone()
             if not result:
                 return False
 
             ip_address = result[0]
 
-            # Delete machine from database
-            cursor.execute('DELETE FROM machines WHERE name = ?', (machine_name,))
+            # Delete client from database
+            cursor.execute('DELETE FROM clients WHERE name = ?', (client_name,))
             deleted_count = cursor.rowcount
             conn.commit()
 
             if deleted_count > 0:
-                logger.info(f"Deleted machine: {machine_name} ({ip_address})")
+                logger.info(f"Deleted client: {client_name} ({ip_address})")
                 return True
             return False
 
-    def delete_machine_by_ip(self, ip_address: str) -> bool:
-        """Delete machine by IP address (for backward compatibility, not recommended)"""
+    def delete_client_by_ip(self, ip_address: str) -> bool:
+        """Delete client by IP address (for backward compatibility, not recommended)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            # Check if machine exists and get its name
-            cursor.execute('SELECT name FROM machines WHERE ip_address = ?', (ip_address,))
+            # Check if client exists and get its name
+            cursor.execute('SELECT name FROM clients WHERE ip_address = ?', (ip_address,))
             result = cursor.fetchone()
             if not result:
                 return False
 
-            machine_name = result[0]
+            client_name = result[0]
 
-            # Delete machine from database using IP (not recommended but kept for compatibility)
-            cursor.execute('DELETE FROM machines WHERE ip_address = ?', (ip_address,))
+            # Delete client from database using IP (not recommended but kept for compatibility)
+            cursor.execute('DELETE FROM clients WHERE ip_address = ?', (ip_address,))
             deleted_count = cursor.rowcount
             conn.commit()
 
             if deleted_count > 0:
-                logger.info(f"Deleted machine: {machine_name} ({ip_address})")
+                logger.info(f"Deleted client: {client_name} ({ip_address})")
                 return True
             return False
 
@@ -914,10 +1034,10 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO task_executions
-                (task_id, machine_name, started_at, status)
+                (task_id, client_name, started_at, status)
                 VALUES (?, ?, ?, ?)
             ''', (
-                execution.task_id, execution.machine_name,
+                execution.task_id, execution.client_name,
                 datetime.now().isoformat(), execution.status.value
             ))
             execution_id = cursor.lastrowid
@@ -958,11 +1078,11 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO subtask_executions
-                (task_id, subtask_name, subtask_order, target_machine, started_at, status)
+                (task_id, subtask_name, subtask_order, target_client, started_at, status)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 execution.task_id, execution.subtask_name, execution.subtask_order,
-                execution.target_machine, datetime.now().isoformat(), execution.status.value
+                execution.target_client, datetime.now().isoformat(), execution.status.value
             ))
             execution_id = cursor.lastrowid
             conn.commit()
@@ -995,15 +1115,15 @@ class Database:
             rows = cursor.fetchall()
             return [self._row_to_subtask_execution(row) for row in rows]
 
-    def get_subtask_executions_by_machine(self, task_id: int, machine_name: str) -> List[SubtaskExecution]:
-        """Get subtask execution records for a specific task and machine"""
+    def get_subtask_executions_by_client(self, task_id: int, client_name: str) -> List[SubtaskExecution]:
+        """Get subtask execution records for a specific task and client"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT * FROM subtask_executions
-                WHERE task_id = ? AND target_machine = ?
+                WHERE task_id = ? AND target_client = ?
                 ORDER BY subtask_order ASC, started_at ASC
-            ''', (task_id, machine_name))
+            ''', (task_id, client_name))
             rows = cursor.fetchall()
             return [self._row_to_subtask_execution(row) for row in rows]
 
@@ -1024,7 +1144,7 @@ class Database:
             except (KeyError, IndexError):
                 return default
 
-        target_machines = safe_json_parse(safe_get('target_machines'), [])
+        target_clients = safe_json_parse(safe_get('target_clients'), [])
         commands = safe_json_parse(safe_get('commands'), [])
         execution_order = safe_json_parse(safe_get('execution_order'), [])
 
@@ -1035,7 +1155,7 @@ class Database:
             try:
                 subtask = SubtaskDefinition(
                     name=subtask_dict.get('name', ''),
-                    target_machine=subtask_dict.get('target_machine', ''),
+                    target_client=subtask_dict.get('target_client', ''),
                     order=subtask_dict.get('order', 0),
                     args=subtask_dict.get('args', []),
                     kwargs=subtask_dict.get('kwargs', {}),
@@ -1051,13 +1171,13 @@ class Database:
             id=row['id'],
             name=row['name'],
             command=row['command'],
-            target_machines=target_machines,
+            target_clients=target_clients,
             commands=commands,
             execution_order=execution_order,
             subtasks=subtasks,
             schedule_time=parse_datetime(row['schedule_time']),
             cron_expression=row['cron_expression'],
-            target_machine=row['target_machine'],
+            target_client=row['target_client'],
             status=TaskStatus(row['status']),
             created_at=parse_datetime(row['created_at']),
             started_at=parse_datetime(row['started_at']),
@@ -1065,13 +1185,15 @@ class Database:
             result=row['result'],
             error_message=row['error_message'],
             retry_count=row['retry_count'],
-            max_retries=row['max_retries']
+            max_retries=row['max_retries'],
+            send_email=bool(safe_get('send_email', 0)),  # Convert integer back to boolean
+            email_recipients=safe_get('email_recipients')
         )
 
         return task
 
-    def _row_to_machine(self, row) -> Machine:
-        """Convert database row to Machine object"""# Parse system information JSON fields
+    def _row_to_client(self, row) -> Client:
+        """Convert database row to client object"""# Parse system information JSON fields
         def safe_json_parse(field_value):
             try:
                 return json.loads(field_value) if field_value else None
@@ -1085,14 +1207,15 @@ class Database:
             except (KeyError, IndexError):
                 return default
 
-        return Machine(
+        return Client(
             name=row['name'],
             ip_address=row['ip_address'],
             port=row['port'],
-            status=MachineStatus(row['status']),
+            status=ClientStatus(row['status']),
             last_heartbeat=parse_datetime(row['last_heartbeat']),
             last_config_update=parse_datetime(safe_get('last_config_update')),
             current_task_id=safe_get('current_task_id'),
+            current_subtask_id=safe_get('current_subtask_id'),
             cpu_info=safe_json_parse(safe_get('cpu_info')),
             memory_info=safe_json_parse(safe_get('memory_info')),
             gpu_info=safe_json_parse(safe_get('gpu_info')),
@@ -1100,4 +1223,228 @@ class Database:
             disk_info=safe_json_parse(safe_get('disk_info')),
             system_summary=safe_json_parse(safe_get('system_summary'))
         )
+
+
+    # Client aliases for backward compatibility and cleaner terminology
+    # These provide cleaner 'client' terminology while maintaining the same functionality
+    
+    def register_client(self, client: Client):
+        "Register client (alias for register_client)"
+        return self.register_client(client)
+    
+    def get_client_by_name(self, client_name: str) -> Optional[Client]:
+        "Get client by name (alias for get_client_by_name)"
+        return self.get_client_by_name(client_name)
+    
+    def get_client_by_ip(self, ip_address: str) -> Optional[Client]:
+        "Get client by IP (alias for get_client_by_ip)"
+        return self.get_client_by_ip(ip_address)
+    
+    def get_all_clients(self) -> List[Client]:
+        "Get all clients (alias for get_all_clients)"
+        return self.get_all_clients()
+    
+    def get_online_clients(self) -> List[Client]:
+        "Get online clients (alias for get_online_clients)"
+        return self.get_online_clients()
+    
+    def client_name_exists(self, client_name: str) -> bool:
+        "Check if client name exists (alias for client_name_exists)"
+        return self.client_name_exists(client_name)
+    
+    def get_client_names(self) -> List[str]:
+        "Get client names (alias for get_client_names)"
+        return self.get_client_names()
+    
+    def get_online_client_names(self) -> List[str]:
+        "Get online client names (alias for get_online_client_names)"
+        return self.get_online_client_names()
+    
+    def update_client_heartbeat(self, ip_address: str, status: ClientStatus = None):
+        "Update client heartbeat by IP (alias for update_client_heartbeat)"
+        return self.update_client_heartbeat(ip_address, status)
+    
+    def update_client_heartbeat_by_name(self, client_name: str, status: ClientStatus = None):
+        "Update client heartbeat by name (alias for update_client_heartbeat_by_name)"
+        return self.update_client_heartbeat_by_name(client_name, status)
+    
+    def update_client_config(self, client: Client):
+        "Update client config (alias for update_client_config)"
+        return self.update_client_config(client)
+    
+    def delete_client(self, client_name: str) -> bool:
+        "Delete client (alias for delete_client)"
+        return self.delete_client(client_name)
+    
+    def delete_client_by_ip(self, ip_address: str) -> bool:
+        "Delete client by IP (alias for delete_client_by_ip)"
+        return self.delete_client_by_ip(ip_address)
+    
+    def get_subtask_executions_by_client(self, task_id: int, client_name: str) -> List[SubtaskExecution]:
+        "Get subtask executions by client (alias for get_subtask_executions_by_client)"
+        return self.get_subtask_executions_by_client(task_id, client_name)
+
+    # Additional methods for result collection system
+    def get_subtask_executions_filtered(self, task_id: int, subtask_name: str = None, client_name: str = None) -> List[SubtaskExecution]:
+        """
+        Get subtask execution records with optional filtering
+        
+        Args:
+            task_id: ID of the task
+            subtask_name: Optional subtask name filter
+            client_name: Optional client name filter
+            
+        Returns:
+            List of SubtaskExecution objects
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = 'SELECT * FROM subtask_executions WHERE task_id = ?'
+            params = [task_id]
+            
+            if subtask_name:
+                query += ' AND subtask_name = ?'
+                params.append(subtask_name)
+            
+            if client_name:
+                query += ' AND target_client = ?'
+                params.append(client_name)
+            
+            query += ' ORDER BY subtask_order ASC, started_at ASC'
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [self._row_to_subtask_execution(row) for row in rows]
+
+    def update_task_status(self, task_id: int, status: TaskStatus, completed_at: datetime = None, 
+                          result: str = None, error_message: str = None):
+        """
+        Update task status and completion information
+        
+        Args:
+            task_id: ID of the task to update
+            status: New task status
+            completed_at: Completion timestamp
+            result: Task result
+            error_message: Error message if task failed
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            update_fields = ['status = ?']
+            params = [status.value]
+            
+            if completed_at:
+                update_fields.append('completed_at = ?')
+                params.append(completed_at.isoformat())
+            
+            if result:
+                update_fields.append('result = ?')
+                params.append(result)
+            
+            if error_message:
+                update_fields.append('error_message = ?')
+                params.append(error_message)
+            
+            query = f'UPDATE tasks SET {", ".join(update_fields)} WHERE id = ?'
+            params.append(task_id)
+            
+            cursor.execute(query, params)
+            conn.commit()
+            
+            logger.debug(f"Updated task {task_id} status to {status.value}")
+            
+            # Emit real-time update
+            if self.socketio:
+                self.socketio.emit('task_status_updated', {
+                    'task_id': task_id,
+                    'status': status.value,
+                    'completed_at': completed_at.isoformat() if completed_at else None
+                })
+
+    def delete_pending_subtask_executions(self, task_id: int, subtask_name: str, target_client: str):
+        """Delete pending subtask execution records for a specific subtask"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Only delete records that are pending (haven't started execution)
+                cursor.execute('''
+                    DELETE FROM subtask_executions 
+                    WHERE task_id = ? AND subtask_name = ? AND target_client = ? AND status = ?
+                ''', (task_id, subtask_name, target_client, TaskStatus.PENDING.value))
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                
+                logger.info(f"Deleted {deleted_count} pending subtask execution records for task {task_id}, subtask '{subtask_name}', client '{target_client}'")
+                return deleted_count > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to delete pending subtask executions: {e}")
+            return False
+
+    def update_client_current_task(self, client_name: str, task_id: int = None, subtask_id: str = None):
+        """Update the current task and subtask being executed by a client"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    UPDATE clients 
+                    SET current_task_id = ?, current_subtask_id = ? 
+                    WHERE name = ?
+                ''', (task_id, subtask_id, client_name))
+                
+                if cursor.rowcount == 0:
+                    logger.warning(f"No client found with name: {client_name}")
+                    return False
+                
+                conn.commit()
+                
+                # Log the update
+                if task_id and subtask_id:
+                    logger.info(f"Client '{client_name}' started executing task {task_id}, subtask '{subtask_id}'")
+                elif task_id:
+                    logger.info(f"Client '{client_name}' started executing task {task_id}")
+                else:
+                    logger.info(f"Client '{client_name}' finished executing tasks")
+                
+                # Emit real-time update
+                if self.socketio:
+                    self.socketio.emit('client_task_updated', {
+                        'client_name': client_name,
+                        'task_id': task_id,
+                        'subtask_id': subtask_id
+                    })
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to update client current task: {e}")
+            return False
+
+    def _migrate_subtask_ids(self, cursor):
+        """Add subtask_id field to subtask_executions table and current_subtask_id to clients table"""
+        try:
+            # Check if subtask_id column exists in subtask_executions table
+            cursor.execute("PRAGMA table_info(subtask_executions)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'subtask_id' not in columns:
+                cursor.execute("ALTER TABLE subtask_executions ADD COLUMN subtask_id TEXT")
+                logger.info("Added subtask_id column to subtask_executions table")
+            
+            # Check if current_subtask_id column exists in clients table
+            cursor.execute("PRAGMA table_info(clients)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'current_subtask_id' not in columns:
+                cursor.execute("ALTER TABLE clients ADD COLUMN current_subtask_id TEXT")
+                logger.info("Added current_subtask_id column to clients table")
+                
+        except Exception as e:
+            logger.error(f"Failed to migrate subtask IDs: {e}")
+            raise
 

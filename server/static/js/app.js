@@ -53,7 +53,7 @@ function initializeSocket() {
     });
     
     socket.on('task_started', function(data) {
-        showNotification('Taskstart execute', `Task ID: ${data.task_id} started executing on machine ${data.machine_name}`, 'info');
+        showNotification('Task start execute', `Task ID: ${data.task_id} started executing on client ${data.client_name}`, 'info');
         if (typeof refreshTasks === 'function') {
             refreshTasks();
         }
@@ -68,38 +68,45 @@ function initializeSocket() {
         }
     });
     
-    socket.on('machine_registered', function(data) {
-        showNotification('Machine Registered', `Machine ${data.name} registered`, 'success');
-        if (typeof refreshMachines === 'function') {
-            refreshMachines();
+    socket.on('client_registered', function(data) {
+        showNotification('Client Registered', `Client ${data.name} registered`, 'success');
+        if (typeof refreshClients === 'function') {
+            refreshClients();
         }
     });
     
-    socket.on('machine_unregistered', function(data) {
-        showNotification('Machine Unregistered', `Machine ${data.machine_name} has been unregistered`, 'warning');
-        if (typeof refreshMachines === 'function') {
-            refreshMachines();
+    socket.on('client_unregistered', function(data) {
+        showNotification('Client Unregistered', `Client ${data.client_name} has been unregistered`, 'warning');
+        if (typeof refreshClients === 'function') {
+            refreshClients();
         }
     });
     
-    socket.on('machine_config_updated', function(data) {
-        console.log('Machine config updated:', data);
-        if (typeof refreshMachines === 'function') {
-            refreshMachines();
+    socket.on('client_config_updated', function(data) {
+        console.log('Client config updated:', data);
+        if (typeof refreshClients === 'function') {
+            refreshClients();
         }
     });
     
-    socket.on('machine_heartbeat', function(data) {
-        console.log('Machine heartbeat:', data);
-        if (typeof updateMachineStatus === 'function') {
-            updateMachineStatus(data);
+    socket.on('client_heartbeat', function(data) {
+        console.log('Client heartbeat:', data);
+        if (typeof updateClientStatus === 'function') {
+            updateClientStatus(data);
         }
     });
     
-    socket.on('machine_offline', function(data) {
-        showNotification('Machine Offline', `Machine ${data.machine_name} went offline`, 'warning');
-        if (typeof refreshMachines === 'function') {
-            refreshMachines();
+    socket.on('client_offline', function(data) {
+        showNotification('Client Offline', `Client ${data.client_name} went offline`, 'warning');
+        if (typeof refreshClients === 'function') {
+            refreshClients();
+        }
+    });
+    
+    socket.on('client_deleted', function(data) {
+        showNotification('Client Deleted', `Client ${data.client_name} has been deleted`, 'warning');
+        if (typeof refreshClients === 'function') {
+            refreshClients();
         }
     });
 }
@@ -282,16 +289,16 @@ function getStatusBadge(status) {
     return `<span class=status-badge ${statusInfo.class}>${statusInfo.text}</span>`;
 }
 
-// Get Machine StatusTagsHTML
-function getMachineStatusBadge(status) {
+// Get Client StatusTagsHTML
+function getClientStatusBadge(status) {
     const statusMap = {
-        'online': { class: 'machine-online', text: 'Online' },
-        'offline': { class: 'machine-offline', text: 'Offline' },
-        'busy': { class: 'machine-busy', text: 'Busy' }
+        'online': { class: 'client-online', text: 'Online' },
+        'offline': { class: 'client-offline', text: 'Offline' },
+        'busy': { class: 'client-busy', text: 'Busy' }
     };
     
-    const statusInfo = statusMap[status] || { class: 'machine-offline', text: status };
-    return `<span class=machine-status ${statusInfo.class}>${statusInfo.text}</span>`;
+    const statusInfo = statusMap[status] || { class: 'client-offline', text: status };
+    return `<span class=client-status ${statusInfo.class}>${statusInfo.text}</span>`;
 }
 
 // Confirmdialog

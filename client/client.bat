@@ -339,7 +339,7 @@ echo.
 echo Starting client process ^(Direct Mode^)...
 echo Press Ctrl+C to stop the client
 echo.
-echo Machine name and server URL will be auto-detected
+echo Client name and server URL will be auto-detected
 cd ..
 %PYTHON_EXE% -m client.client_runner
 cd client

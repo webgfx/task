@@ -16,6 +16,7 @@ from common.utils import setup_logging
 from server.database import Database
 from server.api import create_api_blueprint
 from server.scheduler import TaskScheduler
+from server.result_collector import TaskResultCollector, create_default_config
 
 # Setup logging
 setup_logging(Config.LOG_LEVEL, Config.LOG_FILE)
@@ -88,8 +89,46 @@ def create_app():
     database = Database(Config.DATABASE_PATH, socketio)
     app.database = database
     
-    # Register API blueprint
-    api_bp = create_api_blueprint(database, socketio)
+    # Initialize result collector
+    try:
+        # Try to load config from email_config.py, otherwise use defaults
+        result_config = create_default_config()
+        
+        # Try to load email configuration from file
+        try:
+            import importlib.util
+            config_path = os.path.join(os.path.dirname(__file__), 'email_config.py')
+            if os.path.exists(config_path):
+                spec = importlib.util.spec_from_file_location("email_config", config_path)
+                email_config_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(email_config_module)
+                
+                if hasattr(email_config_module, 'EMAIL_CONFIG'):
+                    result_config['email'] = email_config_module.EMAIL_CONFIG
+                    logger.info("Loaded email configuration from email_config.py")
+                
+                if hasattr(email_config_module, 'REPORT_CONFIG'):
+                    result_config['reports'] = email_config_module.REPORT_CONFIG
+                    logger.info("Loaded report configuration from email_config.py")
+                    
+                if hasattr(email_config_module, 'FEATURES'):
+                    result_config['features'] = email_config_module.FEATURES
+                    logger.info("Loaded feature configuration from email_config.py")
+            else:
+                logger.info("email_config.py not found, using default configuration")
+                logger.info("To enable email notifications, copy email_config_template.py to email_config.py and configure it")
+        except Exception as e:
+            logger.warning(f"Failed to load email configuration: {e}")
+        
+        result_collector = TaskResultCollector(database, socketio, result_config)
+        app.result_collector = result_collector
+        logger.info("Result collector initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize result collector: {e}")
+        result_collector = None
+    
+    # Register API blueprint with result collector
+    api_bp = create_api_blueprint(database, socketio, result_collector)
     app.register_blueprint(api_bp, url_prefix='/api')
     
     # Initialize task scheduler
@@ -107,10 +146,10 @@ def create_app():
         """Task management page"""
         return render_template('tasks.html')
     
-    @app.route('/machines')
-    def machines_page():
+    @app.route('/clients')
+    def clients_page():
         """Client management page"""
-        return render_template('machines.html')
+        return render_template('clients.html')
     
     @app.route('/logs')
     def logs_page():
@@ -137,3 +176,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -39,7 +39,7 @@ class ClientInstaller:
         os.makedirs(self.log_dir, exist_ok=True)
         os.makedirs(self.work_dir, exist_ok=True)
     
-    def install(self, server_url, machine_name, **kwargs):
+    def install(self, server_url, client_name, **kwargs):
         """Install client with configuration"""
         try:
             logger.info(f"Installing task client to: {self.install_dir}")
@@ -47,7 +47,7 @@ class ClientInstaller:
             # Create configuration
             config = {
                 'server_url': server_url,
-                'machine_name': machine_name,
+                'client_name': client_name,
                 # Note: heartbeat_interval is now configured in common.cfg
                 'config_update_interval': kwargs.get('config_update_interval', 600),
                 'log_level': kwargs.get('log_level', 'INFO'),
@@ -264,7 +264,7 @@ echo "Task client stopped"
             minimal_cfg_content = f"""# Task Client Configuration File
 [DEFAULT]
 server_url = http://localhost:5000
-machine_name = 
+client_name = 
 # Note: heartbeat_interval is now configured in common.cfg
 config_update_interval = {kwargs.get('config_update_interval', 600)}
 log_level = {kwargs.get('log_level', 'INFO')}
@@ -368,8 +368,8 @@ def main():
                        help='Action to perform')
     parser.add_argument('--server-url', default='http://localhost:5000',
                        help='Server URL (required for install)')
-    parser.add_argument('--machine-name', 
-                       help='Machine name (required for install)')
+    parser.add_argument('--client-name', 
+                       help='Client name (required for install)')
     parser.add_argument('--install-dir',
                        help='Installation directory (default: ~/.task_client)')
     parser.add_argument('--service-name', default='task-client',
@@ -396,13 +396,13 @@ def main():
     
     try:
         if args.action == 'install':
-            if not args.machine_name:
-                print("Error: --machine-name is required for installation")
+            if not args.client_name:
+                print("Error: --client-name is required for installation")
                 sys.exit(1)
             
             success = installer.install(
                 server_url=args.server_url,
-                machine_name=args.machine_name,
+                client_name=args.client_name,
                 heartbeat_interval=args.heartbeat_interval,
                 config_update_interval=args.config_update_interval,
                 log_level=args.log_level,
@@ -459,7 +459,7 @@ def main():
                 info = installer.get_installation_info()
                 if info:
                     print(f"  Location: {info.get('install_dir', 'Unknown')}")
-                    print(f"  Machine Name: {info.get('machine_name', 'Unknown')}")
+                    print(f"  Client Name: {info.get('client_name', 'Unknown')}")
                     print(f"  Server URL: {info.get('server_url', 'Unknown')}")
             else:
                 print("❌ Client is not installed")
@@ -476,3 +476,4 @@ def main():
 if __name__ == '__main__':
     from datetime import datetime
     main()
+

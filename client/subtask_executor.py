@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 class SubtaskExecutor:
     """Executes subtasks and reports results to server"""
     
-    def __init__(self, server_url: str, machine_name: str):
+    def __init__(self, server_url: str, client_name: str):
         self.server_url = server_url
-        self.machine_name = machine_name
+        self.client_name = client_name
         self.task_log_folder = None
         self.task_logger = None
         
@@ -90,7 +90,7 @@ class SubtaskExecutor:
         
     def execute_task_subtasks(self, task_id: int, task_name: str, subtasks: List[SubtaskDefinition]) -> Dict[str, Any]:
         """
-        Execute all subtasks for this machine in the given task
+        Execute all subtasks for this client in the given task
         
         Args:
             task_id: ID of the task
@@ -109,26 +109,26 @@ class SubtaskExecutor:
         self.task_logger.info(f"=== TASK EXECUTION STARTED ===")
         self.task_logger.info(f"Task ID: {task_id}")
         self.task_logger.info(f"Task Name: {task_name}")
-        self.task_logger.info(f"Machine: {self.machine_name}")
+        self.task_logger.info(f"client: {self.client_name}")
         self.task_logger.info(f"Start Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         self.task_logger.info(f"Log Folder: {self.task_log_folder}")
         
-        # Filter subtasks for this machine
-        my_subtasks = [s for s in subtasks if s.target_machine == self.machine_name]
+        # Filter subtasks for this client
+        my_subtasks = [s for s in subtasks if s.target_client == self.client_name]
         
         if not my_subtasks:
-            self.task_logger.info(f"No subtasks assigned to machine {self.machine_name}")
-            logger.info(f"No subtasks assigned to machine {self.machine_name} for task {task_id}")
+            self.task_logger.info(f"No subtasks assigned to client {self.client_name}")
+            logger.info(f"No subtasks assigned to client {self.client_name} for task {task_id}")
             return {
                 'success': True,
                 'executed_count': 0,
-                'message': 'No subtasks assigned to this machine'
+                'message': 'No subtasks assigned to this client'
             }
         
         # Sort by order
         my_subtasks.sort(key=lambda x: x.order)
         
-        self.task_logger.info(f"Found {len(my_subtasks)} subtasks assigned to this machine")
+        self.task_logger.info(f"Found {len(my_subtasks)} subtasks assigned to this client")
         for i, subtask in enumerate(my_subtasks):
             self.task_logger.info(f"  {i+1}. {subtask.name} (order: {subtask.order})")
         
@@ -221,7 +221,7 @@ class SubtaskExecutor:
             'task_info': {
                 'id': task_id,
                 'name': task_name,
-                'machine': self.machine_name
+                'client': self.client_name
             },
             'execution_info': {
                 'start_time': start_time.isoformat(),
@@ -261,7 +261,7 @@ class SubtaskExecutor:
         if self.task_logger:
             self.task_logger.info(f"Executing subtask: {subtask.name}")
             self.task_logger.info(f"  Order: {subtask.order}")
-            self.task_logger.info(f"  Target machine: {subtask.target_machine}")
+            self.task_logger.info(f"  Target client: {subtask.target_client}")
             if subtask.args:
                 self.task_logger.info(f"  Arguments: {subtask.args}")
             if subtask.kwargs:
@@ -355,13 +355,17 @@ class SubtaskExecutor:
         try:
             data = {
                 'subtask_name': subtask.name,
-                'target_machine': self.machine_name,
+                'target_client': self.client_name,
                 'status': status.value,
                 'order': subtask.order
             }
             
             if result is not None:
-                data['result'] = json.dumps(result) if not isinstance(result, str) else result
+                # Ensure result is properly serialized
+                if isinstance(result, str):
+                    data['result'] = result
+                else:
+                    data['result'] = json.dumps(result, ensure_ascii=False, default=str)
             
             if error_message:
                 data['error_message'] = error_message
@@ -375,11 +379,17 @@ class SubtaskExecutor:
             
             if response.status_code == 200:
                 logger.debug(f"Reported subtask {subtask.name} status: {status.value}")
+                if self.task_logger:
+                    self.task_logger.info(f"Successfully reported subtask {subtask.name} status to server")
             else:
                 logger.warning(f"Failed to report subtask status: {response.status_code} - {response.text}")
+                if self.task_logger:
+                    self.task_logger.warning(f"Failed to report subtask status: {response.status_code} - {response.text}")
                 
         except Exception as e:
             logger.error(f"Error reporting subtask status: {e}")
+            if self.task_logger:
+                self.task_logger.error(f"Error reporting subtask status: {e}")
     
     def get_available_subtasks(self) -> List[str]:
         """Get list of available subtasks on this client"""
@@ -403,8 +413,8 @@ class SubtaskExecutor:
 class TaskSubtaskAdapter:
     """Adapter to handle both legacy tasks and new subtask-based tasks"""
     
-    def __init__(self, server_url: str, machine_name: str):
-        self.subtask_executor = SubtaskExecutor(server_url, machine_name)
+    def __init__(self, server_url: str, client_name: str):
+        self.subtask_executor = SubtaskExecutor(server_url, client_name)
         
         # Import legacy executor
         from client.executor import TaskExecutor
@@ -438,7 +448,7 @@ class TaskSubtaskAdapter:
         for subtask_data in subtasks_data:
             subtask = SubtaskDefinition(
                 name=subtask_data.get('name', ''),
-                target_machine=subtask_data.get('target_machine', ''),
+                target_client=subtask_data.get('target_client', ''),
                 order=subtask_data.get('order', 0),
                 args=subtask_data.get('args', []),
                 kwargs=subtask_data.get('kwargs', {}),
@@ -461,3 +471,4 @@ class TaskSubtaskAdapter:
         
         # Use legacy executor
         return self.legacy_executor.execute(command)
+

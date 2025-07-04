@@ -4,7 +4,7 @@
 
 let dashboardData = {
     tasks: [],
-    machines: []
+    clients: []
 };
 
 // Initialize after page load
@@ -18,20 +18,20 @@ async function initializeDashboard() {
     await loadDashboardData();
     updateStatistics();
     displayRecentTasks();
-    displayMachineStatus();
+    displayClientStatus();
     addLogEntry('systemstarted', 'info');
 }
 
 // Load dashboard data
 async function loadDashboardData() {
     try {
-        const [tasksResponse, machinesResponse] = await Promise.all([
+        const [tasksResponse, clientsResponse] = await Promise.all([
             apiGet('/api/tasks'),
-            apiGet('/api/machines')
+            apiGet('/api/clients')
         ]);
         
         dashboardData.tasks = tasksResponse.data || [];
-        dashboardData.machines = machinesResponse.data || [];
+        dashboardData.clients = clientsResponse.data || [];
         
     } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -42,19 +42,19 @@ async function loadDashboardData() {
 // Update statistics
 function updateStatistics() {
     const tasks = dashboardData.tasks;
-    const machines = dashboardData.machines;
+    const clients = dashboardData.clients;
     
     // Calculate statistics
     const totalTasks = tasks.length;
     const runningTasks = tasks.filter(task => task.status === 'running').length;
     const completedTasks = tasks.filter(task => task.status === 'completed').length;
-    const onlineMachines = machines.filter(machine => machine.status === 'online').length;
+    const onlineClients = clients.filter(client => client.status === 'online').length;
     
     // Update page display
     updateElement('totalTasks', totalTasks);
     updateElement('runningTasks', runningTasks);
     updateElement('completedTasks', completedTasks);
-    updateElement('onlineMachines', onlineMachines);
+    updateElement('onlineClients', onlineClients);
 }
 
 // showRecent Tasks
@@ -78,7 +78,7 @@ function displayRecentTasks() {
                 <div class=task-command>${escapeHtml(task.command.substring(0, 60))}${task.command.length > 60 ? '...' : ''}</div>
                 <div class=task-meta>
                     <span>Created time: ${formatRelativeTime(task.created_at)}</span>
-                    ${task.target_machine ? `<span> • Target Machine: ${task.target_machine}</span>` : ''}
+                    ${task.target_client ? `<span> • Target Client: ${task.target_client}</span>` : ''}
                 </div>
             </div>
             <div class=task-status>
@@ -90,26 +90,26 @@ function displayRecentTasks() {
     container.innerHTML = html;
 }
 
-// showMachine Status
-function displayMachineStatus() {
-    const container = document.getElementById('machineStatus');
+// showClient Status
+function displayClientStatus() {
+    const container = document.getElementById('clientStatus');
     if (!container) return;
     
-    if (dashboardData.machines.length === 0) {
-        container.innerHTML = '<div style=padding: 20px; text-align: center; color: #6c757d;>No machines</div>';
+    if (dashboardData.clients.length === 0) {
+        container.innerHTML = '<div style=padding: 20px; text-align: center; color: #6c757d;>No clients</div>';
         return;
     }
     
-    const html = dashboardData.machines.map(machine => `
-        <div class=machine-card onclick=viewMachineDetail('${machine.name}')>
-            <div class=machine-header>
-                <div class=machine-name>${escapeHtml(machine.name)}</div>
-                ${getMachineStatusBadge(machine.status)}
+    const html = dashboardData.clients.map(client => `
+        <div class=client-card onclick=viewClientDetail('${client.name}')>
+            <div class=client-header>
+                <div class=client-name>${escapeHtml(client.name)}</div>
+                ${getClientStatusBadge(client.status)}
             </div>
-            <div class=machine-info>
-                <div><i class=fas fa-network-wired></i> IP: ${machine.ip_address}:${machine.port}</div>
-                <div><i class=fas fa-heartbeat></i> last heartbeat: ${formatRelativeTime(machine.last_heartbeat)}</div>
-                ${machine.current_task_id ? `<div><i class=fas fa-tasks></i> currentTask: #${machine.current_task_id}</div>` : ''}
+            <div class=client-info>
+                <div><i class=fas fa-network-wired></i> IP: ${client.ip_address}:${client.port}</div>
+                <div><i class=fas fa-heartbeat></i> last heartbeat: ${formatRelativeTime(client.last_heartbeat)}</div>
+                ${client.current_task_id ? `<div><i class=fas fa-tasks></i> currentTask: #${client.current_task_id}</div>` : ''}
             </div>
         </div>
     `).join('');
@@ -155,9 +155,9 @@ function viewTaskDetail(taskId) {
     window.location.href = `/tasks?view=${taskId}`;
 }
 
-// viewMachinedetails
-function viewMachineDetail(machineName) {
-    window.location.href = `/machines?view=${encodeURIComponent(machineName)}`;
+// viewClientdetails
+function viewClientDetail(clientName) {
+    window.location.href = `/clients?view=${encodeURIComponent(clientName)}`;
 }
 
 // Auto refresh data
@@ -166,7 +166,7 @@ function startAutoRefresh() {
         await loadDashboardData();
         updateStatistics();
         displayRecentTasks();
-        displayMachineStatus();
+        displayClientStatus();
     }, 30000); // refresh every 30 seconds
 }
 
@@ -196,7 +196,7 @@ if (typeof socket !== 'undefined') {
     });
     
     socket.on('task_started', function(data) {
-        addLogEntry(`Taskstart execute: ID ${data.task_id} [TRANSLATED]Machine ${data.machine_name}`, 'info');
+        addLogEntry(`Taskstart execute: ID ${data.task_id} [TRANSLATED]Client ${data.client_name}`, 'info');
         loadDashboardData().then(() => {
             updateStatistics();
             displayRecentTasks();
@@ -212,26 +212,26 @@ if (typeof socket !== 'undefined') {
         });
     });
     
-    socket.on('machine_registered', function(data) {
-        addLogEntry(`NewMachine Registered: ${data.name} (${data.ip_address})`, 'success');
+    socket.on('client_registered', function(data) {
+        addLogEntry(`NewClient Registered: ${data.name} (${data.ip_address})`, 'success');
         loadDashboardData().then(() => {
             updateStatistics();
-            displayMachineStatus();
+            displayClientStatus();
         });
     });
     
-    socket.on('machine_heartbeat', function(data) {
-        // [TRANSLATED] [TRANSLATED]Update Machine Status[TRANSLATED]day[TRANSLATED]show
+    socket.on('client_heartbeat', function(data) {
+        // [TRANSLATED] [TRANSLATED]Update Client Status[TRANSLATED]day[TRANSLATED]show
         loadDashboardData().then(() => {
-            displayMachineStatus();
+            displayClientStatus();
         });
     });
     
-    socket.on('machine_offline', function(data) {
-        addLogEntry(`MachineOffline: ${data.machine_name}`, 'warning');
+    socket.on('client_offline', function(data) {
+        addLogEntry(`ClientOffline: ${data.client_name}`, 'warning');
         loadDashboardData().then(() => {
             updateStatistics();
-            displayMachineStatus();
+            displayClientStatus();
         });
     });
 }

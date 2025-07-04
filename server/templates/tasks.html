@@ -24,7 +24,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/machines" class="nav-link">
+                    <a href="/clients" class="nav-link">
                         <i class="fas fa-server"></i>
                         <span>Client Management</span>
                     </a>
@@ -67,9 +67,9 @@
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label>Machine:</label>
-                    <select id="machineFilter" onchange="filterTasks()">
-                        <option value="">All Machines</option>
+                    <label>Client:</label>
+                    <select id="clientFilter" onchange="filterTasks()">
+                        <option value="">All Clients</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -78,23 +78,23 @@
                 </div>
             </div>
 
-            <!-- Task list table -->
+            <!-- Task list table with enhanced subtask-client view -->
             <div class="task-table-container">
-                <table class="task-table">
+                <table class="task-table enhanced-task-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Task Name</th>
-                            <th>Subtasks</th>
-                            <th>Target Machine</th>
-                            <th>Status</th>
-                            <th>Scheduled Time</th>
-                            <th>Created time</th>
-                            <th>Actions</th>
+                            <th class="task-id-col">Task ID</th>
+                            <th class="task-name-col">Task Name</th>
+                            <th class="subtask-col">Subtask</th>
+                            <th class="client-col">Client</th>
+                            <th class="status-col">Status</th>
+                            <th class="timing-col">Timing</th>
+                            <th class="progress-col">Progress</th>
+                            <th class="actions-col">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="taskTableBody">
-                        <!-- Task data will be loaded dynamically via JavaScript -->
+                        <!-- Enhanced task data will be loaded dynamically via JavaScript -->
                     </tbody>
                 </table>
             </div>
@@ -168,6 +168,28 @@
                             <label for="cronExpression">Cron Expression</label>
                             <input type="text" id="cronExpression" placeholder="e.g.: 0 */1 * * * (execute every hour)">
                             <small class="help-text">Format: minute hour day month weekday</small>
+                        </div>
+                    </div>
+
+                    <!-- Email notification configuration -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-envelope"></i> Email Notification</h4>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="sendEmail" onchange="toggleEmailRecipients()">
+                                <span class="checkmark"></span>
+                                Send email notification when task completes
+                            </label>
+                        </div>
+
+                        <div class="form-group" id="emailRecipientsGroup" style="display: none;">
+                            <label for="emailRecipients">Email Recipients <span class="required">*</span></label>
+                            <input type="text" id="emailRecipients" placeholder="recipient1@company.com; recipient2@company.com">
+                            <small class="help-text">
+                                Separate multiple email addresses with semicolons (;)<br>
+                                If left empty, emails will be sent to the default recipient.
+                            </small>
                         </div>
                     </div>
                 </form>

@@ -78,12 +78,12 @@
             color: #721c24;
         }
         
-        .log-action.MACHINE_REGISTER {
+        .log-action.CLIENT_REGISTER {
             background: #d4edda;
             color: #155724;
         }
         
-        .log-action.MACHINE_UPDATE {
+        .log-action.CLIENT_UPDATE {
             background: #fff3cd;
             color: #856404;
         }
@@ -201,7 +201,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/machines" class="nav-link">
+                    <a href="/clients" class="nav-link">
                         <i class="fas fa-server"></i>
                         <span>Client Management</span>
                     </a>
@@ -269,8 +269,8 @@
                 // Don't log connection message to avoid clutter
             });
             
-            socket.on('machine_registered', function(data) {
-                // Auto refresh when new machine registers
+            socket.on('client_registered', function(data) {
+                // Auto refresh when new client registers
                 loadLogs();
             });
             

@@ -23,7 +23,7 @@
                     </a>
                 </li>
                 <li class="nav-item active">
-                    <a href="/machines" class="nav-link">
+                    <a href="/clients" class="nav-link">
                         <i class="fas fa-server"></i>
                         <span>Client Management</span>
                     </a>
@@ -50,7 +50,7 @@
             <div class="filter-bar">
                 <div class="filter-group">
                     <label>Status:</label>
-                    <select id="statusFilter" onchange="filterMachines()">
+                    <select id="statusFilter" onchange="filterClients()">
                         <option value="">All Status</option>
                         <option value="online">Online</option>
                         <option value="offline">Offline</option>
@@ -59,28 +59,28 @@
                 </div>
                 <div class="filter-group">
                     <label>Search:</label>
-                    <input type="text" id="searchInput" placeholder="Search client name or IP" onkeyup="filterMachines()">
+                    <input type="text" id="searchInput" placeholder="Search client name or IP" onkeyup="filterClients()">
                 </div>
             </div>
 
             <!-- Client grid -->
-            <div class="machine-grid" id="machineGrid">
+            <div class="client-grid" id="clientGrid">
                 <!-- Client cards will be loaded dynamically via JavaScript -->
             </div>
         </main>
     </div>
 
     <!-- Client details modal -->
-    <div id="machineDetailModal" class="modal">
+    <div id="clientDetailModal" class="modal">
         <div class="modal-content modal-large">
             <div class="modal-header">
                 <h3>Client Details</h3>
-                <button class="close-btn" onclick="closeMachineDetailModal()">
+                <button class="close-btn" onclick="closeClientDetailModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
-                <div id="machineDetailContent">
+                <div id="clientDetailContent">
                     <!-- Client detail content will be loaded dynamically via JavaScript -->
                 </div>
             </div>
@@ -93,6 +93,6 @@
     <!-- JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v=2025070204"></script>
-    <script src="{{ url_for('static', filename='js/machines.js') }}?v=2025070204"></script>
+    <script src="{{ url_for('static', filename='js/clients.js') }}?v=2025070204"></script>
 </body>
 </html>

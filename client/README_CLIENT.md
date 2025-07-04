@@ -69,7 +69,7 @@ client/
 ```bash
 python client_installer.py install \
     --server-url http://localhost:5000 \
-    --machine-name my-machine \
+    --client-name my-client \
     --heartbeat-interval 60  # 60秒间隔
 ```
 
@@ -146,12 +146,12 @@ python config_tool.py --validate
 
 **Linux/Mac:**
 ```bash
-./quick_setup.sh --server-url http://your-server:5000 --machine-name your-machine
+./quick_setup.sh --server-url http://your-server:5000 --client-name your-client
 ```
 
 **Windows:**
 ```cmd
-quick_setup.bat --server-url http://your-server:5000 --machine-name your-machine
+quick_setup.bat --server-url http://your-server:5000 --client-name your-client
 ```
 
 ### 方法 2: 手动安装
@@ -160,7 +160,7 @@ quick_setup.bat --server-url http://your-server:5000 --machine-name your-machine
 ```bash
 python client_installer.py install \
     --server-url http://localhost:5000 \
-    --machine-name my-machine
+    --client-name my-client
 ```
 
 #### 2. 启动客户端
@@ -203,7 +203,7 @@ python client_runner.py --config ~/.task_client/config.json
 ```bash
 python client_installer.py install \
     --server-url http://localhost:5000 \
-    --machine-name my-machine \
+    --client-name my-client \
     --heartbeat-interval 30 \
     --config-update-interval 600 \
     --log-level INFO \
@@ -297,7 +297,7 @@ python client_runner.py --config ~/.task_client/config.json --log-level DEBUG
 server_url = http://localhost:5000
 
 # 客户端标识
-machine_name = 
+client_name = 
 
 # 心跳设置（秒）
 heartbeat_interval = 30
@@ -352,7 +352,7 @@ python client_installer.py uninstall
 # 2. 重新安装
 python client_installer.py install \
     --server-url http://localhost:5000 \
-    --machine-name my-machine
+    --client-name my-client
 ```
 
 ## 🐛 故障排除
@@ -394,7 +394,7 @@ python client_installer.py info
    ```bash
    python client_installer.py install \
        --server-url YOUR_SERVER_URL \
-       --machine-name YOUR_MACHINE_NAME
+       --client-name YOUR_client_name
    ```
 3. **使用新的启动方式**
 

@@ -1,0 +1,102 @@
+{
+  "tests": 8,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2025-07-04T11:06:14Z",
+  "time": "0.46s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "AdapterEnumerationTests",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2025-07-04T11:06:14Z",
+      "time": "0.46s",
+      "testsuite": [
+        {
+          "name": "OnlyFallback",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 67,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:14Z",
+          "time": "0.004s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "OnlyVulkan",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:14Z",
+          "time": "0s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "OnlyD3D11",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 103,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:14Z",
+          "time": "0.087s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "MatchingDXGIAdapterD3D11",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:14Z",
+          "time": "0.086s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "OnlyD3D12",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 179,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:14Z",
+          "time": "0.133s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "MatchingDXGIAdapterD3D12",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 197,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:14Z",
+          "time": "0.148s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "OnlyMetal",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 255,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:15Z",
+          "time": "0s",
+          "classname": "AdapterEnumerationTests"
+        },
+        {
+          "name": "OneBackendThenTheOther",
+          "file": "..\\..\\src\\dawn\\tests\\end2end\\AdapterEnumerationTests.cpp",
+          "line": 273,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2025-07-04T11:06:15Z",
+          "time": "0s",
+          "classname": "AdapterEnumerationTests"
+        }
+      ]
+    }
+  ]
+}

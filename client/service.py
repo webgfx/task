@@ -79,8 +79,8 @@ def check_windows_service_support():
     except Exception as e:
         raise RuntimeError(f"Windows service support check failed: {e}")
 
-def generate_machine_name():
-    """Generate machine name using hostname and IP"""
+def generate_client_name():
+    """Generate client name using hostname and IP"""
     try:
         hostname = platform.node()
         
@@ -94,12 +94,12 @@ def generate_machine_name():
             
             # Use last part of IP for brevity
             ip_last = local_ip.split('.')[-1]
-            machine_name = f"{hostname}-{ip_last}"
+            client_name = f"{hostname}-{ip_last}"
         except Exception:
             # Fallback to hostname only if IP detection fails
-            machine_name = hostname
+            client_name = hostname
         
-        return machine_name
+        return client_name
     except Exception:
         # Ultimate fallback
         return f"windows-{platform.node()}"
@@ -128,7 +128,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
         # Unregister from server
         if self.client:
             try:
-                self.client._unregister_machine()
+                self.client._unregister_client()
                 self.client.stop()
             except Exception as e:
                 if self.logger:
@@ -159,7 +159,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
                 self.logger.error("Failed to load configuration, creating default config")
                 config = {
                     'server_url': 'http://localhost:5000',
-                    'machine_name': generate_machine_name(),
+                    'client_name': generate_client_name(),
                     'heartbeat_interval': 600
                 }
             
@@ -173,7 +173,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
             
             self.logger.info(f"Starting Web Graphics Service")
             self.logger.info(f"Server URL: {config.get('server_url')}")
-            self.logger.info(f"Machine Name: {config.get('machine_name')}")
+            self.logger.info(f"client Name: {config.get('client_name')}")
             
             # Wait a moment for system to stabilize
             import time
@@ -209,7 +209,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
                 # Create a configuration data structure for the runner
                 runner_config = {
                     'server_url': config.get('server_url', 'http://localhost:5000'),
-                    'machine_name': config.get('machine_name', 'default-machine'),
+                    'client_name': config.get('client_name', 'default-client'),
                     'heartbeat_interval': config.get('heartbeat_interval', 30),
                     'config_update_interval': config.get('config_update_interval', 600),
                     'log_level': config.get('log_level', 'INFO'),
@@ -330,7 +330,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
             # If no config file found, create default configuration
             if not config:
                 config = {
-                    'machine_name': generate_machine_name(),
+                    'client_name': generate_client_name(),
                     'heartbeat_interval': 30,
                     'log_level': 'INFO'
                 }
@@ -377,8 +377,8 @@ class TaskClientService(win32serviceutil.ServiceFramework):
         
         return None
 
-    def _unregister_machine(self):
-        """Unregister machine from server when service stops"""
+    def _unregister_client(self):
+        """Unregister client from server when service stops"""
         if not self.client:
             return
             
@@ -386,25 +386,25 @@ class TaskClientService(win32serviceutil.ServiceFramework):
             import requests
             
             data = {
-                'name': self.client.machine_name,
+                'name': self.client.client_name,
                 'status': 'offline'
             }
             
             response = requests.post(
-                f"{self.client.server_url}/api/machines/unregister",
+                f"{self.client.server_url}/api/clients/unregister",
                 json=data,
                 timeout=10
             )
             
             if response.status_code == 200:
-                self.logger.info(f"Machine unregistered successfully: {self.client.machine_name}")
+                self.logger.info(f"client unregistered successfully: {self.client.client_name}")
             else:
-                self.logger.warning(f"Failed to unregister machine: {response.status_code}")
+                self.logger.warning(f"Failed to unregister client: {response.status_code}")
                 
         except Exception as e:
-            self.logger.error(f"Error unregistering machine: {e}")
+            self.logger.error(f"Error unregistering client: {e}")
 
-def install_service(server_url=None, machine_name=None):
+def install_service(server_url=None, client_name=None):
     """Install the Windows service"""
     try:
         # Check Windows service support first
@@ -421,7 +421,7 @@ def install_service(server_url=None, machine_name=None):
         # Create configuration file
         config = {
             'server_url': server_url or 'http://localhost:5000',
-            'machine_name': machine_name or generate_machine_name(),
+            'client_name': client_name or generate_client_name(),
             'heartbeat_interval': 600,  # 10 minutes
             'log_level': 'INFO'
         }
@@ -432,7 +432,7 @@ def install_service(server_url=None, machine_name=None):
         
         print(f"✓ Configuration saved to: {config_file}")
         print(f"  Server URL: {config['server_url']}")
-        print(f"  Machine Name: {config['machine_name']}")
+        print(f"  client Name: {config['client_name']}")
         print(f"  Heartbeat Interval: {config['heartbeat_interval']} seconds (10 minutes)")
         
         # Install service with explicit string encoding
@@ -591,7 +591,7 @@ def status_service():
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                 print(f"Server URL: {config.get('server_url', 'Unknown')}")
-                print(f"Machine Name: {config.get('machine_name', 'Unknown')}")
+                print(f"client Name: {config.get('client_name', 'Unknown')}")
             except Exception:
                 pass
         
@@ -654,7 +654,7 @@ def debug_service():
         if config:
             runner_config = {
                 'server_url': config.get('server_url', 'http://localhost:5000'),
-                'machine_name': config.get('machine_name', 'debug-machine'),
+                'client_name': config.get('client_name', 'debug-client'),
                 'heartbeat_interval': config.get('heartbeat_interval', 30),
                 'config_update_interval': config.get('config_update_interval', 600),
                 'log_level': config.get('log_level', 'INFO'),
@@ -664,7 +664,7 @@ def debug_service():
         else:
             runner_config = {
                 'server_url': 'http://localhost:5000',
-                'machine_name': 'debug-machine',
+                'client_name': 'debug-client',
                 'heartbeat_interval': 30,
                 'config_update_interval': 600,
                 'log_level': 'INFO',
@@ -719,16 +719,16 @@ if __name__ == '__main__':
         # Handle command line arguments
         if 'install' in sys.argv:
             server_url = None
-            machine_name = None
+            client_name = None
             
             # Parse additional arguments
             for i, arg in enumerate(sys.argv):
                 if arg == '--server-url' and i + 1 < len(sys.argv):
                     server_url = sys.argv[i + 1]
-                elif arg == '--machine-name' and i + 1 < len(sys.argv):
-                    machine_name = sys.argv[i + 1]
+                elif arg == '--client-name' and i + 1 < len(sys.argv):
+                    client_name = sys.argv[i + 1]
             
-            install_service(server_url, machine_name)
+            install_service(server_url, client_name)
             
         elif 'debug' in sys.argv:
             debug_service()
@@ -753,3 +753,4 @@ if __name__ == '__main__':
             
         else:
             win32serviceutil.HandleCommandLine(TaskClientService)
+

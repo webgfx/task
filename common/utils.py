@@ -129,3 +129,4 @@ def check_port_available(host: str, port: int) -> bool:
             return result != 0  # 0 indicates successful connection, port is in use
     except Exception:
         return False
+

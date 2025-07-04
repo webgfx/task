@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default values
 SERVER_URL="http://localhost:5000"
-MACHINE_NAME=$(hostname)
+CLIENT_NAME=$(hostname)
 INSTALL_DIR="$HOME/.task_client"
 
 # Parse command line arguments
@@ -22,8 +22,8 @@ while [[ $# -gt 0 ]]; do
             SERVER_URL="$2"
             shift 2
             ;;
-        --machine-name)
-            MACHINE_NAME="$2"
+        --client-name)
+            CLIENT_NAME="$2"
             shift 2
             ;;
         --install-dir)
@@ -35,13 +35,13 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --server-url URL    Server URL (default: http://localhost:5000)"
-            echo "  --machine-name NAME Machine name (default: hostname)"
+            echo "  --client-name NAME  Client name (default: hostname)"
             echo "  --install-dir DIR   Installation directory (default: ~/.task_client)"
             echo "  --help              Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0 --server-url http://192.168.1.100:5000 --machine-name worker-01"
-            echo "  $0 --machine-name gpu-server"
+            echo "  $0 --server-url http://192.168.1.100:5000 --client-name worker-01"
+            echo "  $0 --client-name gpu-server"
             exit 0
             ;;
         *)
@@ -54,7 +54,7 @@ done
 
 echo "Configuration:"
 echo "  Server URL: $SERVER_URL"
-echo "  Machine Name: $MACHINE_NAME"
+echo "  Client Name: $CLIENT_NAME"
 echo "  Install Directory: $INSTALL_DIR"
 echo
 
@@ -99,7 +99,7 @@ fi
 echo "🔧 Installing Task Client..."
 python3 "$SCRIPT_DIR/client_installer.py" install \
     --server-url "$SERVER_URL" \
-    --machine-name "$MACHINE_NAME" \
+    --client-name "$CLIENT_NAME" \
     --install-dir "$INSTALL_DIR"
 
 if [ $? -eq 0 ]; then

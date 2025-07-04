@@ -16,7 +16,7 @@ class Config:
     
     # Heartbeat configuration
     HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 60))  # seconds
-    MACHINE_TIMEOUT = int(os.getenv('MACHINE_TIMEOUT', 180))  # seconds
+    CLIENT_TIMEOUT = int(os.getenv('CLIENT_TIMEOUT', 180))  # seconds
     
     # Task execution configuration
     TASK_TIMEOUT = int(os.getenv('TASK_TIMEOUT', 3600))  # seconds
@@ -38,7 +38,7 @@ class Config:
 class ClientConfig:
     # Server connection configuration
     SERVER_URL = os.getenv('SERVER_URL', 'http://localhost:5000')
-    MACHINE_NAME = os.getenv('MACHINE_NAME', 'default-machine')
+    CLIENT_NAME = os.getenv('CLIENT_NAME', 'default-client')
     
     # Client process configuration
     HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 60))
@@ -53,7 +53,8 @@ class ClientConfig:
         """Update configuration from command line arguments"""
         if args.server_url:
             cls.SERVER_URL = args.server_url
-        if args.machine_name:
-            cls.MACHINE_NAME = args.machine_name
+        if args.client_name:
+            cls.CLIENT_NAME = args.client_name
         if args.heartbeat_interval:
             cls.HEARTBEAT_INTERVAL = args.heartbeat_interval
+

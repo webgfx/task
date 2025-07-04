@@ -493,15 +493,15 @@ def get_system_summary() -> Dict[str, str]:
         }
 
 
-def get_machine_name() -> str:
-    """Get machine/hostname for client identification"""
+def get_client_name() -> str:
+    """Get client/hostname for client identification"""
     try:
         return socket.gethostname()
     except Exception:
         try:
             return platform.node()
         except Exception:
-            return 'unknown-machine'
+            return 'unknown-client'
 
 
 def get_server_url(common_cfg_path: str = None) -> str:
