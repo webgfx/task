@@ -239,6 +239,9 @@ class TaskResultCollector:
             elif task.send_email and not task.get_email_recipients_list():
                 logger.warning(f"Task {task_id} requested email notification but no recipients specified")
             
+            # Cache task results for future reference
+            self._cache_task_results(task, client_results)
+
             # Emit real-time notification
             self._emit_task_completion_event(task, client_results, overall_success)
             
@@ -464,6 +467,41 @@ class TaskResultCollector:
         except Exception as e:
             logger.error(f"Error sending manual notification for task {task_id}: {e}")
             return False
+
+
+    def _cache_task_results(self, task: Task, client_results: Dict[str, Any]):
+        """
+        Cache completed task results to the task_results table for future reference.
+
+        Args:
+            task: Completed task
+            client_results: Results organized by client
+        """
+        try:
+            import json
+
+            for client_name, client_data in client_results.items():
+                for execution in client_data.get('subtasks', []):
+                    try:
+                        self.database.cache_task_result(
+                            task_id=task.id,
+                            task_name=task.name,
+                            client_name=client_name,
+                            subtask_name=execution.subtask_name,
+                            status=execution.status.value,
+                            result=execution.result,
+                            execution_time=execution.execution_time,
+                            completed_at=(execution.completed_at.isoformat()
+                                         if execution.completed_at else None)
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to cache result for subtask "
+                                   f"'{execution.subtask_name}' on '{client_name}': {e}")
+
+            logger.info(f"Cached results for task {task.id} ({task.name})")
+
+        except Exception as e:
+            logger.error(f"Error caching task results for task {task.id}: {e}")
 
 
 def create_default_config() -> Dict[str, Any]:

@@ -136,48 +136,58 @@ class ClientInstaller:
             return False
     
     def _copy_core_files(self):
-        """Copy core files to installation directory"""
+        """
+        Copy only configuration files to installation directory.
+        
+        Code runs directly from the repository so that updates (git pull) take
+        effect automatically without reinstalling or restarting the service.
+        Only config templates are copied to the install dir as starting points.
+        """
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
         
-        # Files to copy
-        files_to_copy = [
-            ('client/client_runner.py', 'client_runner.py'),
-            ('client/executor.py', 'executor.py'),
-            ('client/heartbeat.py', 'heartbeat.py'),
-            ('client/config_manager.py', 'config_manager.py'),
+        # Only copy configuration templates — NOT code
+        config_files = [
             ('client/client.cfg', 'client.cfg'),
-            ('common/__init__.py', 'common/__init__.py'),
-            ('common/config.py', 'common/config.py'),
-            ('common/models.py', 'common/models.py'),
-            ('common/system_info.py', 'common/system_info.py'),
-            ('common/utils.py', 'common/utils.py'),
         ]
         
-        for src_path, dst_name in files_to_copy:
+        for src_path, dst_name in config_files:
             src_file = os.path.join(project_root, src_path)
             dst_file = os.path.join(self.install_dir, dst_name)
             
             # Create directory if needed
             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
             
-            if os.path.exists(src_file):
+            # Only copy if destination doesn't already exist (don't overwrite user config)
+            if not os.path.exists(dst_file) and os.path.exists(src_file):
                 shutil.copy2(src_file, dst_file)
+                logger.debug(f"Copied config: {src_path} -> {dst_name}")
+            elif os.path.exists(dst_file):
+                logger.debug(f"Skipped (already exists): {dst_name}")
+            else:
+                logger.warning(f"Source file not found: {src_file}")
+        
+        # Write the repo root path into the install dir so startup scripts know
+        # where to find the code
+        repo_root_file = os.path.join(self.install_dir, 'repo_root.txt')
+        with open(repo_root_file, 'w', encoding='utf-8') as f:
+            f.write(project_root)
+        logger.info(f"Repo root recorded: {project_root}")
                 logger.debug(f"Copied: {src_path} -> {dst_name}")
             else:
                 logger.warning(f"Source file not found: {src_file}")
     
     def _create_startup_scripts(self, config):
-        """Create startup scripts for different platforms"""
+        """Create startup scripts that run the client from the repo"""
         python_exe = sys.executable
-        runner_script = os.path.join(self.install_dir, 'client_runner.py')
-        config_file = os.path.join(self.install_dir, 'config.json')
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        runner_script = os.path.join(project_root, 'client', 'client_runner.py')
         cfg_file = os.path.join(self.install_dir, 'client.cfg')
         
-        # Windows batch script
+        # Windows batch script — runs directly from repo
         batch_content = f"""@echo off
-cd /d "{self.install_dir}"
-"{python_exe}" client_runner.py --config config.json --cfg client.cfg
+"{python_exe}" "{runner_script}" --repo-root "{project_root}" --cfg "{cfg_file}"
 """
         batch_file = os.path.join(self.install_dir, 'start_client.bat')
         with open(batch_file, 'w', encoding='utf-8') as f:
@@ -192,10 +202,9 @@ echo Task client stopped
         with open(stop_batch_file, 'w', encoding='utf-8') as f:
             f.write(stop_batch_content)
         
-        # Unix shell script
+        # Unix shell script — runs directly from repo
         shell_content = f"""#!/bin/bash
-cd "{self.install_dir}"
-"{python_exe}" client_runner.py --config config.json --cfg client.cfg
+"{python_exe}" "{runner_script}" --repo-root "{project_root}" --cfg "{cfg_file}"
 """
         shell_file = os.path.join(self.install_dir, 'start_client.sh')
         with open(shell_file, 'w', encoding='utf-8') as f:

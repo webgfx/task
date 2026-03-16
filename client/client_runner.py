@@ -1,7 +1,11 @@
 """
 Client Runtime Manager
-Handles client execution, server communication, and task processing
-Separated from installation logic for easier updates
+Handles client execution, server communication, and task processing.
+
+The runner is designed to execute from the repo directory so that updates to the
+repo (e.g. git pull) automatically take effect without reinstalling or restarting
+the service.  Subtask modules in common/subtasks/ are periodically reloaded to
+pick up newly added or modified definitions.
 """
 import os
 import sys
@@ -14,13 +18,30 @@ import requests
 import socketio
 from datetime import datetime, timedelta
 
-# Ensure we can import local modules
+# ---------------------------------------------------------------------------
+# Path setup: prefer repo root so code changes are picked up without reinstall
+# ---------------------------------------------------------------------------
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, current_dir)  # For client modules
-sys.path.insert(0, parent_dir)   # For common modules
 
-# Import local modules (these will be copied to installation directory)
+# If a --repo-root arg is provided early, prepend it so repo code wins.
+# This is parsed "early" before argparse so the imports below use the right path.
+_repo_root = None
+for i, arg in enumerate(sys.argv):
+    if arg == '--repo-root' and i + 1 < len(sys.argv):
+        _repo_root = os.path.abspath(sys.argv[i + 1])
+        break
+
+if _repo_root and os.path.isdir(_repo_root):
+    # Repo root takes highest priority
+    sys.path.insert(0, os.path.join(_repo_root, 'client'))
+    sys.path.insert(0, _repo_root)
+else:
+    # Fallback: derive from this file's location
+    sys.path.insert(0, current_dir)   # For client modules
+    sys.path.insert(0, parent_dir)    # For common modules
+
+# Import local modules
 try:
     from common.system_info import get_client_name, get_server_url
     from common.client_info_collector import prepare_registration_data, prepare_ping_response_data
@@ -31,7 +52,7 @@ try:
     from config_manager import get_config_manager, get_heartbeat_interval, get_config_update_interval
 except ImportError as e:
     print(f"Failed to import required modules: {e}")
-    print("Make sure the client is properly installed")
+    print("Make sure the client is properly installed or --repo-root is correct")
     sys.exit(1)
 
 logger = logging.getLogger(__name__)
@@ -117,9 +138,18 @@ class TaskClientRunner:
         # Configuration update thread
         self.config_update_thread = None
         
+        # Subtask auto-reload: track known subtask files to detect repo changes
+        self._last_subtask_snapshot = self._snapshot_subtasks()
+        # Subtask reload interval (in seconds) — defaults to config_update_interval
+        self.subtask_reload_interval = self.cfg_manager.get_int(
+            'ADVANCED', 'subtask_reload_interval',
+            self.config_update_interval
+        )
+        
         logger.info(f"Client runner initialized: {self.client_name} ({self.local_ip}) -> {self.server_url}")
         logger.info(f"Heartbeat interval: {get_heartbeat_interval()} seconds")
         logger.info(f"Configuration update interval: {self.config_update_interval} seconds")
+        logger.info(f"Subtask reload interval: {self.subtask_reload_interval} seconds")
         
         # Log configuration summary
         if self.cfg_manager.get_boolean('ADVANCED', 'verbose_logging', False):
@@ -348,6 +378,52 @@ class TaskClientRunner:
                     # Exit the process gracefully
                     import os
                     os._exit(1)
+            except Exception as e:
+                logger.error(f"Failed to handle client unregistration: {e}")
+        
+        @self.sio.event
+        def reload_subtasks(data):
+            """Handle subtask reload request from server"""
+            try:
+                client_name = data.get('client_name')
+                
+                # If specific client requested or broadcast to all
+                if client_name == self.client_name or client_name is None:
+                    logger.info(f"🔄 SUBTASK_RELOAD: Received subtask reload request from server")
+                    
+                    # Reload subtasks
+                    try:
+                        from common.subtasks import reload_subtasks
+                        reloaded_count = reload_subtasks()
+                        
+                        logger.info(f"✅ SUBTASK_RELOAD: Successfully reloaded {reloaded_count} subtask modules")
+                        
+                        # Send response back to server
+                        self.sio.emit('subtask_reload_response', {
+                            'client_name': self.client_name,
+                            'success': True,
+                            'reloaded_count': reloaded_count,
+                            'message': f'Successfully reloaded {reloaded_count} subtask modules',
+                            'timestamp': datetime.now().isoformat()
+                        })
+                        
+                    except Exception as e:
+                        error_msg = str(e)
+                        logger.error(f"❌ SUBTASK_RELOAD: Failed to reload subtasks: {error_msg}")
+                        
+                        # Send error response back to server
+                        self.sio.emit('subtask_reload_response', {
+                            'client_name': self.client_name,
+                            'success': False,
+                            'error': error_msg,
+                            'message': f'Failed to reload subtasks: {error_msg}',
+                            'timestamp': datetime.now().isoformat()
+                        })
+                else:
+                    logger.debug(f"SUBTASK_RELOAD: Ignoring reload request for different client '{client_name}'")
+                    
+            except Exception as e:
+                logger.error(f"Failed to handle subtask reload request: {e}")
                     
             except Exception as e:
                 logger.error(f"Failed to handle client unregistration: {e}")
@@ -558,15 +634,22 @@ class TaskClientRunner:
             self.stop()
     
     def _start_config_update_thread(self):
-        """Start configuration update thread"""
+        """Start configuration and subtask update thread"""
         def config_update_loop():
+            subtask_check_elapsed = 0
             while self.running:
                 try:
-                    # Wait for specified time interval
-                    time.sleep(self.config_update_interval)
+                    time.sleep(min(self.config_update_interval, self.subtask_reload_interval, 60))
                     
                     if not self.running:
                         break
+                    
+                    subtask_check_elapsed += min(self.config_update_interval, self.subtask_reload_interval, 60)
+                    
+                    # Check for subtask changes periodically
+                    if subtask_check_elapsed >= self.subtask_reload_interval:
+                        subtask_check_elapsed = 0
+                        self._check_and_reload_subtasks()
                     
                     # Update configuration information
                     self._update_client_config()
@@ -577,6 +660,7 @@ class TaskClientRunner:
         self.config_update_thread = threading.Thread(target=config_update_loop, daemon=True)
         self.config_update_thread.start()
         logger.info(f"Started configuration update thread (interval: {self.config_update_interval}s)")
+        logger.info(f"Subtask auto-reload enabled (interval: {self.subtask_reload_interval}s)")
     
     def _update_client_config(self):
         """Update client configuration information to server"""
@@ -612,6 +696,57 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Failed to update client configuration: {e}")
     
+    def _snapshot_subtasks(self):
+        """
+        Take a snapshot of subtask module files (name → mtime) so we can detect
+        when the repo is updated (e.g. git pull adds or modifies a subtask).
+        """
+        snapshot = {}
+        try:
+            import common.subtasks as subtasks_pkg
+            subtasks_dir = os.path.dirname(subtasks_pkg.__file__)
+            for filename in os.listdir(subtasks_dir):
+                if (filename.endswith('.py') and
+                        filename not in ['__init__.py', 'base.py'] and
+                        not filename.startswith('_')):
+                    filepath = os.path.join(subtasks_dir, filename)
+                    snapshot[filename] = os.path.getmtime(filepath)
+        except Exception as e:
+            logger.debug(f"Could not snapshot subtask files: {e}")
+        return snapshot
+
+    def _check_and_reload_subtasks(self):
+        """
+        Compare the current subtask file snapshot against the saved one.
+        If files were added, removed, or modified, reload subtask modules.
+        """
+        try:
+            current = self._snapshot_subtasks()
+            if current != self._last_subtask_snapshot:
+                added = set(current.keys()) - set(self._last_subtask_snapshot.keys())
+                removed = set(self._last_subtask_snapshot.keys()) - set(current.keys())
+                modified = {f for f in current if f in self._last_subtask_snapshot
+                            and current[f] != self._last_subtask_snapshot[f]}
+
+                changes = []
+                if added:
+                    changes.append(f"added: {', '.join(added)}")
+                if removed:
+                    changes.append(f"removed: {', '.join(removed)}")
+                if modified:
+                    changes.append(f"modified: {', '.join(modified)}")
+
+                logger.info(f"Subtask changes detected ({'; '.join(changes)}), reloading...")
+
+                from common.subtasks import reload_subtasks
+                reloaded = reload_subtasks()
+                self._last_subtask_snapshot = current
+                logger.info(f"Subtask reload complete: {reloaded} modules loaded")
+            else:
+                logger.debug("No subtask changes detected")
+        except Exception as e:
+            logger.error(f"Error checking/reloading subtasks: {e}")
+
     def _execute_subtask_task(self, task_id, task_name, task_data):
         """Execute subtask-based task"""
         try:
@@ -918,6 +1053,8 @@ def main():
                        help='Override server URL (optional)')
     parser.add_argument('--cfg', 
                        help='Client configuration file path (client.cfg)')
+    parser.add_argument('--repo-root',
+                       help='Repository root directory (for running from repo)')
     parser.add_argument('--log-level', 
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                        help='Override log level from config')

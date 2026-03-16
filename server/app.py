@@ -156,6 +156,11 @@ def create_app():
         """Client communication logs page"""
         return render_template('logs.html')
     
+    @app.route('/results')
+    def results_page():
+        """Cached task results page"""
+        return render_template('results.html')
+    
     return app, socketio
 
 def main():

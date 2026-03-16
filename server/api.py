@@ -161,8 +161,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
             task_id = database.create_task(task)
             task.id = task_id
 
+            # Convert task to dict and ensure JSON serialization works
+            task_dict = task.to_dict()
+
             # Broadcast new task creation event
-            socketio.emit('task_created', task.to_dict())
+            socketio.emit('task_created', task_dict)
 
             if subtasks:
                 logger.info(f"Created task: {task.name} with {len(subtasks)} subtasks for {len(clients)} clients")
@@ -171,7 +174,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             return jsonify({
                 'success': True,
-                'data': task.to_dict()
+                'data': task_dict
             }), 201
 
         except Exception as e:
@@ -1507,7 +1510,47 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'success': False,
                 'error': str(e)
             }), 500
-            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/subtasks/reload', methods=['POST'])
+    def reload_subtasks_endpoint():
+        """Reload all subtask modules to pick up changes without restarting the service"""
+        try:
+            from common.subtasks import reload_subtasks
+            
+            # Reload subtasks on server
+            reloaded_count = reload_subtasks()
+            
+            # Get client name from request (optional - if not specified, broadcast to all)
+            data = request.get_json() or {}
+            client_name = data.get('client_name')
+            
+            # Send reload request to client(s) via SocketIO
+            if client_name:
+                # Send to specific client
+                socketio.emit('reload_subtasks', {'client_name': client_name})
+                logger.info(f"Sent subtask reload request to client: {client_name}")
+                target_info = f"client '{client_name}'"
+            else:
+                # Broadcast to all clients
+                socketio.emit('reload_subtasks', {'client_name': None})
+                logger.info("Sent subtask reload request to all clients")
+                target_info = "all clients"
+            
+            logger.info(f"Server subtasks reloaded via API: {reloaded_count} modules")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully reloaded {reloaded_count} subtask modules on server and sent reload request to {target_info}',
+                'reloaded_count': reloaded_count,
+                'target': target_info
+            })
+            
+        except Exception as e:
+            logger.error(f"Reload subtasks failed: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
 
     # Client Communication Logs API
     @api.route('/logs', methods=['GET'])
@@ -1976,6 +2019,99 @@ def create_api_blueprint(database, socketio, result_collector=None):
         finally:
             # Clean up
             ping_responses.pop(client_name, None)
+
+    # Cached Results API
+
+    @api.route('/results', methods=['GET'])
+    def get_cached_results():
+        """Get cached task results with optional filtering"""
+        try:
+            task_id = request.args.get('task_id', type=int)
+            client_name = request.args.get('client_name')
+            subtask_name = request.args.get('subtask_name')
+            limit = request.args.get('limit', 100, type=int)
+
+            results = database.get_cached_results(
+                task_id=task_id,
+                client_name=client_name,
+                subtask_name=subtask_name,
+                limit=limit
+            )
+
+            return jsonify({
+                'success': True,
+                'data': results,
+                'count': len(results)
+            })
+        except Exception as e:
+            logger.error(f"Failed to get cached results: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/results/<int:result_id>', methods=['GET'])
+    def get_cached_result(result_id):
+        """Get a single cached result by ID"""
+        try:
+            result = database.get_cached_result_by_id(result_id)
+            if not result:
+                return jsonify({
+                    'success': False,
+                    'error': 'Result not found'
+                }), 404
+
+            return jsonify({
+                'success': True,
+                'data': result
+            })
+        except Exception as e:
+            logger.error(f"Failed to get cached result: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/results/client/<client_name>', methods=['GET'])
+    def get_client_results(client_name):
+        """Get all cached results for a specific client"""
+        try:
+            subtask_name = request.args.get('subtask_name')
+            limit = request.args.get('limit', 50, type=int)
+
+            results = database.get_cached_results(
+                client_name=client_name,
+                subtask_name=subtask_name,
+                limit=limit
+            )
+
+            return jsonify({
+                'success': True,
+                'data': results,
+                'count': len(results)
+            })
+        except Exception as e:
+            logger.error(f"Failed to get results for client {client_name}: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api.route('/results/client/<client_name>/latest', methods=['GET'])
+    def get_client_latest_result(client_name):
+        """Get the latest cached result for a specific client"""
+        try:
+            subtask_name = request.args.get('subtask_name')
+
+            result = database.get_latest_result_for_client(
+                client_name=client_name,
+                subtask_name=subtask_name
+            )
+
+            if not result:
+                return jsonify({
+                    'success': False,
+                    'error': f'No results found for client {client_name}'
+                }), 404
+
+            return jsonify({
+                'success': True,
+                'data': result
+            })
+        except Exception as e:
+            logger.error(f"Failed to get latest result for client {client_name}: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     return api
 

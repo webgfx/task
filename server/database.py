@@ -103,6 +103,23 @@ class Database:
                 cursor.execute("ALTER TABLE tasks ADD COLUMN subtasks TEXT DEFAULT '[]'")
                 logger.info("Added subtasks column to tasks table")
 
+            # Create task results cache table for storing completed task results
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS task_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    task_name TEXT NOT NULL,
+                    client_name TEXT NOT NULL,
+                    subtask_name TEXT NOT NULL,
+                    status TEXT DEFAULT 'completed',
+                    result TEXT,
+                    execution_time REAL,
+                    completed_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (task_id) REFERENCES tasks (id)
+                )
+            ''')
+
             # Create client communication logs table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS logs (
@@ -322,19 +339,20 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO tasks (name, command, clients, subtasks, execution_order,
+                INSERT INTO tasks (name, command, clients, execution_order,
                                  subtasks, schedule_time, cron_expression, client, status,
-                                 created_at, max_retries, send_email, email_recipients)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 created_at, started_at, completed_at, result, error_message,
+                                 retry_count, max_retries, send_email, email_recipients)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 task.name, task.command,
                 json.dumps(task.clients) if task.clients else '[]',
-                json.dumps(task.subtasks) if task.subtasks else '[]',
                 json.dumps(task.execution_order) if task.execution_order else '[]',
                 json.dumps([s.to_dict() for s in task.subtasks]) if task.subtasks else '[]',
                 task.schedule_time.isoformat() if task.schedule_time else None,
                 task.cron_expression, task.client, task.status.value,
-                datetime.now().isoformat(), task.max_retries,
+                datetime.now().isoformat(), None, None, None, None,
+                task.retry_count, task.max_retries,
                 1 if task.send_email else 0,  # Convert boolean to integer for SQLite
                 task.email_recipients
             ))
@@ -366,8 +384,8 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE tasks SET name=?, command=?, clients=?, subtasks=?,
-                               execution_order=?, subtasks=?, schedule_time=?, cron_expression=?,
+                UPDATE tasks SET name=?, command=?, clients=?, execution_order=?,
+                               subtasks=?, schedule_time=?, cron_expression=?,
                                client=?, status=?, started_at=?, completed_at=?,
                                result=?, error_message=?, retry_count=?, max_retries=?,
                                send_email=?, email_recipients=?
@@ -375,7 +393,6 @@ class Database:
             ''', (
                 task.name, task.command,
                 json.dumps(task.clients) if task.clients else '[]',
-                json.dumps(task.subtasks) if task.subtasks else '[]',
                 json.dumps(task.execution_order) if task.execution_order else '[]',
                 json.dumps([s.to_dict() for s in task.subtasks]) if task.subtasks else '[]',
                 task.schedule_time.isoformat() if task.schedule_time else None,
@@ -1442,3 +1459,159 @@ class Database:
             logger.error(f"Failed to remove task_executions table: {e}")
             # Don't raise - this is not critical
 
+    # Task result caching methods
+
+    def cache_task_result(self, task_id: int, task_name: str, client_name: str,
+                         subtask_name: str, status: str, result: str = None,
+                         execution_time: float = None, completed_at: str = None) -> int:
+        """
+        Cache a task result for future reference.
+
+        Args:
+            task_id: ID of the task
+            task_name: Name of the task
+            client_name: Name of the client that executed the subtask
+            subtask_name: Name of the subtask
+            status: Execution status
+            result: JSON-encoded result data
+            execution_time: Time taken to execute
+            completed_at: When execution completed
+
+        Returns:
+            ID of the cached result record
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO task_results
+                (task_id, task_name, client_name, subtask_name, status,
+                 result, execution_time, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                task_id, task_name, client_name, subtask_name, status,
+                result, execution_time,
+                completed_at or datetime.now().isoformat()
+            ))
+            result_id = cursor.lastrowid
+            conn.commit()
+            logger.info(f"Cached result for task {task_id} ({task_name}), "
+                       f"subtask '{subtask_name}' on client '{client_name}'")
+            return result_id
+
+    def get_cached_results(self, task_id: int = None, client_name: str = None,
+                          subtask_name: str = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get cached task results with optional filtering.
+
+        Args:
+            task_id: Optional task ID filter
+            client_name: Optional client name filter
+            subtask_name: Optional subtask name filter
+            limit: Maximum number of results to return
+
+        Returns:
+            List of result dictionaries
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            query = 'SELECT * FROM task_results WHERE 1=1'
+            params = []
+
+            if task_id is not None:
+                query += ' AND task_id = ?'
+                params.append(task_id)
+            if client_name:
+                query += ' AND client_name = ?'
+                params.append(client_name)
+            if subtask_name:
+                query += ' AND subtask_name = ?'
+                params.append(subtask_name)
+
+            query += ' ORDER BY created_at DESC LIMIT ?'
+            params.append(limit)
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            results = []
+            for row in rows:
+                results.append({
+                    'id': row['id'],
+                    'task_id': row['task_id'],
+                    'task_name': row['task_name'],
+                    'client_name': row['client_name'],
+                    'subtask_name': row['subtask_name'],
+                    'status': row['status'],
+                    'result': row['result'],
+                    'execution_time': row['execution_time'],
+                    'completed_at': row['completed_at'],
+                    'created_at': row['created_at'],
+                })
+            return results
+
+    def get_cached_result_by_id(self, result_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single cached result by ID"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM task_results WHERE id = ?', (result_id,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'id': row['id'],
+                    'task_id': row['task_id'],
+                    'task_name': row['task_name'],
+                    'client_name': row['client_name'],
+                    'subtask_name': row['subtask_name'],
+                    'status': row['status'],
+                    'result': row['result'],
+                    'execution_time': row['execution_time'],
+                    'completed_at': row['completed_at'],
+                    'created_at': row['created_at'],
+                }
+            return None
+
+    def get_latest_result_for_client(self, client_name: str,
+                                     subtask_name: str = None) -> Optional[Dict[str, Any]]:
+        """Get the latest cached result for a client, optionally filtered by subtask"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            query = 'SELECT * FROM task_results WHERE client_name = ?'
+            params = [client_name]
+
+            if subtask_name:
+                query += ' AND subtask_name = ?'
+                params.append(subtask_name)
+
+            query += ' ORDER BY created_at DESC LIMIT 1'
+
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'id': row['id'],
+                    'task_id': row['task_id'],
+                    'task_name': row['task_name'],
+                    'client_name': row['client_name'],
+                    'subtask_name': row['subtask_name'],
+                    'status': row['status'],
+                    'result': row['result'],
+                    'execution_time': row['execution_time'],
+                    'completed_at': row['completed_at'],
+                    'created_at': row['created_at'],
+                }
+            return None
+
+    def delete_cached_results(self, older_than_days: int = 90) -> int:
+        """Delete cached results older than specified days"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM task_results
+                WHERE created_at < datetime('now', '-' || ? || ' days')
+            ''', (older_than_days,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            logger.info(f"Deleted {deleted_count} cached results older than {older_than_days} days")
+            return deleted_count

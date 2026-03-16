@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results - Distributed Task Management System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-tasks"></i>
+                <h2>Web Graphics Service</h2>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/tasks" class="nav-link">
+                        <i class="fas fa-list-check"></i>
+                        <span>Task Management</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/clients" class="nav-link">
+                        <i class="fas fa-server"></i>
+                        <span>Client Management</span>
+                    </a>
+                </li>
+                <li class="nav-item active">
+                    <a href="/results" class="nav-link">
+                        <i class="fas fa-database"></i>
+                        <span>Results</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/logs" class="nav-link">
+                        <i class="fas fa-file-lines"></i>
+                        <span>Log Management</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main content area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-content">
+                    <h1>Cached Results</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="refreshResults()">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Filters -->
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Client:</label>
+                    <select id="clientFilter" onchange="filterResults()">
+                        <option value="">All Clients</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Subtask:</label>
+                    <select id="subtaskFilter" onchange="filterResults()">
+                        <option value="">All Subtasks</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Status:</label>
+                    <select id="statusFilter" onchange="filterResults()">
+                        <option value="">All</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Task Results</h3>
+                    <span id="resultCount" class="badge">0 results</span>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Task</th>
+                                <th>Client</th>
+                                <th>Subtask</th>
+                                <th>Status</th>
+                                <th>Execution Time</th>
+                                <th>Completed At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                            <tr>
+                                <td colspan="8" class="text-center">Loading results...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Result Detail Modal -->
+            <div id="resultDetailModal" class="modal" style="display:none;">
+                <div class="modal-content modal-large">
+                    <div class="modal-header">
+                        <h3 id="resultDetailTitle">Result Details</h3>
+                        <button class="close-btn" onclick="closeResultDetailModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" id="resultDetailBody">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification container -->
+    <div id="notifications" class="notifications"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/results.js') }}"></script>
+</body>
+</html>

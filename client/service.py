@@ -13,7 +13,11 @@ from pathlib import Path
 
 # Fix Python path for Windows service
 def fix_service_path():
-    """Fix Python path for Windows service execution"""
+    """Fix Python path for Windows service execution.
+    
+    Returns:
+        str: The project root directory path
+    """
     # Get the directory where this service.py file is located
     service_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(service_dir)
@@ -167,7 +171,8 @@ class TaskClientService(win32serviceutil.ServiceFramework):
             try:
                 self.logger.info("Fixing Python path for service execution...")
                 # Re-fix path in case service changed working directory
-                fix_service_path()
+                repo_root = fix_service_path()
+                self.logger.info(f"Repository root: {repo_root}")
                 
                 self.logger.info("Importing TaskClient...")
                 # Import TaskClient dynamically to avoid import issues at module level
@@ -181,7 +186,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
                     self.logger.info("Attempting alternative import...")
                     # Try absolute import
                     import importlib.util
-                    runner_path = os.path.join(project_root, 'client', 'client_runner.py')
+                    runner_path = os.path.join(repo_root, 'client', 'client_runner.py')
                     spec = importlib.util.spec_from_file_location("client.client_runner", runner_path)
                     runner_module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(runner_module)
@@ -190,7 +195,9 @@ class TaskClientService(win32serviceutil.ServiceFramework):
                 
                 self.logger.info("Creating TaskClientRunner instance...")
                 
-                # Create a configuration data structure for the runner
+                # Create a configuration data structure for the runner.
+                # The service runs directly from the repo, so code updates via
+                # git pull take effect automatically through subtask auto-reload.
                 runner_config = {
                     'server_url': config.get('server_url', 'http://localhost:5000'),
                     'client_name': config.get('client_name', 'default-client'),

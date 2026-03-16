@@ -1940,3 +1940,64 @@ body {
 .filter-bar .filter-group:last-child {
     margin-left: auto;
 }
+
+/* Results page styles */
+.result-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.result-detail-grid .detail-row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.result-detail-grid .detail-row strong {
+    min-width: 120px;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.result-data-section {
+    margin-top: 16px;
+}
+
+.result-data-section h4 {
+    margin-bottom: 10px;
+    color: #333;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 6px;
+}
+
+.result-json,
+.result-text {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 16px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    max-height: 500px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.status-completed {
+    color: #28a745;
+}
+
+.status-failed {
+    color: #dc3545;
+}
+
+.status-pending {
+    color: #ffc107;
+}
+

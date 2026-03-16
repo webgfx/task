@@ -12,9 +12,13 @@ Usage:
     
     # List available subtasks
     available = list_subtasks()
+    
+    # Reload subtasks (useful for development)
+    reload_subtasks()
 """
 
 import os
+import sys
 import importlib
 import logging
 from typing import Dict, Any, Optional, List
@@ -55,6 +59,57 @@ def _load_all_subtasks():
                 logging.debug(f"Loaded subtask module: {module_name}")
             except Exception as e:
                 logging.error(f"Failed to load subtask module {module_name}: {e}")
+
+
+def reload_subtasks():
+    """
+    Reload all subtask modules to pick up changes without restarting the service.
+    This is useful during development when subtask implementations are updated.
+    """
+    global _registry
+    
+    logging.info("Reloading all subtask modules...")
+    
+    # Clear the current registry
+    if _registry is not None:
+        _registry._subtasks.clear()
+    
+    # Get the directory containing subtask modules
+    subtasks_dir = os.path.dirname(__file__)
+    
+    # Find all subtask modules
+    subtask_modules = []
+    for filename in os.listdir(subtasks_dir):
+        if (filename.endswith('.py') and 
+            filename not in ['__init__.py', 'base.py'] and
+            not filename.startswith('_')):
+            module_name = f'common.subtasks.{filename[:-3]}'
+            subtask_modules.append(module_name)
+    
+    # Reload each module
+    reloaded_count = 0
+    for module_name in subtask_modules:
+        try:
+            # If the module is already imported, reload it
+            if module_name in sys.modules:
+                importlib.reload(sys.modules[module_name])
+                logging.debug(f"Reloaded existing module: {module_name}")
+            else:
+                # Import new module
+                importlib.import_module(module_name)
+                logging.debug(f"Imported new module: {module_name}")
+            reloaded_count += 1
+        except Exception as e:
+            logging.error(f"Failed to reload subtask module {module_name}: {e}")
+    
+    logging.info(f"Successfully reloaded {reloaded_count} subtask modules")
+    
+    # List loaded subtasks for confirmation
+    if _registry:
+        loaded_subtasks = _registry.list_subtasks()
+        logging.info(f"Available subtasks after reload: {', '.join(loaded_subtasks)}")
+    
+    return reloaded_count
 
 
 def register_subtask_class(name: str, subtask_instance: BaseSubtask):
