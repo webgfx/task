@@ -1,20 +1,20 @@
 """
-Subtasks package for distributed task execution.
+Tasks package for distributed job execution.
 
-This package provides a modular approach to subtask definitions where each
-subtask is defined as a class inheriting from BaseSubtask.
+This package provides a modular approach to task definitions where each
+task type is defined as a class inheriting from BaseTask.
 
 Usage:
-    from common.tasks import get_subtask, list_subtasks, execute_subtask
+    from common.tasks import get_task, list_tasks, execute_task
 
-    # Execute a subtask
-    result = execute_subtask('get_hostname')
+    # Execute a task
+    result = execute_task('get_hostname')
 
-    # List available subtasks
-    available = list_subtasks()
+    # List available tasks
+    available = list_tasks()
 
-    # Reload subtasks (useful for development)
-    reload_subtasks()
+    # Reload tasks (useful for development)
+    reload_tasks()
 """
 
 import os
@@ -23,176 +23,140 @@ import importlib
 import logging
 from typing import Dict, Any, Optional, List
 
-# Import the base classes
-from .base import BaseSubtask, SubtaskRegistry, SubtaskResultDefinition
+from .base import BaseTask, TaskRegistry, TaskResultDefinition
 
 # Global registry instance
 _registry = None
 
 
-def get_registry() -> SubtaskRegistry:
-    """Get the global subtask registry"""
+def get_registry() -> TaskRegistry:
+    """Get the global task registry"""
     global _registry
     if _registry is None:
-        _registry = SubtaskRegistry()
-        _load_all_subtasks()
+        _registry = TaskRegistry()
+        _load_all_tasks()
     return _registry
 
 
-def _load_all_subtasks():
-    """Automatically load all subtask modules from the subtasks directory"""
+def _load_all_tasks():
+    """Automatically load all task modules from the tasks directory"""
     global _registry
 
-    # Get the directory containing subtask modules
-    subtasks_dir = os.path.dirname(__file__)
+    tasks_dir = os.path.dirname(__file__)
 
-    # Import all Python files in the subtasks directory (except __init__.py and base.py)
-    for filename in os.listdir(subtasks_dir):
+    for filename in os.listdir(tasks_dir):
         if (filename.endswith('.py') and
             filename not in ['__init__.py', 'base.py'] and
             not filename.startswith('_')):
 
-            module_name = filename[:-3]  # Remove .py extension
+            module_name = filename[:-3]
             try:
-                # Import the module - this will trigger registration
-                importlib.import_module(f'common.tasks.{module_name}')
-                logging.debug(f"Loaded subtask module: {module_name}")
+                spec = importlib.util.spec_from_file_location(
+                    f'common.tasks.{module_name}',
+                    os.path.join(tasks_dir, filename)
+                )
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[f'common.tasks.{module_name}'] = module
+                spec.loader.exec_module(module)
+                logging.debug(f"Loaded task module: {module_name}")
             except Exception as e:
-                logging.error(f"Failed to load subtask module {module_name}: {e}")
+                logging.error(f"Failed to load task module {module_name}: {e}")
 
 
-def reload_subtasks():
-    """
-    Reload all subtask modules to pick up changes without restarting the service.
-    This is useful during development when subtask implementations are updated.
-    """
+def reload_tasks():
+    """Reload all task modules to pick up changes without restarting the service."""
     global _registry
 
-    logging.info("Reloading all subtask modules...")
+    logging.info("Reloading all task modules...")
 
-    # Clear the current registry
     if _registry is not None:
-        _registry._subtasks.clear()
+        _registry._tasks.clear()
 
-    # Get the directory containing subtask modules
-    subtasks_dir = os.path.dirname(__file__)
+    tasks_dir = os.path.dirname(__file__)
 
-    # Find all subtask modules
-    subtask_modules = []
-    for filename in os.listdir(subtasks_dir):
+    task_modules = []
+    for filename in os.listdir(tasks_dir):
         if (filename.endswith('.py') and
             filename not in ['__init__.py', 'base.py'] and
             not filename.startswith('_')):
             module_name = f'common.tasks.{filename[:-3]}'
-            subtask_modules.append(module_name)
+            task_modules.append(module_name)
 
-    # Reload each module
     reloaded_count = 0
-    for module_name in subtask_modules:
+    for module_name in task_modules:
         try:
-            # If the module is already imported, reload it
             if module_name in sys.modules:
                 importlib.reload(sys.modules[module_name])
                 logging.debug(f"Reloaded existing module: {module_name}")
             else:
-                # Import new module
-                importlib.import_module(module_name)
+                base_name = module_name.split('.')[-1]
+                filepath = os.path.join(tasks_dir, base_name + '.py')
+                spec = importlib.util.spec_from_file_location(module_name, filepath)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
                 logging.debug(f"Imported new module: {module_name}")
             reloaded_count += 1
         except Exception as e:
-            logging.error(f"Failed to reload subtask module {module_name}: {e}")
+            logging.error(f"Failed to reload task module {module_name}: {e}")
 
-    logging.info(f"Successfully reloaded {reloaded_count} subtask modules")
+    logging.info(f"Successfully reloaded {reloaded_count} task modules")
 
-    # List loaded subtasks for confirmation
     if _registry:
-        loaded_subtasks = _registry.list_subtasks()
-        logging.info(f"Available subtasks after reload: {', '.join(loaded_subtasks)}")
+        loaded = _registry.list_tasks()
+        logging.info(f"Available tasks after reload: {', '.join(loaded)}")
 
     return reloaded_count
 
 
-def register_subtask_class(name: str, subtask_instance: BaseSubtask):
-    """Register a subtask instance"""
-    registry = get_registry()
-    registry.register(name, subtask_instance)
+def register_task_class(name: str, task_instance: BaseTask):
+    """Register a task instance"""
+    get_registry().register(name, task_instance)
 
 
-def get_subtask(name: str) -> Optional[BaseSubtask]:
-    """Get a subtask instance by name"""
+def get_task(name: str) -> Optional[BaseTask]:
+    """Get a task instance by name"""
     return get_registry().get(name)
 
 
-def list_subtasks() -> List[str]:
-    """List all available subtask names"""
-    return get_registry().list_subtasks()
+def list_tasks() -> List[str]:
+    """List all available task names"""
+    return get_registry().list_tasks()
 
 
-def list_subtasks_with_descriptions() -> Dict[str, str]:
-    """List all subtasks with their descriptions"""
-    return get_registry().list_subtasks_with_descriptions()
+def list_tasks_with_descriptions() -> Dict[str, str]:
+    """List all tasks with their descriptions"""
+    return get_registry().list_tasks_with_descriptions()
 
 
-def execute_subtask(name: str, *args, **kwargs) -> Dict[str, Any]:
-    """Execute a subtask and return the result"""
+def execute_task(name: str, *args, **kwargs) -> Dict[str, Any]:
+    """Execute a task and return the result"""
     return get_registry().execute(name, *args, **kwargs)
 
 
-# Convenience functions for backward compatibility
-def get_hostname() -> str:
-    """Backward compatibility wrapper for get_hostname subtask"""
-    result = execute_subtask('get_hostname')
-    if result['success']:
-        return result['result']
-    else:
-        raise Exception(result['error'])
-
-
-def get_system_info() -> Dict[str, Any]:
-    """Backward compatibility wrapper for get_system_info subtask"""
-    result = execute_subtask('get_system_info')
-    if result['success']:
-        return result['result']
-    else:
-        raise Exception(result['error'])
-
-
-# Legacy registration function for backward compatibility
-def register_subtask(name: str, result_def: Optional[SubtaskResultDefinition] = None):
-    """Legacy decorator - kept for backward compatibility"""
-    def decorator(func):
-        # This is kept for legacy support but new subtasks should use classes
-        logging.warning(f"Legacy subtask registration for {name}. Consider migrating to BaseSubtask class.")
-        return func
-    return decorator
-
-
-# Legacy function for getting result definitions
-def get_subtask_result_definition(name: str) -> Optional[SubtaskResultDefinition]:
-    """Legacy function - result definitions are now handled by subtask classes"""
-    subtask = get_subtask(name)
-    if subtask:
-        # Create a legacy result definition from the subtask description
-        return SubtaskResultDefinition(
+def get_task_result_definition(name: str) -> Optional[TaskResultDefinition]:
+    """Get result definition for a task type"""
+    task = get_task(name)
+    if task:
+        return TaskResultDefinition(
             name=name,
-            description=subtask.get_description(),
+            description=task.get_description(),
             result_type="any"
         )
     return None
 
 
-# Legacy function for listing with definitions
-def list_subtasks_with_definitions() -> Dict[str, Dict[str, Any]]:
-    """Legacy function - returns subtasks with descriptions"""
+def list_tasks_with_definitions() -> Dict[str, Dict[str, Any]]:
+    """List tasks with full definitions"""
     result = {}
     registry = get_registry()
-    for name in registry.list_subtasks():
-        subtask = registry.get(name)
+    for name in registry.list_tasks():
+        task = registry.get(name)
         result[name] = {
-            'function': subtask.get_description(),
-            'result_definition': SubtaskResultDefinition(
+            'function': task.get_description(),
+            'result_definition': TaskResultDefinition(
                 name=name,
-                description=subtask.get_description(),
+                description=task.get_description(),
                 result_type="any"
             )
         }

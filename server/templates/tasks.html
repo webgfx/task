@@ -23,7 +23,7 @@
                 <li class="nav-item active">
                     <a href="/tasks" class="nav-link">
                         <i class="fas fa-list-check"></i>
-                        <span>Task Management</span>
+                        <span>Job Management</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -52,7 +52,7 @@
             <!-- Header -->
             <header class="header">
                 <div class="header-content">
-                    <h1>Task Management</h1>
+                    <h1>Job Management</h1>
                     <div class="header-actions">
                         <button class="btn btn-secondary" onclick="selectAllTasks()">
                             <i class="fas fa-check-square"></i>
@@ -64,7 +64,7 @@
                         </button>
                         <button class="btn btn-primary" onclick="openTaskModal()">
                             <i class="fas fa-plus"></i>
-                            Create Task
+                            Create Job
                         </button>
                     </div>
                 </div>
@@ -78,7 +78,7 @@
                         <option value="">All</option>
                         <option value="pending">Pending</option>
                         <option value="running">Running</option>
-                        <option value="completed">Completed</option>
+                        <option value="completed">Passed</option>
                         <option value="failed">Failed</option>
                         <option value="cancelled">Cancelled</option>
                     </select>
@@ -91,7 +91,7 @@
                 </div>
                 <div class="filter-group">
                     <label>Search:</label>
-                    <input type="text" id="searchInput" placeholder="Search task name or subtask" onkeyup="filterTasks()">
+                    <input type="text" id="searchInput" placeholder="Search job name or task" onkeyup="filterTasks()">
                 </div>
                 <div class="filter-group">
                     <button class="btn btn-outline" onclick="toggleAllTaskDetails()" id="toggleAllBtn" title="Toggle all task details">
@@ -106,9 +106,9 @@
                 <table class="task-table enhanced-task-table">
                     <thead>
                         <tr>
-                            <th class="task-name-col">Task Name</th>
-                            <th class="subtask-id-col">Subtask ID</th>
-                            <th class="subtask-name-col">Subtask Name</th>
+                            <th class="task-name-col">Job Name</th>
+                            <th class="subtask-id-col">Task ID</th>
+                            <th class="subtask-name-col">Task Name</th>
                             <th class="client-col">Client</th>
                             <th class="status-col">Status</th>
                             <th class="result-col">Result</th>
@@ -133,7 +133,7 @@
     <div id="taskModal" class="modal">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h3 id="modalTitle">Create Task</h3>
+                <h3 id="modalTitle">Create Job</h3>
                 <button class="close-btn" onclick="closeTaskModal()">
                     <i class="fas fa-times"></i>
                 </button>

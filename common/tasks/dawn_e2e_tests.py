@@ -18,12 +18,12 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-from .base import BaseSubtask
-from . import register_subtask_class
+from .base import BaseTask
+from . import register_task_class
 
 
-class DawnE2ETestsSubtask(BaseSubtask):
-    """Dawn E2E tests subtask for downloading and running Dawn end-to-end tests."""
+class DawnE2ETestsTask(BaseTask):
+    """Dawn E2E tests task for downloading and running Dawn end-to-end tests."""
 
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         """
@@ -733,7 +733,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
 
 
 # Register the subtask class instance
-register_subtask_class('dawn_e2e_tests', DawnE2ETestsSubtask())
+register_task_class('dawn_e2e_tests', DawnE2ETestsTask())
 
 
 # Legacy function wrapper for backward compatibility

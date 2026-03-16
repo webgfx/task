@@ -22,7 +22,7 @@
                 <li class="nav-item">
                     <a href="/tasks" class="nav-link">
                         <i class="fas fa-list-check"></i>
-                        <span>Task Management</span>
+                        <span>Job Management</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -53,9 +53,13 @@
                 <div class="header-content">
                     <h1>Cached Results</h1>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="selectAllResults()">
+                            <i class="fas fa-check-square"></i>
+                            Select All
+                        </button>
                         <button class="btn btn-primary" onclick="compareSelected()" id="compareBtn" disabled>
                             <i class="fas fa-chart-line"></i>
-                            Compare Selected (<span id="selectedCount">0</span>)
+                            Compare (<span id="selectedCount">0</span>)
                         </button>
                         <button class="btn btn-secondary" onclick="refreshResults()">
                             <i class="fas fa-sync-alt"></i>
@@ -74,49 +78,42 @@
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label>Subtask:</label>
+                    <label>Task:</label>
                     <select id="subtaskFilter" onchange="filterResults()">
-                        <option value="">All Subtasks</option>
+                        <option value="">All Tasks</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label>Status:</label>
                     <select id="statusFilter" onchange="filterResults()">
                         <option value="">All</option>
-                        <option value="completed">Completed</option>
+                        <option value="completed">Passed</option>
                         <option value="failed">Failed</option>
                     </select>
                 </div>
             </div>
 
             <!-- Results Table -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>Task Results</h3>
-                    <span id="resultCount" class="badge">0 results</span>
-                </div>
-                <div class="table-container">
-                    <table class="data-table" id="resultsTable">
-                        <thead>
-                            <tr>
-                                <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all"></th>
-                                <th>ID</th>
-                                <th>Task</th>
-                                <th>Client</th>
-                                <th>Subtask</th>
-                                <th>Status</th>
-                                <th>Execution Time</th>
-                                <th>Completed At</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="resultsBody">
-                            <tr>
-                                <td colspan="9" class="text-center">Loading results...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="task-table-container">
+                <table class="task-table enhanced-task-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Job</th>
+                            <th>Client</th>
+                            <th>Task</th>
+                            <th>Status</th>
+                            <th>Execution Time</th>
+                            <th>Finished At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                        <tr>
+                            <td colspan="7" class="text-center">Loading results...</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination" id="resultsPagination"></div>
             </div>
 
             <!-- Result Detail Modal -->
@@ -168,7 +165,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/results.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/results.js') }}?v=20260317"></script>
 </body>
 </html>
 

@@ -40,8 +40,8 @@ import configparser
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .base import BaseSubtask
-from . import register_subtask_class
+from .base import BaseTask
+from . import register_task_class
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ def _find_new_results(results_dir: str, before: set) -> Optional[Dict[str, Any]]
     return None
 
 
-class AiTestSubtask(BaseSubtask):
+class AiTestTask(BaseTask):
     """
     Driver for the external ai-test benchmark project.
 
@@ -280,5 +280,5 @@ class AiTestSubtask(BaseSubtask):
         return "Run ai-test benchmarks (ORT/llama.cpp) via node scripts/perf-test.js"
 
 
-register_subtask_class('ai_test', AiTestSubtask())
+register_task_class('ai_test', AiTestTask())
 

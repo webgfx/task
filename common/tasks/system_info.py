@@ -12,12 +12,12 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 
-from .base import BaseSubtask
-from . import register_subtask_class
+from .base import BaseTask
+from . import register_task_class
 
 
-class GetSystemInfoSubtask(BaseSubtask):
-    """Subtask to get comprehensive system information"""
+class GetSystemInfoTask(BaseTask):
+    """Task to get comprehensive system information"""
 
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         """
@@ -206,7 +206,7 @@ class GetSystemInfoSubtask(BaseSubtask):
 
 
 # Register the subtask
-register_subtask_class('get_system_info', GetSystemInfoSubtask())
+register_task_class('get_system_info', GetSystemInfoTask())
 
 
 def get_system_summary() -> Dict[str, Any]:

@@ -19,7 +19,7 @@
                 <li class="nav-item">
                     <a href="/tasks" class="nav-link">
                         <i class="fas fa-list-check"></i>
-                        <span>Task Management</span>
+                        <span>Job Management</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -38,9 +38,9 @@
                 <div class="header-content">
                     <h1>System Overview</h1>
                     <div class="header-actions">
-                        <button id="reloadSubtasksBtn" class="btn btn-small btn-secondary"
-                                onclick="reloadSubtasks()" title="Reload subtask modules on server and clients">
-                            <i class="fas fa-sync-alt"></i> Reload Subtasks
+                        <button id="reloadTasksBtn" class="btn btn-small btn-secondary"
+                                onclick="reloadTasks()" title="Reload subtask modules on server and clients">
+                            <i class="fas fa-sync-alt"></i> Reload Tasks
                         </button>
                         <span class="connection-status" id="connectionStatus">
                             <i class="fas fa-circle text-success"></i>
@@ -60,7 +60,7 @@
                         </div>
                         <div class="stat-content">
                             <h3 id="totalTasks">0</h3>
-                            <p>Total Tasks</p>
+                            <p>Total Jobs</p>
                         </div>
                     </div>
 
@@ -90,7 +90,7 @@
                         </div>
                         <div class="stat-content">
                             <h3 id="completedTasks">0</h3>
-                            <p>Completed</p>
+                            <p>Passed</p>
                         </div>
                     </div>
                 </div>
@@ -101,7 +101,7 @@
                         <h2>Recent Tasks</h2>
                         <a href="/tasks" class="btn btn-primary">
                             <i class="fas fa-plus"></i>
-                            Create Task
+                            Create Job
                         </a>
                     </div>
                     <div class="task-list" id="recentTasks">

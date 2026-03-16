@@ -212,11 +212,11 @@ function createClientTableRow(client) {
     const statusIcon = getStatusIcon(client.status);
     const lastHeartbeat = client.last_heartbeat ? formatRelativeTime(client.last_heartbeat) : 'Never';
 
-    // Get current task and subtask information
-    const taskId = client.current_task_id || '-';
+    // Get current job and task information
+    const taskId = client.current_job_id || '-';
     const taskName = client.current_task_name || '-';
-    const subtaskId = client.current_subtask_id || '-';
-    const subtaskName = client.current_subtask_id ? getSubtaskDisplayName(client.current_subtask_id) : '-';
+    const currentTaskId = client.current_task_id || '-';
+    const currentTaskName = client.current_task_id ? getSubtaskDisplayName(client.current_task_id) : '-';
 
     // Main client row
     const mainRow = `
@@ -240,11 +240,11 @@ function createClientTableRow(client) {
                 </div>
             </td>
             <td class="subtask-id-col">
-                ${subtaskId !== '-' ? `<span class="subtask-id-badge">${escapeHtml(subtaskId)}</span>` : '<span class="no-id">—</span>'}
+                ${currentTaskId !== '-' ? `<span class="subtask-id-badge">${escapeHtml(currentTaskId)}</span>` : '<span class="no-id">—</span>'}
             </td>
             <td class="subtask-name-col">
                 <div class="subtask-name-info">
-                    <span class="subtask-name">${escapeHtml(subtaskName)}</span>
+                    <span class="subtask-name">${escapeHtml(currentTaskName)}</span>
                 </div>
             </td>
             <td class="heartbeat-col">
@@ -255,12 +255,6 @@ function createClientTableRow(client) {
                     <button class="collapse-toggle" onclick="event.stopPropagation(); toggleClientDetails('${client.name}')"
                             title="Toggle client details">
                         <i class="fas fa-chevron-up" id="toggle-icon-${client.name}"></i>
-                    </button>
-                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); updateClientRepo('${client.name}')" title="Git Pull Repo">
-                        <i class="fas fa-code-branch"></i>
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); unregisterClient('${client.name}')" title="Remove Client">
-                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </td>
@@ -377,7 +371,7 @@ async function loadClientDetails(clientName) {
         }
 
         // Get client tasks
-        const tasksResponse = await apiGet('/api/tasks');
+        const tasksResponse = await apiGet('/api/jobs');
         const allTasks = tasksResponse.data || [];
         const clientTasks = allTasks.filter(task =>
             task.clients && task.clients.includes(clientName)
@@ -497,7 +491,7 @@ function getSubtaskDisplayName(subtaskId) {
         'hostname': 'Hostname',
         'log_cleanup': 'Log Cleanup',
         'file_download': 'File Download',
-        'command_execution': 'Subtask Execution',
+        'command_execution': 'Task Run',
         'system_monitoring': 'System Monitoring'
     };
 
@@ -560,7 +554,7 @@ async function unregisterClient(clientName) {
     try {
         // Get client info for better confirmation dialog
         const client = clients.find(c => c.name === clientName);
-        const currentTasks = client && client.current_task_id ? `\n- Has active task #${client.current_task_id}` : '';
+        const currentTasks = client && client.current_job_id ? `\n- Has active task #${client.current_job_id}` : '';
 
         // Show detailed confirmation dialog
         const confirmMessage = `Are you sure you want to unregister client "${clientName}"?

@@ -11,12 +11,12 @@ import os
 import logging
 from typing import Dict, Any
 
-from .base import BaseSubtask
-from . import register_subtask_class
+from .base import BaseTask
+from . import register_task_class
 
 
-class GetHostnameSubtask(BaseSubtask):
-    """Subtask to get the hostname of the current client"""
+class GetHostnameTask(BaseTask):
+    """Task to get the hostname of the current client"""
 
     def run(self, *args, **kwargs) -> str:
         """
@@ -84,7 +84,7 @@ class GetHostnameSubtask(BaseSubtask):
 
 
 # Register the subtask
-register_subtask_class('get_hostname', GetHostnameSubtask())
+register_task_class('get_hostname', GetHostnameTask())
 
 
 def validate_hostname(hostname: str) -> Dict[str, Any]:

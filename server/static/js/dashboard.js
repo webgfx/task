@@ -26,7 +26,7 @@ async function initializeDashboard() {
 async function loadDashboardData() {
     try {
         const [tasksResponse, clientsResponse] = await Promise.all([
-            apiGet('/api/tasks'),
+            apiGet('/api/jobs'),
             apiGet('/api/clients')
         ]);
         
@@ -109,7 +109,7 @@ function displayClientStatus() {
             <div class=client-info>
                 <div><i class=fas fa-network-wired></i> IP: ${client.ip_address}:${client.port}</div>
                 <div><i class=fas fa-heartbeat></i> last heartbeat: ${formatRelativeTime(client.last_heartbeat)}</div>
-                ${client.current_task_id ? `<div><i class=fas fa-tasks></i> currentTask: #${client.current_task_id}</div>` : ''}
+                ${client.current_job_id ? `<div><i class=fas fa-tasks></i> currentTask: #${client.current_job_id}</div>` : ''}
             </div>
         </div>
     `).join('');

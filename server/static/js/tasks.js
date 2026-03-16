@@ -43,13 +43,13 @@ function setupWebSocketListeners() {
 
             // Show notification for completion or failure
             if (data.status === 'completed') {
-                const subtaskDisplay = data.subtask_id !== null && data.subtask_id !== undefined ? `"${data.subtask_name}" (ID: ${data.subtask_id})` : `"${data.subtask_name}"`;
-                showNotification('Subtask Completed',
-                    `Subtask ${subtaskDisplay} completed on client ${data.client}`, 'success');
+                const subtaskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
+                showNotification('Task Completed',
+                    `Task ${subtaskDisplay} completed on client ${data.client}`, 'success');
             } else if (data.status === 'failed') {
-                const subtaskDisplay = data.subtask_id !== null && data.subtask_id !== undefined ? `"${data.subtask_name}" (ID: ${data.subtask_id})` : `"${data.subtask_name}"`;
-                showNotification('Subtask Failed',
-                    `Subtask ${subtaskDisplay} failed on client ${data.client}`, 'error');
+                const subtaskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
+                showNotification('Task Failed',
+                    `Task ${subtaskDisplay} failed on client ${data.client}`, 'error');
             }
         });
 
@@ -86,14 +86,14 @@ function setupWebSocketListeners() {
             }
 
             // Show notification
-            const subtaskDisplay = data.subtask_id !== null && data.subtask_id !== undefined ? `"${data.subtask_name}" (ID: ${data.subtask_id})` : `"${data.subtask_name}"`;
-            showNotification('Subtask Deleted',
-                `Subtask ${subtaskDisplay} deleted from client ${data.client}`, 'info');
+            const subtaskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
+            showNotification('Task Deleted',
+                `Task ${subtaskDisplay} deleted from client ${data.client}`, 'info');
 
-            // If all subtasks were deleted, show task cancellation notice
+            // If All tasks were deleted, show task cancellation notice
             if (data.remaining_subtasks === 0) {
                 showNotification('Task Cancelled',
-                    'All subtasks were deleted - task has been cancelled', 'warning');
+                    'All tasks were deleted - task has been cancelled', 'warning');
             }
         });
 
@@ -200,7 +200,7 @@ async function loadAvailableSubtasks() {
         // Try to load enhanced subtask definitions first
         let response;
         try {
-            response = await apiGet('/api/subtasks/definitions');
+            response = await apiGet('/api/tasks/definitions');
             if (response.success && response.data) {
                 // Enhanced format with result definitions
                 availableSubtasks = Object.keys(response.data).map(name => {
@@ -219,7 +219,7 @@ async function loadAvailableSubtasks() {
         }
 
         // Fallback to basic subtasks list
-        response = await apiGet('/api/subtasks');
+        response = await apiGet('/api/tasks');
         if (response.success && response.data) {
             availableSubtasks = response.data.map(subtask => ({
                 name: subtask.name,
@@ -361,7 +361,7 @@ function updateSubtaskNumbers() {
     subtaskRows.forEach((row, index) => {
         const header = row.querySelector('.subtask-header h5');
         if (header) {
-            header.textContent = `Subtask ${index + 1}`;
+            header.textContent = `Task ${index + 1}`;
         }
 
         // Only try to update order input if it exists
@@ -490,7 +490,7 @@ async function saveTask() {
             showNotification('Validation Error', 'At least one subtask is required', 'error');
             return;
         }
-        taskData.subtasks = subtasks;
+        taskData.tasks = subtasks;
 
         // Handle email notification settings
         const sendEmail = document.getElementById('sendEmail').checked;
@@ -511,9 +511,9 @@ async function saveTask() {
         let response;
 
         if (taskId) {
-            response = await apiPut(`/api/tasks/${taskId}`, taskData);
+            response = await apiPut(`/api/jobs/${taskId}`, taskData);
         } else {
-            response = await apiPost('/api/tasks', taskData);
+            response = await apiPost('/api/jobs', taskData);
         }
 
         if (response.success) {
@@ -543,36 +543,36 @@ async function saveTask() {
 async function displayGeneratedSubtaskIds(taskId) {
     try {
         console.log('Fetching subtask IDs for task:', taskId);
-        const response = await apiGet(`/api/tasks/${taskId}`);
+        const response = await apiGet(`/api/jobs/${taskId}`);
         console.log('Fetched task data:', response);
 
-        if (response.success && response.data.subtasks && response.data.subtasks.length > 0) {
+        if (response.success && response.data.tasks && response.data.tasks.length > 0) {
             const task = response.data;
             const subtaskRows = document.querySelectorAll('.subtask-row');
 
             console.log('Found subtask rows:', subtaskRows.length);
-            console.log('Server subtasks:', task.subtasks.length);
+            console.log('Server subtasks:', task.tasks.length);
 
             // Create a simple mapping based on order
             let idsUpdated = 0;
             subtaskRows.forEach((subtaskRow, rowIndex) => {
                 // Find subtasks for this row (by order)
-                const matchingSubtasks = task.subtasks.filter(st => st.order === rowIndex);
+                const matchingSubtasks = task.tasks.filter(st => st.order === rowIndex);
 
                 if (matchingSubtasks.length > 0) {
                     const firstSubtask = matchingSubtasks[0];
-                    console.log(`Updating row ${rowIndex} with subtask ID:`, firstSubtask.subtask_id);
+                    console.log(`Updating row ${rowIndex} with subtask ID:`, firstSubtask.task_id);
 
-                    subtaskRow.setAttribute('data-subtask-id', firstSubtask.subtask_id);
+                    subtaskRow.setAttribute('data-subtask-id', firstSubtask.task_id);
 
                     // Display the subtask ID in the UI
                     const idDisplay = subtaskRow.querySelector('.subtask-id-display');
                     const idValue = subtaskRow.querySelector('.subtask-id-value');
                     if (idDisplay && idValue) {
                         if (matchingSubtasks.length === 1) {
-                            idValue.textContent = firstSubtask.subtask_id;
+                            idValue.textContent = firstSubtask.task_id;
                         } else {
-                            idValue.textContent = `${firstSubtask.subtask_id} (+${matchingSubtasks.length - 1} more)`;
+                            idValue.textContent = `${firstSubtask.task_id} (+${matchingSubtasks.length - 1} more)`;
                         }
                         idDisplay.style.display = 'block';
                         idsUpdated++;
@@ -585,7 +585,7 @@ async function displayGeneratedSubtaskIds(taskId) {
             // Show IDs for 3 seconds, then close
             if (idsUpdated > 0) {
                 showNotification('Subtask IDs Generated',
-                    `Unique IDs assigned to ${task.subtasks.length} subtasks.`,
+                    `Unique IDs assigned to ${task.tasks.length} subtasks.`,
                     'info', 100);
 
                 setTimeout(() => {
@@ -637,7 +637,7 @@ function collectSubtasks() {
 
                 // Preserve subtask ID only for the first client if editing
                 if (existingSubtaskId && clientIndex === 0) {
-                    subtaskData.subtask_id = existingSubtaskId;
+                    subtaskData.task_id = existingSubtaskId;
                 }
 
                 subtasks.push(subtaskData);
@@ -648,17 +648,17 @@ function collectSubtasks() {
     return subtasks;
 }
 
-// Load tasks from server and get execution data
+// Load tasks from server and get run data
 async function refreshTasks() {
     try {
-        const response = await apiGet('/api/tasks');
+        const response = await apiGet('/api/jobs');
         if (response.success) {
             allTasks = response.data || [];
         } else {
             throw new Error(response.error || 'Unknown error');
         }
 
-        // Executions are now included inline in the tasks response
+        // runs are now included inline in the tasks response
         // No need for separate per-task API calls
 
         filterTasks();
@@ -732,7 +732,7 @@ function renderTaskGroup(task, container) {
                     <span class="task-group-title">${task.name}</span>
                 </div>
                 <div class="task-group-summary">
-                    ${taskStats.totalExecutions} subtasks •
+                    ${taskStats.totalRuns} tasks •
                     ${taskStats.completed} passed •
                     ${taskStats.running} running •
                     ${taskStats.failed} failed •
@@ -740,7 +740,7 @@ function renderTaskGroup(task, container) {
                 </div>
                 <div class="task-group-actions">
                     <button class="collapse-toggle" onclick="toggleTaskGroup(${task.id})"
-                            title="Toggle subtask details">
+                            title="Toggle task details">
                         <i class="fas fa-chevron-up" id="toggle-icon-${task.id}"></i>
                     </button>
                     <button class="btn btn-small btn-primary" onclick="viewTaskDetails(${task.id})"
@@ -748,58 +748,52 @@ function renderTaskGroup(task, container) {
                         <i class="fas fa-eye"></i>
                     </button>
                     <button class="btn btn-small btn-secondary" onclick="copyTask(${task.id})"
-                            title="Copy Task">
+                            title="Copy Job">
                         <i class="fas fa-copy"></i>
                     </button>
-                    ${task.status !== 'running' ?
-                        `<button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteTask(${task.id})"
-                                title="Delete Task" style="flex-shrink:0;">
-                            <i class="fas fa-trash-alt"></i> Del
-                        </button>` : ''
-                    }
                 </div>
             </div>
         </td>
     `;
     container.appendChild(groupRow);
 
-    // Create subtask execution rows
-    const subtaskExecutions = generateSubtaskExecutions(task);
-    subtaskExecutions.forEach(execution => {
-        const executionRow = createSubtaskExecutionRow(task, execution);
-        container.appendChild(executionRow);
+    // Create subtask run rows
+    const taskRuns = generateTaskRuns(task);
+    taskRuns.forEach(run => {
+        const runRow = createTaskRunRow(task, run);
+        container.appendChild(runRow);
     });
 }
 
-// Generate subtask execution combinations
-function generateSubtaskExecutions(task) {
-    const executions = [];
+// Generate subtask run combinations
+function generateTaskRuns(task) {
+    const runs = [];
 
-    if (task.subtasks && task.subtasks.length > 0) {
-        // Group subtasks by name and order, then create execution for each target client
-        task.subtasks.forEach(subtask => {
-            const executionData = findExecutionData(task, subtask.name, subtask.client);
+    if (task.tasks && task.tasks.length > 0) {
+        // Group subtasks by name and order, then create run for each target client
+        task.tasks.forEach(subtask => {
+            const runData = findExecutionData(task, subtask.name, subtask.client);
 
-            // Determine the subtask_id: prefer execution data, fall back to task definition
+            // Determine the task_id: prefer run data, fall back to task definition
             let subtaskId = null;
-            if (executionData && executionData.subtask_id !== undefined && executionData.subtask_id !== null) {
-                subtaskId = executionData.subtask_id;
-            } else if (subtask.subtask_id !== undefined && subtask.subtask_id !== null) {
-                subtaskId = subtask.subtask_id;
+            if (runData && runData.task_id !== undefined && runData.task_id !== null) {
+                subtaskId = runData.task_id;
+            } else if (subtask.task_id !== undefined && subtask.task_id !== null) {
+                subtaskId = subtask.task_id;
             }
 
-            executions.push({
-                subtask_id: subtaskId,
-                subtask_name: subtask.name,
+            runs.push({
+                task_id: subtaskId,
+                task_name: subtask.name,
                 client: subtask.client,
                 order: subtask.order,
                 timeout: subtask.timeout,
-                status: executionData ? executionData.status : 'pending',
-                started_at: executionData ? executionData.started_at : null,
-                completed_at: executionData ? executionData.completed_at : null,
-                execution_time: executionData ? executionData.execution_time : null,
-                result: executionData ? executionData.result : null,
-                error_message: executionData ? executionData.error_message : null
+                status: runData ? runData.status : 'pending',
+                started_at: runData ? runData.started_at : null,
+                completed_at: runData ? runData.completed_at : null,
+                execution_time: runData ? runData.execution_time : null,
+                result: runData ? runData.result : null,
+                error_message: runData ? runData.error_message : null
             });
         });
     } else {
@@ -809,8 +803,8 @@ function generateSubtaskExecutions(task) {
             : [task.client || 'Any Available'];
 
         targetClients.forEach(client => {
-            executions.push({
-                subtask_name: 'Subtask Execution',
+            runs.push({
+                task_name: 'Subtask run',
                 client: client,
                 order: 0,
                 timeout: 300,
@@ -825,22 +819,22 @@ function generateSubtaskExecutions(task) {
     }
 
     // Sort by order and then by target client
-    executions.sort((a, b) => {
+    runs.sort((a, b) => {
         if (a.order !== b.order) {
             return a.order - b.order;
         }
         return a.client.localeCompare(b.client);
     });
 
-    return executions;
+    return runs;
 }
 
-// Find execution data for a specific subtask-client combination
+// Find run data for a specific subtask-client combination
 function findExecutionData(task, subtaskName, targetClient) {
-    if (!task.executions) return null;
+    if (!task.runs) return null;
 
-    return task.executions.find(exec =>
-        exec.subtask_name === subtaskName &&
+    return task.runs.find(exec =>
+        exec.task_name === subtaskName &&
         exec.client === targetClient
     );
 }
@@ -861,10 +855,10 @@ function getClientWorkingStatus(client, allTasks) {
         if (task.status !== 'running') return false;
 
         // Check if this client has running subtasks in this task
-        if (task.executions) {
-            return task.executions.some(execution =>
-                execution.client === client.name &&
-                execution.status === 'running'
+        if (task.runs) {
+            return task.runs.some(run =>
+                run.client === client.name &&
+                run.status === 'running'
             );
         }
 
@@ -876,36 +870,36 @@ function getClientWorkingStatus(client, allTasks) {
     return isWorking ? 'busy' : 'free';
 }
 
-// Create a subtask execution row
-function createSubtaskExecutionRow(task, execution) {
+// Create a subtask run row
+function createTaskRunRow(task, run) {
     const row = document.createElement('tr');
-    row.className = `subtask-execution-row task-${task.id}-executions`;
+    row.className = `task-run-row task-${task.id}-runs`;
 
     // Get client and determine actual working status
-    const client = clientsList.find(m => m.name === execution.client);
+    const client = clientsList.find(m => m.name === run.client);
     const clientStatus = getClientWorkingStatus(client, allTasks);
 
     // Format timing information
-    const timingInfo = formatTimingInfo(execution);
+    const timingInfo = formatTimingInfo(run);
 
     // Format result information
-    const resultInfo = formatResultInfo(execution);
+    const resultInfo = formatResultInfo(run);
 
     row.innerHTML = `
         <td class="task-name-col"></td>
         <td class="subtask-id-col">
-            ${execution.subtask_id !== null && execution.subtask_id !== undefined ? `<span class="subtask-id-badge">${execution.subtask_id}</span>` : '<span class="no-id">—</span>'}
+            ${run.task_id !== null && run.task_id !== undefined ? `<span class="subtask-id-badge">${run.task_id}</span>` : '<span class="no-id">—</span>'}
         </td>
         <td class="subtask-name-col">
             <div class="subtask-name-info">
-                <span class="subtask-name">${execution.subtask_name}</span>
+                <span class="subtask-name">${run.task_name.replace(/_/g, '-')}</span>
             </div>
         </td>
         <td class="client-col">
-            <span class="client-name">${execution.client}</span>
+            <span class="client-name">${run.client}</span>
         </td>
         <td class="status-col">
-            <span class="status-badge ${execution.status}">${execution.status === 'completed' ? 'PASSED' : execution.status.toUpperCase()}</span>
+            <span class="status-badge ${run.status}">${run.status === 'completed' ? 'PASSED' : run.status.toUpperCase()}</span>
         </td>
         <td class="result-col">
             ${resultInfo}
@@ -915,13 +909,13 @@ function createSubtaskExecutionRow(task, execution) {
         </td>
         <td class="actions-col">
             <div class="row-actions">
-                ${execution.status === 'failed' && execution.error_message ?
-                    `<button class="btn btn-small btn-danger" onclick="showExecutionError('${execution.subtask_name}', '${execution.client}', \`${execution.error_message.replace(/`/g, '\\`')}\`, '${execution.subtask_id !== null && execution.subtask_id !== undefined ? execution.subtask_id : ''}')" title="View Error">
+                ${run.status === 'failed' && run.error_message ?
+                    `<button class="btn btn-small btn-danger" onclick="showExecutionError('${run.task_name}', '${run.client}', \`${run.error_message.replace(/`/g, '\\`')}\`, '${run.task_id !== null && run.task_id !== undefined ? run.task_id : ''}')" title="View Error">
                         <i class="fas fa-exclamation-triangle"></i>
                     </button>` : ''
                 }
-                ${execution.status === 'pending' && task.status !== 'completed' && task.status !== 'failed' && task.status !== 'cancelled' ?
-                    `<button class="btn btn-small btn-warning" onclick="deleteSubtaskExecution(${task.id}, '${execution.subtask_name}', '${execution.client}', '${execution.subtask_id !== null && execution.subtask_id !== undefined ? execution.subtask_id : ''}')" title="Delete Pending Subtask">
+                ${run.status === 'pending' && task.status !== 'completed' && task.status !== 'failed' && task.status !== 'cancelled' ?
+                    `<button class="btn btn-small btn-warning" onclick="deletePendingTask(${task.id}, '${run.task_name}', '${run.client}', '${run.task_id !== null && run.task_id !== undefined ? run.task_id : ''}')" title="Delete Pending Task">
                         <i class="fas fa-trash"></i>
                     </button>` : ''
                 }
@@ -934,26 +928,26 @@ function createSubtaskExecutionRow(task, execution) {
 
 // Calculate task statistics
 function calculateTaskStatistics(task) {
-    const executions = generateSubtaskExecutions(task);
+    const runs = generateTaskRuns(task);
 
     const stats = {
-        totalExecutions: executions.length,
-        completed: executions.filter(e => e.status === 'completed').length,
-        running: executions.filter(e => e.status === 'running').length,
-        failed: executions.filter(e => e.status === 'failed').length,
-        pending: executions.filter(e => e.status === 'pending').length
+        totalRuns: runs.length,
+        completed: runs.filter(e => e.status === 'completed').length,
+        running: runs.filter(e => e.status === 'running').length,
+        failed: runs.filter(e => e.status === 'failed').length,
+        pending: runs.filter(e => e.status === 'pending').length
     };
 
     return stats;
 }
 
 // Format result information for display
-function formatResultInfo(execution) {
-    if (!execution.result) {
+function formatResultInfo(run) {
+    if (!run.result) {
         return '<span class="no-result">—</span>';
     }
 
-    const result = execution.result;
+    const result = run.result;
     const maxPreviewLength = 50; // Maximum characters to show in preview
 
     // Create preview text
@@ -966,9 +960,9 @@ function formatResultInfo(execution) {
 
     // Determine result type for styling
     let resultClass = 'result-preview';
-    if (execution.status === 'failed') {
+    if (run.status === 'failed') {
         resultClass += ' result-error';
-    } else if (execution.status === 'completed') {
+    } else if (run.status === 'completed') {
         resultClass += ' result-success';
     }
 
@@ -980,21 +974,21 @@ function formatResultInfo(execution) {
 }
 
 // Format timing information for display
-function formatTimingInfo(execution) {
-    if (!execution.started_at) {
+function formatTimingInfo(run) {
+    if (!run.started_at) {
         return '<span class="timing-info">Not started</span>';
     }
 
     let timingHtml = `<div class="timing-info">`;
 
-    timingHtml += `<div><span class="timing-label">Started:</span> ${new Date(execution.started_at).toLocaleString()}</div>`;
+    timingHtml += `<div><span class="timing-label">Started:</span> ${new Date(run.started_at).toLocaleString()}</div>`;
 
-    if (execution.completed_at) {
-        timingHtml += `<div><span class="timing-label">Completed:</span> ${new Date(execution.completed_at).toLocaleString()}</div>`;
+    if (run.completed_at) {
+        timingHtml += `<div><span class="timing-label">Completed:</span> ${new Date(run.completed_at).toLocaleString()}</div>`;
     }
 
-    if (execution.execution_time) {
-        timingHtml += `<div><span class="timing-label">Duration:</span><span class="execution-time">${execution.execution_time.toFixed(2)}s</span></div>`;
+    if (run.execution_time) {
+        timingHtml += `<div><span class="timing-label">Duration:</span><span class="run-time">${run.execution_time.toFixed(2)}s</span></div>`;
     }
 
     timingHtml += '</div>';
@@ -1004,7 +998,7 @@ function formatTimingInfo(execution) {
 
 // Toggle task group visibility
 function toggleTaskGroup(taskId) {
-    const executionRows = document.querySelectorAll(`.task-${taskId}-executions`);
+    const executionRows = document.querySelectorAll(`.task-${taskId}-runs`);
     const toggleIcon = document.getElementById(`toggle-icon-${taskId}`);
 
     const isCollapsed = executionRows[0] && executionRows[0].classList.contains('collapsed');
@@ -1030,8 +1024,8 @@ function toggleAllTaskDetails() {
     const toggleIcon = document.getElementById('toggleAllIcon');
     const toggleText = document.getElementById('toggleAllText');
 
-    // Get all execution rows and toggle icons
-    const allExecutionRows = document.querySelectorAll('.subtask-execution-row');
+    // Get all run rows and toggle icons
+    const allExecutionRows = document.querySelectorAll('.task-run-row');
     const allToggleIcons = document.querySelectorAll('.collapse-toggle i[id^="toggle-icon-"]');
 
     if (allTaskDetailsVisible) {
@@ -1063,17 +1057,17 @@ function toggleAllTaskDetails() {
     }
 }
 
-// Show execution error details
+// Show run error details
 function showExecutionError(subtaskName, targetClient, errorMessage, subtaskId = null) {
     const subtaskDisplay = subtaskId ? `${subtaskName} (ID: ${subtaskId})` : subtaskName;
-    showNotification('Execution Error',
+    showNotification('run Error',
         `Error in ${subtaskDisplay} on ${targetClient}:\n\n${errorMessage}`, 'error');
 }
 
-// Show execution result details
+// Show run result details
 function showExecutionResult(subtaskName, targetClient, result, subtaskId = null) {
     const subtaskDisplay = subtaskId ? `${subtaskName} (ID: ${subtaskId})` : subtaskName;
-    showNotification('Execution Result',
+    showNotification('run Result',
         `Result from ${subtaskDisplay} on ${targetClient}:\n\n${result}`, 'info');
 }
 
@@ -1089,9 +1083,9 @@ function filterTasks() {
             return false;
         }
 
-        // Client filter - check if task has any subtasks or executions on the specified client
+        // Client filter - check if task has any subtasks or runs on the specified client
         if (clientFilter) {
-            const hasTargetClient = task.subtasks && task.subtasks.some(st => st.client === clientFilter) ||
+            const hasTargetClient = task.tasks && task.tasks.some(st => st.client === clientFilter) ||
                                    task.clients && task.clients.includes(clientFilter) ||
                                    task.client === clientFilter;
             if (!hasTargetClient) {
@@ -1104,7 +1098,7 @@ function filterTasks() {
             const searchTerm = searchInput.toLowerCase();
             const matchesName = task.name.toLowerCase().includes(searchTerm);
             const matchesSubtaskLegacy = task.command && task.command.toLowerCase().includes(searchTerm);
-            const matchesSubtask = task.subtasks && task.subtasks.some(st =>
+            const matchesSubtask = task.tasks && task.tasks.some(st =>
                 st.name.toLowerCase().includes(searchTerm)
             );
 
@@ -1117,9 +1111,10 @@ function filterTasks() {
     });
 
     tasksCurrentPage = 1;
+    renderEnhancedTasks();
 }
 
-// Format execution time
+// Format run time
 function formatExecutionTime(startTime, endTime) {
     if (!startTime) return '-';
 
@@ -1160,14 +1155,14 @@ function getStatusClass(status) {
 }
 
 // Calculate task progress percentage
-function calculateTaskProgress(executions) {
-    if (!executions || executions.length === 0) return 0;
+function calculateTaskProgress(runs) {
+    if (!runs || runs.length === 0) return 0;
 
-    const completed = executions.filter(exec =>
+    const completed = runs.filter(exec =>
         exec.status === 'completed' || exec.status === 'failed'
     ).length;
 
-    return Math.round((completed / executions.length) * 100);
+    return Math.round((completed / runs.length) * 100);
 }
 
 // Update task statistics
@@ -1329,12 +1324,12 @@ async function deleteTask(taskId) {
     const task = allTasks.find(t => t.id === taskId);
     const taskName = task ? task.name : `Task ${taskId}`;
 
-    if (!confirm(`Are you sure you want to delete "${taskName}"?\n\nThis will permanently delete:\n• The task itself\n• All execution history\n• All subtask records\n\nThis action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete "${taskName}"?\n\nThis will permanently delete:\n• The task itself\n• All run history\n• All run records\n\nThis action cannot be undone.`)) {
         return;
     }
 
     try {
-        const response = await apiDelete(`/api/tasks/${taskId}`);
+        const response = await apiDelete(`/api/jobs/${taskId}`);
 
         if (response.success) {
             showNotification('Task Deleted', response.message || 'Task deleted successfully', 'success');
@@ -1378,7 +1373,7 @@ async function batchDeleteTasks() {
 
     if (ids.length === 0) return;
 
-    if (!confirm(`Delete ${ids.length} task(s)?\n\nThis will permanently remove all selected tasks and their execution history.\n\nThis action cannot be undone.`)) {
+    if (!confirm(`Delete ${ids.length} task(s)?\n\nThis will permanently remove all selected tasks and their run history.\n\nThis action cannot be undone.`)) {
         return;
     }
 
@@ -1386,7 +1381,7 @@ async function batchDeleteTasks() {
     let failed = 0;
     for (const id of ids) {
         try {
-            const response = await apiDelete(`/api/tasks/${id}`);
+            const response = await apiDelete(`/api/jobs/${id}`);
             if (response.success) deleted++;
             else failed++;
         } catch (e) {
@@ -1399,16 +1394,16 @@ async function batchDeleteTasks() {
     updateBatchDeleteButton();
 }
 
-// Delete subtask execution that hasn't started yet
-async function deleteSubtaskExecution(taskId, subtaskName, targetClient, subtaskId = null) {
+// Delete subtask run that hasn't started yet
+async function deletePendingTask(taskId, subtaskName, targetClient, subtaskId = null) {
     const subtaskDisplay = subtaskId ? `"${subtaskName}" (ID: ${subtaskId})` : `"${subtaskName}"`;
 
-    if (!confirm(`Are you sure you want to delete the pending subtask ${subtaskDisplay} for client "${targetClient}"?\n\nThis action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete the pending task ${subtaskDisplay} for client "${targetClient}"?\n\nThis action cannot be undone.`)) {
         return;
     }
 
     try {
-        const response = await fetch(`/api/tasks/${taskId}/subtasks/${encodeURIComponent(subtaskName)}/delete`, {
+        const response = await fetch(`/api/jobs/${taskId}/tasks/${encodeURIComponent(subtaskName)}/delete`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
@@ -1422,23 +1417,23 @@ async function deleteSubtaskExecution(taskId, subtaskName, targetClient, subtask
 
         if (result.success) {
             const successMessage = subtaskId ?
-                `Subtask "${subtaskName}" (ID: ${subtaskId}) deleted successfully` :
-                `Subtask "${subtaskName}" deleted successfully`;
-            showNotification('Subtask Deleted', successMessage, 'success');
+                `Task "${subtaskName}" (ID: ${subtaskId}) deleted successfully` :
+                `Task "${subtaskName}" deleted successfully`;
+            showNotification('Task Deleted', successMessage, 'success');
 
-            // Check if all subtasks were deleted
+            // Check if All tasks were deleted
             if (result.remaining_subtasks === 0) {
-                showNotification('Task Status', 'All subtasks deleted - task has been cancelled', 'info');
+                showNotification('Task Status', 'All tasks deleted - task has been cancelled', 'info');
             }
 
             // Refresh the task list to show updated state
             await refreshTasks();
         } else {
-            showNotification('Error', result.error || 'Failed to delete subtask', 'error');
+            showNotification('Error', result.error || 'Failed to delete task', 'error');
         }
     } catch (error) {
-        console.error('Failed to delete subtask:', error);
-        showNotification('Error', 'Failed to delete subtask', 'error');
+        console.error('Failed to delete task:', error);
+        showNotification('Error', 'Failed to delete task', 'error');
     }
 }
 
@@ -1448,16 +1443,16 @@ async function viewTaskDetails(taskId) {
         // Store current task ID for real-time updates
         window.currentTaskDetailId = taskId;
 
-        const response = await apiGet(`/api/tasks/${taskId}`);
+        const response = await apiGet(`/api/jobs/${taskId}`);
 
         if (response.success) {
             const task = response.data;
 
-            // Get subtask execution status
-            const executionsResponse = await apiGet(`/api/tasks/${taskId}/subtask-executions`);
-            const executions = executionsResponse.success ? executionsResponse.data : [];
+            // Get subtask run status
+            const executionsResponse = await apiGet(`/api/jobs/${taskId}/runs`);
+            const runs = executionsResponse.success ? executionsResponse.data : [];
 
-            displayTaskDetailsWithExecutions(task, executions);
+            displayTaskDetailsWithExecutions(task, runs);
         } else {
             showNotification('Error', response.error || 'Failed to load task details', 'error');
         }
@@ -1467,8 +1462,8 @@ async function viewTaskDetails(taskId) {
     }
 }
 
-// Display task details with execution status in modal
-function displayTaskDetailsWithExecutions(task, executions = []) {
+// Display task details with run status in modal
+function displayTaskDetailsWithExecutions(task, runs = []) {
     const modal = document.getElementById('taskDetailModal');
     const content = document.getElementById('taskDetailContent');
 
@@ -1500,24 +1495,24 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
         </div>
     `;
 
-    if (task.subtasks && task.subtasks.length > 0) {
-        // Create execution status map for quick lookup
+    if (task.tasks && task.tasks.length > 0) {
+        // Create run status map for quick lookup
         const executionMap = {};
-        executions.forEach(exec => {
-            const key = `${exec.subtask_name}_${exec.client}`;
+        runs.forEach(exec => {
+            const key = `${exec.task_name}_${exec.client}`;
             executionMap[key] = exec;
         });
 
         // Calculate overall subtask statistics
-        const totalSubtasks = task.subtasks.length;
-        const completedSubtasks = executions.filter(e => e.status === 'completed').length;
-        const failedSubtasks = executions.filter(e => e.status === 'failed').length;
-        const runningSubtasks = executions.filter(e => e.status === 'running').length;
+        const totalSubtasks = task.tasks.length;
+        const completedSubtasks = runs.filter(e => e.status === 'completed').length;
+        const failedSubtasks = runs.filter(e => e.status === 'failed').length;
+        const runningSubtasks = runs.filter(e => e.status === 'running').length;
         const pendingSubtasks = totalSubtasks - completedSubtasks - failedSubtasks - runningSubtasks;
 
         detailsHtml += `
             <div class="task-detail-section">
-                <h4>Subtask Execution Overview</h4>
+                <h4>Subtask run Overview</h4>
                 <div class="subtask-overview">
                     <div class="overview-stats">
                         <div class="stat-item">
@@ -1551,21 +1546,21 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
 
         detailsHtml += `
             <div class="task-detail-section">
-                <h4>Subtask Details (${task.subtasks.length})</h4>
+                <h4>Subtask Details (${task.tasks.length})</h4>
                 <div class="subtasks-detail">
         `;
 
-        task.subtasks.forEach((subtask, index) => {
+        task.tasks.forEach((subtask, index) => {
             const executionKey = `${subtask.name}_${subtask.client}`;
-            const execution = executionMap[executionKey];
+            const run = executionMap[executionKey];
 
             // Determine status and timing
-            const status = execution ? execution.status : 'pending';
-            const startTime = execution && execution.started_at ? new Date(execution.started_at).toLocaleString() : '-';
-            const endTime = execution && execution.completed_at ? new Date(execution.completed_at).toLocaleString() : '-';
-            const executionTime = execution && execution.execution_time ? `${execution.execution_time.toFixed(3)}s` : '-';
-            const result = execution && execution.result ? execution.result : '-';
-            const errorMessage = execution && execution.error_message ? execution.error_message : '';
+            const status = run ? run.status : 'pending';
+            const startTime = run && run.started_at ? new Date(run.started_at).toLocaleString() : '-';
+            const endTime = run && run.completed_at ? new Date(run.completed_at).toLocaleString() : '-';
+            const executionTime = run && run.execution_time ? `${run.execution_time.toFixed(3)}s` : '-';
+            const result = run && run.result ? run.result : '-';
+            const errorMessage = run && run.error_message ? run.error_message : '';
 
             detailsHtml += `
                 <div class="subtask-detail-item">
@@ -1573,15 +1568,15 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
                         <h5>Subtask ${index + 1}: ${subtask.name}</h5>
                         <div class="subtask-status-info">
                             <span class="status-badge ${status}">${status}</span>
-                            ${execution && execution.subtask_id !== null && execution.subtask_id !== undefined ? `<span class="subtask-id-badge">ID: ${execution.subtask_id}</span>` : ''}
+                            ${run && run.task_id !== null && run.task_id !== undefined ? `<span class="subtask-id-badge">ID: ${run.task_id}</span>` : ''}
                         </div>
                     </div>
                     <div class="subtask-detail-content">
                         <div class="detail-grid">
-                            ${execution && execution.subtask_id !== null && execution.subtask_id !== undefined ? `
+                            ${run && run.task_id !== null && run.task_id !== undefined ? `
                                 <div class="detail-item">
                                     <label>Subtask ID:</label>
-                                    <span>${execution.subtask_id}</span>
+                                    <span>${run.task_id}</span>
                                 </div>
                             ` : ''}
                             <div class="detail-item">
@@ -1601,7 +1596,7 @@ function displayTaskDetailsWithExecutions(task, executions = []) {
                                 <span>${endTime}</span>
                             </div>
                             <div class="detail-item">
-                                <label>Execution Time:</label>
+                                <label>run Time:</label>
                                 <span>${executionTime}</span>
                             </div>
                             <div class="detail-item">
@@ -1715,7 +1710,7 @@ function closeTaskDetailModal() {
 // Copy task - open copy modal with original task data
 async function copyTask(taskId) {
     try {
-        const response = await apiGet(`/api/tasks/${taskId}`);
+        const response = await apiGet(`/api/jobs/${taskId}`);
         if (response.success) {
             const originalTask = response.data;
             openTaskCopyModal(originalTask);
@@ -1787,13 +1782,13 @@ function toggleCopyEmailRecipients() {
 function populateClientUpdatesList(originalTask) {
     const clientUpdatesList = document.getElementById('clientUpdatesList');
 
-    if (!originalTask.subtasks || originalTask.subtasks.length === 0) {
+    if (!originalTask.tasks || originalTask.tasks.length === 0) {
         clientUpdatesList.innerHTML = '<p class="help-text">No subtasks to configure client assignments.</p>';
         return;
     }
 
     // Get unique clients from original task
-    const uniqueClients = [...new Set(originalTask.subtasks.map(st => st.client))];
+    const uniqueClients = [...new Set(originalTask.tasks.map(st => st.client))];
 
     if (uniqueClients.length === 0) {
         clientUpdatesList.innerHTML = '<p class="help-text">No client assignments to modify.</p>';
@@ -1867,7 +1862,7 @@ async function saveTaskCopy() {
         }
 
         // Submit copy request
-        const response = await apiPost(`/api/tasks/${originalTaskId}/copy`, copyData);
+        const response = await apiPost(`/api/jobs/${originalTaskId}/copy`, copyData);
 
         if (response.success) {
             showNotification('Success', response.message || 'Task copied successfully', 'success');
@@ -1891,15 +1886,15 @@ function getCurrentTaskDetailId() {
 // Refresh task details view
 async function refreshTaskDetails(taskId) {
     try {
-        const response = await apiGet(`/api/tasks/${taskId}`);
+        const response = await apiGet(`/api/jobs/${taskId}`);
         if (response.success) {
             const task = response.data;
 
-            // Get subtask execution status
-            const executionsResponse = await apiGet(`/api/tasks/${taskId}/subtask-executions`);
-            const executions = executionsResponse.success ? executionsResponse.data : [];
+            // Get subtask run status
+            const executionsResponse = await apiGet(`/api/jobs/${taskId}/runs`);
+            const runs = executionsResponse.success ? executionsResponse.data : [];
 
-            displayTaskDetailsWithExecutions(task, executions);
+            displayTaskDetailsWithExecutions(task, runs);
         }
     } catch (error) {
         console.error('Failed to refresh task details:', error);
@@ -1909,7 +1904,7 @@ async function refreshTaskDetails(taskId) {
 // Load task data for editing
 async function loadTaskForEdit(taskId) {
     try {
-        const response = await apiGet(`/api/tasks/${taskId}`);
+        const response = await apiGet(`/api/jobs/${taskId}`);
         if (response.success) {
             const task = response.data;
 
@@ -1920,9 +1915,9 @@ async function loadTaskForEdit(taskId) {
             document.getElementById('taskName').value = task.name;
 
             // Load subtasks (always subtask-based now)
-            if (task.subtasks && task.subtasks.length > 0) {
+            if (task.tasks && task.tasks.length > 0) {
                 // Create a subtask row for each individual subtask (preserving unique IDs)
-                task.subtasks.forEach(subtask => {
+                task.tasks.forEach(subtask => {
                     addSubtask();
                     const subtaskRows = document.querySelectorAll('.subtask-row');
                     const subtaskRow = subtaskRows[subtaskRows.length - 1];
@@ -1931,14 +1926,14 @@ async function loadTaskForEdit(taskId) {
                     subtaskRow.querySelector('.subtask-name').value = subtask.name;
 
                     // Store the subtask ID for preservation during save
-                    if (subtask.subtask_id) {
-                        subtaskRow.setAttribute('data-subtask-id', subtask.subtask_id);
+                    if (subtask.task_id) {
+                        subtaskRow.setAttribute('data-subtask-id', subtask.task_id);
 
                         // Display the subtask ID in the UI
                         const idDisplay = subtaskRow.querySelector('.subtask-id-display');
                         const idValue = subtaskRow.querySelector('.subtask-id-value');
                         if (idDisplay && idValue) {
-                            idValue.textContent = subtask.subtask_id;
+                            idValue.textContent = subtask.task_id;
                             idDisplay.style.display = 'block';
                         }
                     }
@@ -2007,8 +2002,8 @@ function populateClientFilter() {
 
     allTasks.forEach(task => {
         // Add clients from subtasks
-        if (task.subtasks) {
-            task.subtasks.forEach(subtask => {
+        if (task.tasks) {
+            task.tasks.forEach(subtask => {
                 if (subtask.client && subtask.client !== 'any_available') {
                     clientNames.add(subtask.client);
                 }
@@ -2081,7 +2076,7 @@ async function generateTaskReport(taskId) {
     try {
         showNotification('Report Generation', 'Generating report...', 'info');
 
-        const response = await apiPost(`/api/tasks/${taskId}/generate-report?force=true`);
+        const response = await apiPost(`/api/jobs/${taskId}/generate-report?force=true`);
 
         if (response.success) {
             showNotification('Report Generated',
@@ -2101,7 +2096,7 @@ async function sendTaskNotification(taskId) {
     try {
         showNotification('Email Notification', 'Sending email notification...', 'info');
 
-        const response = await apiPost(`/api/tasks/${taskId}/send-notification`);
+        const response = await apiPost(`/api/jobs/${taskId}/send-notification`);
 
         if (response.success) {
             showNotification('Email Sent',

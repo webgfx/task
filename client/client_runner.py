@@ -110,19 +110,19 @@ class TaskClientRunner:
         os.makedirs(self.work_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
 
-        # Initialize subtask executor
+        # Initialize task executor
         try:
             # Add current directory to path for imports
             current_dir = os.path.dirname(os.path.abspath(__file__))
             if current_dir not in sys.path:
                 sys.path.insert(0, current_dir)
 
-            import subtask_executor
-            self.subtask_adapter = subtask_executor.TaskSubtaskAdapter(self.server_url, self.client_name)
-            logger.info("Subtask executor initialized successfully")
+            import task_executor
+            self.task_adapter = task_executor.TaskAdapter(self.server_url, self.client_name)
+            logger.info("Task executor initialized successfully")
         except Exception as e:
-            logger.warning(f"Failed to import subtask executor: {e}")
-            self.subtask_adapter = None
+            logger.warning(f"Failed to import task executor: {e}")
+            self.task_adapter = None
 
         # Initialize components with configuration from cfg file
         self.heartbeat = HeartbeatManager(self.server_url, self.client_name, get_heartbeat_interval)
@@ -224,23 +224,23 @@ class TaskClientRunner:
                 task_name = data.get('name', f'Task-{task_id}')
 
                 # Check if this is a subtask-based task
-                if 'subtasks' in data and data['subtasks']:
+                if 'subtasks' in data and data['tasks']:
                     # Enhanced logging for task reception
-                    logger.info(f"📨 TASK_RECEIVED: '{task_name}' (ID: {task_id}) with {len(data['subtasks'])} subtasks from server")
+                    logger.info(f"📨 TASK_RECEIVED: '{task_name}' (ID: {task_id}) with {len(data['tasks'])} subtasks from server")
                     logger.info(f"TASK_DETAILS: Client '{self.client_name}' received task assignment")
 
                     # Log subtasks assigned to this client
-                    my_subtasks = [s for s in data['subtasks'] if s.get('client') == self.client_name]
-                    logger.info(f"TASK_ASSIGNMENT: {len(my_subtasks)}/{len(data['subtasks'])} subtasks assigned to this client")
+                    my_subtasks = [s for s in data['tasks'] if s.get('client') == self.client_name]
+                    logger.info(f"TASK_ASSIGNMENT: {len(my_subtasks)}/{len(data['tasks'])} subtasks assigned to this client")
 
                     for i, subtask in enumerate(my_subtasks, 1):
                         logger.info(f"ASSIGNED_SUBTASK[{i}]: '{subtask.get('name')}' (order: {subtask.get('order', 0)})")
 
-                    logger.info(f"Received subtask-based task: {task_name} (ID: {task_id}) with {len(data['subtasks'])} subtasks")
+                    logger.info(f"Received subtask-based task: {task_name} (ID: {task_id}) with {len(data['tasks'])} subtasks")
 
                     # Execute subtask-based task in new thread
                     threading.Thread(
-                        target=self._execute_subtask_task,
+                        target=self._execute_task_job,
                         args=(task_id, task_name, data),
                         daemon=True
                     ).start()
@@ -429,8 +429,8 @@ class TaskClientRunner:
 
                     # Reload subtasks
                     try:
-                        from common.tasks import reload_subtasks
-                        reloaded_count = reload_subtasks()
+                        from common.tasks import reload_tasks
+                        reloaded_count = reload_tasks()
 
                         logger.info(f"✅ SUBTASK_RELOAD: Successfully reloaded {reloaded_count} subtask modules")
 
@@ -532,8 +532,8 @@ class TaskClientRunner:
                 return 'busy'
 
             # Check subtask adapter status if available
-            if self.subtask_adapter and hasattr(self.subtask_adapter, 'is_executing'):
-                if self.subtask_adapter.is_executing():
+            if self.task_adapter and hasattr(self.task_adapter, 'is_executing'):
+                if self.task_adapter.is_executing():
                     return 'busy'
 
             # Default to free if no active execution detected
@@ -765,8 +765,8 @@ class TaskClientRunner:
 
                 logger.info(f"Subtask changes detected ({'; '.join(changes)}), reloading...")
 
-                from common.tasks import reload_subtasks
-                reloaded = reload_subtasks()
+                from common.tasks import reload_tasks
+                reloaded = reload_tasks()
                 self._last_subtask_snapshot = current
                 logger.info(f"Subtask reload complete: {reloaded} modules loaded")
             else:
@@ -774,7 +774,7 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Error checking/reloading subtasks: {e}")
 
-    def _execute_subtask_task(self, task_id, task_name, task_data):
+    def _execute_task_job(self, task_id, task_name, task_data):
         """Execute subtask-based task"""
         try:
             # Set current executing task ID
@@ -786,14 +786,14 @@ class TaskClientRunner:
             self._notify_task_start(task_id)
 
             # Check if subtask adapter is available
-            if not self.subtask_adapter:
+            if not self.task_adapter:
                 error_msg = "Subtask adapter not available"
                 logger.error(error_msg)
                 self._notify_task_completion(task_id, False, error_msg)
                 return
 
             # Execute task using subtask adapter
-            result = self.subtask_adapter.execute_task(task_data)
+            result = self.task_adapter.execute_task(task_data)
 
             if result['success']:
                 logger.info(f"Subtask-based task {task_name} completed successfully")

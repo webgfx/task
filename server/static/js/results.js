@@ -31,7 +31,7 @@ async function loadClients() {
 // Load subtask definitions for filter dropdown
 async function loadSubtasks() {
     try {
-        const response = await apiGet('/api/subtasks');
+        const response = await apiGet('/api/tasks');
         subtasksList = response.data || [];
     } catch (error) {
         console.error('Failed to load subtasks:', error);
@@ -57,7 +57,7 @@ function populateFilters() {
         subtaskFilter.innerHTML = '<option value="">All Subtasks</option>';
         // Extract unique subtask names from results
         const uniqueSubtasks = new Set();
-        allResults.forEach(r => uniqueSubtasks.add(r.subtask_name));
+        allResults.forEach(r => uniqueSubtasks.add(r.task_name));
         // Also add from subtask definitions
         subtasksList.forEach(s => uniqueSubtasks.add(s.name));
 
@@ -99,7 +99,7 @@ function filterResults() {
         filtered = filtered.filter(r => r.client_name === clientValue);
     }
     if (subtaskValue) {
-        filtered = filtered.filter(r => r.subtask_name === subtaskValue);
+        filtered = filtered.filter(r => r.task_name === subtaskValue);
     }
     if (statusValue) {
         filtered = filtered.filter(r => r.status === statusValue);
@@ -119,15 +119,12 @@ function renderResults(results) {
     }
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center">No results found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No results found</td></tr>';
         return;
     }
 
     tbody.innerHTML = results.map(result => {
-        const statusClass = result.status === 'completed' ? 'status-completed' :
-                           result.status === 'failed' ? 'status-failed' : 'status-pending';
-        const statusIcon = result.status === 'completed' ? 'fa-check-circle' :
-                          result.status === 'failed' ? 'fa-times-circle' : 'fa-clock';
+        const statusLabel = result.status === 'completed' ? 'PASSED' : result.status.toUpperCase();
 
         const execTime = result.execution_time !== null && result.execution_time !== undefined
             ? `${parseFloat(result.execution_time).toFixed(2)}s` : '-';
@@ -135,23 +132,24 @@ function renderResults(results) {
         const completedAt = result.completed_at
             ? new Date(result.completed_at).toLocaleString() : '-';
 
+        const resultFile = result.result_file || '';
+
         return `
             <tr>
-                <td><input type="checkbox" class="result-checkbox" value="${result.id}" onchange="updateCompareButton()"></td>
-                <td>${result.id}</td>
-                <td>${escapeHtml(result.task_name)}</td>
-                <td>${escapeHtml(result.client_name)}</td>
-                <td><code>${escapeHtml(result.subtask_name)}</code></td>
                 <td>
-                    <span class="status-badge ${statusClass}">
-                        <i class="fas ${statusIcon}"></i>
-                        ${result.status}
-                    </span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" class="result-checkbox" value="${result.id}" onclick="updateCompareButton()" style="width:18px; height:18px; cursor:pointer; accent-color:#6366f1;">
+                        <span class="task-id-badge">#${result.task_id}</span>
+                        <strong>${escapeHtml(result.task_name)}</strong>
+                    </div>
                 </td>
-                <td>${execTime}</td>
+                <td>${escapeHtml(result.client_name)}</td>
+                <td><span class="subtask-name">${escapeHtml(result.task_name).replace(/_/g, '-')}</span></td>
+                <td><span class="status-badge ${result.status}">${statusLabel}</span></td>
+                <td><span class="execution-time">${execTime}</span></td>
                 <td>${completedAt}</td>
                 <td>
-                    <button class="btn btn-small btn-info" onclick="viewResultDetail(${result.id})"
+                    <button class="btn btn-small btn-primary" onclick="viewResultDetail(${result.id})"
                             title="View Details">
                         <i class="fas fa-eye"></i>
                     </button>
@@ -177,7 +175,7 @@ async function viewResultDetail(resultId) {
 
         if (!modal || !title || !body) return;
 
-        title.textContent = `Result: ${result.task_name} - ${result.subtask_name}`;
+        title.textContent = `Result: ${result.task_name} - ${result.task_name}`;
 
         // Parse result data if it's a JSON string
         let resultData = result.result;
@@ -196,6 +194,7 @@ async function viewResultDetail(resultId) {
 
         const statusClass = result.status === 'completed' ? 'status-completed' :
                            result.status === 'failed' ? 'status-failed' : 'status-pending';
+        const statusLabel = result.status === 'completed' ? 'PASSED' : result.status.toUpperCase();
 
         body.innerHTML = `
             <div class="result-detail-grid">
@@ -209,18 +208,18 @@ async function viewResultDetail(resultId) {
                 </div>
                 <div class="detail-row">
                     <strong>Subtask:</strong>
-                    <span><code>${escapeHtml(result.subtask_name)}</code></span>
+                    <span><code>${escapeHtml(result.task_name)}</code></span>
                 </div>
                 <div class="detail-row">
                     <strong>Status:</strong>
-                    <span class="status-badge ${statusClass}">${result.status}</span>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
                 </div>
                 <div class="detail-row">
                     <strong>Execution Time:</strong>
                     <span>${result.execution_time != null ? parseFloat(result.execution_time).toFixed(2) + 's' : '-'}</span>
                 </div>
                 <div class="detail-row">
-                    <strong>Completed At:</strong>
+                    <strong>Finished At:</strong>
                     <span>${result.completed_at ? new Date(result.completed_at).toLocaleString() : '-'}</span>
                 </div>
                 <div class="detail-row">
@@ -275,6 +274,13 @@ function escapeHtml(text) {
 // ============================================================
 
 let comparisonCharts = [];
+
+function selectAllResults() {
+    const checkboxes = document.querySelectorAll('.result-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => { cb.checked = !allChecked; });
+    updateCompareButton();
+}
 
 function getSelectedResultIds() {
     return Array.from(document.querySelectorAll('.result-checkbox:checked'))

@@ -3,66 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Log Management - Task Management System</title>
+    <title>Log Management - Distributed Task Management System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
-        /* Logs specific styling */
-        .logs-table {
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-top: 20px;
-        }
-
-        .logs-table table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .logs-table th {
-            background: #007bff;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-        }
-
-        .logs-table td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #eee;
-            vertical-align: top;
-        }
-
-        .logs-table tr:hover {
-            background: #f8f9fa;
-        }
-
         .log-level {
-            padding: 2px 6px;
+            padding: 2px 8px;
             border-radius: 4px;
             font-size: 0.8em;
-            font-weight: bold;
+            font-weight: 600;
         }
-
-        .log-level.INFO {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .log-level.WARN {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .log-level.ERROR {
-            background: #f8d7da;
-            color: #721c24;
-        }
+        .log-level.INFO { background: var(--status-completed-bg, #d4edda); color: var(--status-completed-text, #155724); }
+        .log-level.WARN { background: var(--status-pending-bg, #fff3cd); color: var(--status-pending-text, #856404); }
+        .log-level.ERROR { background: var(--status-failed-bg, #f8d7da); color: var(--status-failed-text, #721c24); }
 
         .log-action {
             padding: 2px 8px;
@@ -70,122 +26,34 @@
             font-size: 0.85em;
             font-weight: 500;
         }
-
-        .log-action.CONNECT {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .log-action.DISCONNECT {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .log-action.CLIENT_REGISTER {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .log-action.CLIENT_UPDATE {
-            background: #fff3cd;
-            color: #856404;
-        }
+        .log-action.CONNECT { background: #d1ecf1; color: #0c5460; }
+        .log-action.DISCONNECT { background: #f8d7da; color: #721c24; }
+        .log-action.CLIENT_REGISTER { background: #d4edda; color: #155724; }
+        .log-action.CLIENT_UPDATE { background: #fff3cd; color: #856404; }
 
         .log-data {
             max-width: 300px;
             word-wrap: break-word;
-            font-family: monospace;
+            font-family: var(--font-mono, monospace);
             font-size: 0.85em;
-            background: #f8f9fa;
+            background: var(--bg-secondary, #f8f9fa);
             padding: 5px;
             border-radius: 4px;
         }
 
         .timestamp {
-            font-family: monospace;
+            font-family: var(--font-mono, monospace);
             font-size: 0.9em;
-        }
-
-        .controls-group {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background-color 0.2s;
-        }
-
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #0056b3;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #545b62;
-        }
-
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c82333;
-        }
-
-        .form-control {
-            padding: 6px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 0.9em;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-        }
-
-        .no-logs {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            background: #f8f9fa;
-            border-radius: 8px;
+            white-space: nowrap;
         }
 
         .clear-logs-group {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-right: 20px;
         }
-
-        .clear-logs-group label {
-            font-weight: 500;
-            white-space: nowrap;
-        }
-
-
-
-        #clearDate {
-            width: 150px;
-        }
+        .clear-logs-group label { font-weight: 500; white-space: nowrap; }
+        #clearDate { width: 150px; }
     </style>
 </head>
 <body>
@@ -200,7 +68,7 @@
                 <li class="nav-item">
                     <a href="/tasks" class="nav-link">
                         <i class="fas fa-list-check"></i>
-                        <span>Task Management</span>
+                        <span>Job Management</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -244,7 +112,7 @@
             </header>
 
             <!-- Filters -->
-            <div class="filter-bar">
+            <div class="filters">
                 <div class="filter-group">
                     <label>Limit:</label>
                     <select id="limitSelect">
@@ -262,7 +130,7 @@
 
             <!-- Log table container -->
             <div id="logsContent">
-            <div class="loading">Loading logs...</div>
+                <div class="task-table-container" style="text-align:center; padding:40px; color:var(--text-secondary);">Loading logs...</div>
         </div>
     </div>
 
@@ -292,7 +160,7 @@
         // Add new log entry to existing table in real-time
         function addLogEntryToTable(logEntry) {
             const container = document.getElementById('logsContent');
-            const existingTable = container.querySelector('.logs-table table tbody');
+            const existingTable = container.querySelector('.task-table tbody');
 
             if (!existingTable) {
                 // If no table exists, reload all logs
@@ -376,8 +244,8 @@
             }
 
             let html = `
-                <div class="logs-table">
-                    <table>
+                <div class="task-table-container">
+                    <table class="task-table enhanced-task-table">
                         <thead>
                             <tr>
                                 <th>Timestamp</th>

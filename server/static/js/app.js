@@ -485,7 +485,7 @@ async function reloadSubtasks() {
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reloading...';
     
     try {
-        const response = await fetch('/api/subtasks/reload', {
+        const response = await fetch('/api/tasks/reload', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

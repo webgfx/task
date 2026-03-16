@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from common.models import TaskStatus, ClientStatus
+from common.models import JobStatus, ClientStatus
+JobStatus = JobStatus
 from common.utils import parse_datetime
 
 logger = logging.getLogger(__name__)
@@ -108,12 +109,12 @@ class TaskScheduler:
                 logger.warning(f"Task does not exist: {task_id}")
                 return
             
-            if task.status != TaskStatus.PENDING:
+            if task.status != JobStatus.PENDING:
                 logger.warning(f"Task status is not pending execution: {task.name} ({task.status})")
                 return
             
             # Check if this is a subtask-based task
-            if task.subtasks:
+            if task.tasks:
                 self._execute_subtask_task(task)
             else:
                 # Legacy single-client task
@@ -150,26 +151,26 @@ class TaskScheduler:
             logger.info(f"Starting subtask-based task {task.name} on {len(available_clients)} clients")
             
             # Update task status
-            task.status = TaskStatus.RUNNING
+            task.status = JobStatus.RUNNING
             task.started_at = datetime.now()
             self.database.update_task(task)
             
             # Dispatch to each client
             for client_name, client in available_clients.items():
                 # Get subtasks for this client
-                client_subtasks = task.get_subtasks_for_client(client_name)
+                client_subtasks = task.get_tasks_for_client(client_name)
                 
                 if client_subtasks:
                     # Update client status
                     self.database.update_client_heartbeat_by_name(client.name, ClientStatus.BUSY)
                     
-                    # Prepare task data with only relevant subtasks
+                    # Prepare job data with only relevant tasks
                     task_data = {
                         'task_id': task.id,
                         'id': task.id,
                         'name': task.name,
                         'client_name': client.name,
-                        'subtasks': [subtask.to_dict() for subtask in client_subtasks]
+                        'tasks': [t.to_dict() for t in client_subtasks]
                     }
                     
                     # Send task via WebSocket using IP-based room name
@@ -190,7 +191,7 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"Failed to execute subtask task {task.name}: {e}")
             # Reset task status
-            task.status = TaskStatus.PENDING
+            task.status = JobStatus.PENDING
             task.started_at = None
             self.database.update_task(task)
     
@@ -216,7 +217,7 @@ class TaskScheduler:
                     should_execute = True
                 
                 if should_execute:
-                    if task.subtasks:
+                    if task.tasks:
                         # Subtask-based task
                         self._execute_subtask_task(task)
                     else:
@@ -260,7 +261,7 @@ class TaskScheduler:
         """Distribute task to specified client (supports both legacy and subtask format)"""
         try:
             # Update task status
-            task.status = TaskStatus.RUNNING
+            task.status = JobStatus.RUNNING
             task.started_at = datetime.now()
             self.database.update_task(task)
             
@@ -277,9 +278,9 @@ class TaskScheduler:
             }
             
             # Add subtasks if available
-            if task.subtasks:
-                task_data['subtasks'] = [subtask.to_dict() for subtask in task.subtasks]
-                logger.info(f"Dispatching task {task.name} with {len(task.subtasks)} subtasks to client {client.name}")
+            if task.tasks:
+                task_data['subtasks'] = [subtask.to_dict() for subtask in task.tasks]
+                logger.info(f"Dispatching task {task.name} with {len(task.tasks)} subtasks to client {client.name}")
             else:
                 # Legacy command-based task
                 task_data['subtasks'] = task.commands
@@ -296,7 +297,7 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"Failed to distribute task: {e}")
             # Reset task status
-            task.status = TaskStatus.PENDING
+            task.status = JobStatus.PENDING
             task.started_at = None
             self.database.update_task(task)
     
@@ -330,7 +331,7 @@ class TaskScheduler:
         try:
             tasks = self.database.get_all_tasks()
             for task in tasks:
-                if task.status == TaskStatus.PENDING and (task.cron_expression or task.schedule_time):
+                if task.status == JobStatus.PENDING and (task.cron_expression or task.schedule_time):
                     self.schedule_task(task)
             logger.info("Rescheduled all tasks")
         except Exception as e:

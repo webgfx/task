@@ -1,7 +1,7 @@
 """
 HTML Report Generator and Email Notification System
 
-This module generates HTML reports from task execution results and sends email notifications.
+This module generates HTML reports from Job execution results and sends email notifications.
 """
 
 import os
@@ -12,13 +12,13 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from jinja2 import Template, Environment, FileSystemLoader
 
-from common.models import Task, TaskStatus, SubtaskExecution
+from common.models import Job, JobStatus, Run
 
 logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
-    """Generates HTML reports from task execution results"""
+    """Generates HTML reports from Job execution results"""
     
     def __init__(self, template_dir: Optional[str] = None):
         """
@@ -65,7 +65,7 @@ class ReportGenerator:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Execution Report - {{ task.name }}</title>
+    <title>Job Execution Report - {{ Job.name }}</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -177,7 +177,7 @@ class ReportGenerator:
             background-color: #fff3cd;
             color: #856404;
         }
-        .subtasks {
+        .tasks {
             border: 1px solid #dee2e6;
             border-top: none;
             border-radius: 0 0 8px 8px;
@@ -225,7 +225,7 @@ class ReportGenerator:
             max-height: 200px;
             overflow-y: auto;
         }
-        .task-info {
+        .Job-info {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 8px;
@@ -274,12 +274,12 @@ class ReportGenerator:
 <body>
     <div class="container">
         <div class="header">
-            <h1>{{ task.name }}</h1>
-            <div class="subtitle">Task Execution Report</div>
+            <h1>{{ Job.name }}</h1>
+            <div class="subtitle">Job Execution Report</div>
         </div>
         
         <div class="content">
-            <!-- Task Summary -->
+            <!-- Job Summary -->
             <div class="summary">
                 <div class="summary-card {% if overall_status == 'completed' %}success{% elif overall_status == 'failed' %}error{% else %}warning{% endif %}">
                     <h3>{{ overall_status|title }}</h3>
@@ -319,30 +319,30 @@ class ReportGenerator:
                 </div>
             </div>
             
-            <!-- Task Information -->
+            <!-- Job Information -->
             <div class="section">
-                <h2>Task Information</h2>
-                <div class="task-info">
+                <h2>Job Information</h2>
+                <div class="Job-info">
                     <div class="info-grid">
                         <div class="info-item">
-                            <span class="info-label">Task ID:</span>
-                            <span class="info-value">{{ task.id }}</span>
+                            <span class="info-label">Job ID:</span>
+                            <span class="info-value">{{ Job.id }}</span>
                         </div>
                         <div class="info-item">
-                            <span class="info-label">Task Name:</span>
-                            <span class="info-value">{{ task.name }}</span>
+                            <span class="info-label">Job Name:</span>
+                            <span class="info-value">{{ Job.name }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Created:</span>
-                            <span class="info-value">{{ task.created_at or 'N/A' }}</span>
+                            <span class="info-value">{{ Job.created_at or 'N/A' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Started:</span>
-                            <span class="info-value">{{ task.started_at or 'N/A' }}</span>
+                            <span class="info-value">{{ Job.started_at or 'N/A' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Completed:</span>
-                            <span class="info-value">{{ task.completed_at or 'N/A' }}</span>
+                            <span class="info-value">{{ Job.completed_at or 'N/A' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Report Generated:</span>
@@ -366,10 +366,10 @@ class ReportGenerator:
                         </h3>
                     </div>
                     <div class="subtasks">
-                        {% for subtask in client_data.subtasks %}
+                        {% for subtask in client_data.tasks %}
                         <div class="subtask">
                             <div class="subtask-header">
-                                <span class="subtask-name">{{ subtask.subtask_name }}</span>
+                                <span class="subtask-name">{{ subtask.task_name }}</span>
                                 <span class="subtask-time">
                                     {% if subtask.execution_time %}{{ "%.2f"|format(subtask.execution_time) }}s{% endif %}
                                 </span>
@@ -398,7 +398,7 @@ class ReportGenerator:
         </div>
         
         <div class="footer">
-            Generated by Distributed Task Management System on {{ generation_time }}
+            Generated by Distributed Job Management System on {{ generation_time }}
         </div>
     </div>
 </body>
@@ -418,7 +418,7 @@ class ReportGenerator:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Completion Notification</title>
+    <title>Job Completion Notification</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -476,14 +476,14 @@ class ReportGenerator:
 </head>
 <body>
     <div class="header">
-        <h1>Task Completion Notification</h1>
-        <p>{{ task.name }}</p>
+        <h1>Job Completion Notification</h1>
+        <p>{{ Job.name }}</p>
     </div>
     
     <div class="content">
-        <h2>Task Summary</h2>
+        <h2>Job Summary</h2>
         <div class="summary">
-            <p><strong>Task:</strong> {{ task.name }}</p>
+            <p><strong>Job:</strong> {{ Job.name }}</p>
             <p><strong>Status:</strong> 
                 <span class="{% if overall_status == 'completed' %}status-success{% elif overall_status == 'failed' %}status-failed{% else %}status-partial{% endif %}">
                     {{ overall_status|title }}
@@ -492,7 +492,7 @@ class ReportGenerator:
             <p><strong>clients:</strong> {{ successful_clients }}/{{ total_clients }} successful</p>
             <p><strong>Subtasks:</strong> {{ successful_subtasks }}/{{ total_subtasks }} successful</p>
             <p><strong>Execution Time:</strong> {{ execution_time }}</p>
-            <p><strong>Completed:</strong> {{ task.completed_at or generation_time }}</p>
+            <p><strong>Completed:</strong> {{ Job.completed_at or generation_time }}</p>
         </div>
         
         <h3>client Results</h3>
@@ -510,7 +510,7 @@ class ReportGenerator:
     </div>
     
     <div class="footer">
-        <p>Generated by Distributed Task Management System</p>
+        <p>Generated by Distributed Job Management System</p>
         <p>{{ generation_time }}</p>
     </div>
 </body>
@@ -523,12 +523,12 @@ class ReportGenerator:
         except Exception as e:
             logger.error(f"Failed to create email template: {e}")
     
-    def generate_task_report(self, task: Task, client_results: Dict[str, Any]) -> str:
+    def generate_task_report(self, Job: Job, client_results: Dict[str, Any]) -> str:
         """
-        Generate HTML report for a completed task
+        Generate HTML report for a completed Job
         
         Args:
-            task: Task object
+            Job: Job object
             client_results: Dictionary containing results organized by client
             
         Returns:
@@ -554,11 +554,11 @@ class ReportGenerator:
             
             # Calculate execution time
             execution_time = "N/A"
-            if task.started_at and task.completed_at:
+            if Job.started_at and Job.completed_at:
                 try:
                     from common.utils import parse_datetime
-                    start = parse_datetime(task.started_at)
-                    end = parse_datetime(task.completed_at)
+                    start = parse_datetime(Job.started_at)
+                    end = parse_datetime(Job.completed_at)
                     if start and end:
                         duration = (end - start).total_seconds()
                         if duration < 60:
@@ -572,7 +572,7 @@ class ReportGenerator:
             
             # Prepare template context
             context = {
-                'task': task,
+                'Job': Job,
                 'client_results': client_results,
                 'overall_status': overall_status,
                 'total_clients': total_clients,
@@ -592,16 +592,16 @@ class ReportGenerator:
             return html_content
             
         except Exception as e:
-            logger.error(f"Failed to generate task report: {e}")
+            logger.error(f"Failed to generate Job report: {e}")
             # Return a simple fallback report
-            return self._generate_fallback_report(task, client_results)
+            return self._generate_fallback_report(Job, client_results)
     
-    def _generate_fallback_report(self, task: Task, client_results: Dict[str, Any]) -> str:
+    def _generate_fallback_report(self, Job: Job, client_results: Dict[str, Any]) -> str:
         """Generate a simple fallback report if template rendering fails"""
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Task Report - {task.name}</title>
+    <title>Job Report - {Job.name}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 40px; }}
         .header {{ background: #f0f0f0; padding: 20px; border-radius: 8px; }}
@@ -612,9 +612,9 @@ class ReportGenerator:
 </head>
 <body>
     <div class="header">
-        <h1>Task Report: {task.name}</h1>
-        <p>Task ID: {task.id}</p>
-        <p>Status: {task.status.value if task.status else 'Unknown'}</p>
+        <h1>Job Report: {Job.name}</h1>
+        <p>Job ID: {Job.id}</p>
+        <p>Status: {Job.status.value if Job.status else 'Unknown'}</p>
         <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
     
@@ -636,13 +636,13 @@ class ReportGenerator:
 </html>"""
         return html
     
-    def save_report_to_file(self, html_content: str, task: Task, output_dir: Optional[str] = None) -> str:
+    def save_report_to_file(self, html_content: str, Job: Job, output_dir: Optional[str] = None) -> str:
         """
         Save HTML report to file
         
         Args:
             html_content: Generated HTML content
-            task: Task object
+            Job: Job object
             output_dir: Directory to save the report (default: server/reports)
             
         Returns:
@@ -656,9 +656,9 @@ class ReportGenerator:
             
             # Generate filename with timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            clean_task_name = "".join(c for c in task.name if c.isalnum() or c in (' ', '-', '_')).strip()
+            clean_task_name = "".join(c for c in Job.name if c.isalnum() or c in (' ', '-', '_')).strip()
             clean_task_name = clean_task_name.replace(' ', '_')
-            filename = f"task_{task.id}_{clean_task_name}_{timestamp}.html"
+            filename = f"task_{Job.id}_{clean_task_name}_{timestamp}.html"
             
             file_path = os.path.join(output_dir, filename)
             
@@ -674,7 +674,7 @@ class ReportGenerator:
 
 
 class EmailNotifier:
-    """Handles email notifications for task completions using Outlook"""
+    """Handles email notifications for Job completions using Outlook"""
     
     def __init__(self, config: Dict[str, Any] = None):
         """
@@ -748,13 +748,13 @@ class EmailNotifier:
                 'recipient': to
             }
     
-    def send_task_completion_notification(self, task: Task, client_results: Dict[str, Any], 
+    def send_task_completion_notification(self, Job: Job, client_results: Dict[str, Any], 
                                         report_file_path: Optional[str] = None) -> bool:
         """
-        Send email notification for task completion
+        Send email notification for Job completion
         
         Args:
-            task: Completed task
+            Job: Completed Job
             client_results: Results organized by client
             report_file_path: Path to the detailed HTML report file
             
@@ -763,13 +763,13 @@ class EmailNotifier:
         """
         try:
             # Generate email content
-            email_html = self._generate_email_content(task, client_results)
+            email_html = self._generate_email_content(Job, client_results)
             
             # Determine client name for subject
-            client_name = task.name.split('/', 1)[0] if '/' in task.name else socket.gethostname()
+            client_name = Job.name.split('/', 1)[0] if '/' in Job.name else socket.gethostname()
             
             # Create email subject as requested: client_name-task_name
-            subject = f"{client_name}-{task.name}"
+            subject = f"{client_name}-{Job.name}"
             
             # Send email using Outlook
             result = self.send_email(
@@ -781,7 +781,7 @@ class EmailNotifier:
             return result.get('success', False)
             
         except Exception as e:
-            logger.error(f"Failed to send task completion notification: {e}")
+            logger.error(f"Failed to send Job completion notification: {e}")
             return False
     
     def send_notification(self, task_name: str, client_name: str, report_html: str, 
@@ -790,8 +790,8 @@ class EmailNotifier:
         Send email notification with HTML report
         
         Args:
-            task_name: Name of the completed task
-            client_name: Name of the client that completed the task
+            task_name: Name of the completed Job
+            client_name: Name of the client that completed the Job
             report_html: HTML content of the report
             to_email: Recipient email address (optional)
             
@@ -822,7 +822,7 @@ class EmailNotifier:
                 'recipient': to_email or 'unknown'
             }
     
-    def _generate_email_content(self, task: Task, client_results: Dict[str, Any]) -> str:
+    def _generate_email_content(self, Job: Job, client_results: Dict[str, Any]) -> str:
         """Generate email HTML content"""
         try:
             # Calculate summary statistics (same as in report generator)
@@ -842,11 +842,11 @@ class EmailNotifier:
             
             # Calculate execution time
             execution_time = "N/A"
-            if task.started_at and task.completed_at:
+            if Job.started_at and Job.completed_at:
                 try:
                     from common.utils import parse_datetime
-                    start = parse_datetime(task.started_at)
-                    end = parse_datetime(task.completed_at)
+                    start = parse_datetime(Job.started_at)
+                    end = parse_datetime(Job.completed_at)
                     if start and end:
                         duration = (end - start).total_seconds()
                         if duration < 60:
@@ -860,7 +860,7 @@ class EmailNotifier:
             
             # Prepare template context
             context = {
-                'task': task,
+                'Job': Job,
                 'client_results': client_results,
                 'overall_status': overall_status,
                 'total_clients': total_clients,
@@ -881,9 +881,9 @@ class EmailNotifier:
             return f"""
             <html>
             <body>
-                <h2>Task Completion Notification</h2>
-                <p><strong>Task:</strong> {task.name}</p>
-                <p><strong>Status:</strong> {task.status.value if task.status else 'Unknown'}</p>
+                <h2>Job Completion Notification</h2>
+                <p><strong>Job:</strong> {Job.name}</p>
+                <p><strong>Status:</strong> {Job.status.value if Job.status else 'Unknown'}</p>
                 <p><strong>Completed:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                 <p>A detailed report has been generated.</p>
             </body>

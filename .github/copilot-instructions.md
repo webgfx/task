@@ -27,13 +27,13 @@ This is a distributed task management and execution system built with Flask and 
 - **`client_runner.py`** - Client execution engine
 - **`service.py`** - Windows service implementation
 - **`executor.py`** - Task execution logic
-- **`subtask_executor.py`** - Subtask execution handling
+- **`task_executor.py`** - Subtask execution handling
 - **`heartbeat.py`** - Client health monitoring
 
 ### Common Components (`common/`)
 - **`models.py`** - Data models (Task, Client, SubtaskDefinition)
 - **`config.py`** - Configuration management
-- **`subtasks.py`** - Predefined subtask definitions
+- **`tasks package`** - Predefined subtask definitions
 - **`utils.py`** - Utility functions
 
 ## File Organization and Structure

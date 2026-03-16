@@ -1,6 +1,6 @@
 """
-Subtask executor for client
-Responsible for executing subtasks and reporting results to server
+Task executor for client.
+Responsible for executing tasks and reporting results (runs) to server.
 """
 import logging
 import time
@@ -9,13 +9,13 @@ import requests
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from common.tasks import execute_subtask, list_subtasks
-from common.models import TaskStatus, SubtaskDefinition
+from common.tasks import execute_task, list_tasks
+from common.models import JobStatus, TaskDefinition
 
 logger = logging.getLogger(__name__)
 
-class SubtaskExecutor:
-    """Executes subtasks and reports results to server"""
+class TaskExecutor:
+    """Executes tasks and reports results (runs) to server"""
 
     def __init__(self, server_url: str, client_name: str):
         self.server_url = server_url
@@ -88,7 +88,7 @@ class SubtaskExecutor:
         # Don't propagate to parent logger to avoid duplicate logs
         self.task_logger.propagate = False
 
-    def execute_task_subtasks(self, task_id: int, task_name: str, subtasks: List[SubtaskDefinition]) -> Dict[str, Any]:
+    def execute_job_tasks(self, task_id: int, task_name: str, subtasks: List[TaskDefinition]) -> Dict[str, Any]:
         """
         Execute all subtasks for this client in the given task
 
@@ -141,7 +141,7 @@ class SubtaskExecutor:
         for subtask in my_subtasks:
             try:
                 self.task_logger.info(f"--- Starting subtask: {subtask.name} ---")
-                result = self.execute_single_subtask(task_id, subtask)
+                result = self.execute_single_task(task_id, subtask)
                 results.append(result)
 
                 if result['success']:
@@ -166,7 +166,7 @@ class SubtaskExecutor:
                 logger.error(f"Exception executing subtask {subtask.name}: {e}")
                 results.append({
                     'success': False,
-                    'subtask_name': subtask.name,
+                    'task_name': subtask.name,
                     'error': error_msg
                 })
 
@@ -246,7 +246,7 @@ class SubtaskExecutor:
             self.task_logger.error(f"Failed to write task summary: {e}")
             logger.error(f"Failed to write task summary: {e}")
 
-    def execute_single_subtask(self, task_id: int, subtask: SubtaskDefinition) -> Dict[str, Any]:
+    def execute_single_task(self, task_id: int, subtask: TaskDefinition) -> Dict[str, Any]:
         """
         Execute a single subtask and report result to server
 
@@ -272,16 +272,16 @@ class SubtaskExecutor:
         if self.task_logger:
             self.task_logger.info(f"🏃 Starting execution of subtask '{subtask.name}' (order: {subtask.order})")
 
-        self._report_subtask_status(task_id, subtask, TaskStatus.RUNNING)
+        self._report_task_status(task_id, subtask, JobStatus.RUNNING)
 
         start_time = time.time()
 
         try:
             if self.task_logger:
-                self.task_logger.info(f"Calling execute_subtask({subtask.name}, {subtask.args}, {subtask.kwargs})")
+                self.task_logger.info(f"Calling execute_task({subtask.name}, {subtask.args}, {subtask.kwargs})")
 
             # Execute the subtask
-            result = execute_subtask(
+            result = execute_task(
                 subtask.name,
                 *subtask.args,
                 **subtask.kwargs
@@ -295,8 +295,8 @@ class SubtaskExecutor:
 
             if result['success']:
                 # Report successful completion
-                self._report_subtask_status(
-                    task_id, subtask, TaskStatus.COMPLETED,
+                self._report_task_status(
+                    task_id, subtask, JobStatus.COMPLETED,
                     result=result['result'],
                     execution_time=execution_time
                 )
@@ -307,15 +307,15 @@ class SubtaskExecutor:
 
                 return {
                     'success': True,
-                    'subtask_name': subtask.name,
+                    'task_name': subtask.name,
                     'result': result['result'],
                     'execution_time': execution_time
                 }
             else:
                 # Report failure
                 error_msg = result.get('error', 'Unknown error')
-                self._report_subtask_status(
-                    task_id, subtask, TaskStatus.FAILED,
+                self._report_task_status(
+                    task_id, subtask, JobStatus.FAILED,
                     error_message=error_msg,
                     execution_time=execution_time
                 )
@@ -325,7 +325,7 @@ class SubtaskExecutor:
 
                 return {
                     'success': False,
-                    'subtask_name': subtask.name,
+                    'task_name': subtask.name,
                     'error': error_msg,
                     'execution_time': execution_time
                 }
@@ -339,26 +339,26 @@ class SubtaskExecutor:
                 self.task_logger.error(f"  Execution time before exception: {execution_time:.2f} seconds")
 
             # Report exception
-            self._report_subtask_status(
-                task_id, subtask, TaskStatus.FAILED,
+            self._report_task_status(
+                task_id, subtask, JobStatus.FAILED,
                 error_message=error_msg,
                 execution_time=execution_time
             )
 
             return {
                 'success': False,
-                'subtask_name': subtask.name,
+                'task_name': subtask.name,
                 'error': error_msg,
                 'execution_time': execution_time
             }
 
-    def _report_subtask_status(self, task_id: int, subtask: SubtaskDefinition,
-                              status: TaskStatus, result: Any = None,
+    def _report_task_status(self, task_id: int, subtask: TaskDefinition,
+                              status: JobStatus, result: Any = None,
                               error_message: str = None, execution_time: float = None):
         """Report subtask execution status to server"""
         try:
             data = {
-                'subtask_name': subtask.name,
+                'task_name': subtask.name,
                 'client': self.client_name,
                 'status': status.value,
                 'order': subtask.order
@@ -377,7 +377,7 @@ class SubtaskExecutor:
             if execution_time is not None:
                 data['execution_time'] = execution_time
 
-            url = f"{self.server_url}/api/tasks/{task_id}/subtask-executions"
+            url = f"{self.server_url}/api/jobs/{task_id}/runs"
 
             response = requests.post(url, json=data, timeout=10)
 
@@ -386,10 +386,10 @@ class SubtaskExecutor:
                 logger.info(f"📤 REPORT_SUCCESS: Task {task_id} - '{subtask.name}' status '{status.value}' reported to server")
                 if self.task_logger:
                     self.task_logger.info(f"✅ Successfully reported subtask '{subtask.name}' status '{status.value}' to server")
-                    if result is not None and status == TaskStatus.COMPLETED:
+                    if result is not None and status == JobStatus.COMPLETED:
                         result_preview = str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
                         self.task_logger.info(f"REPORT_RESULT: Sent result to server: {result_preview}")
-                    elif error_message and status == TaskStatus.FAILED:
+                    elif error_message and status == JobStatus.FAILED:
                         error_preview = str(error_message)[:100] + "..." if len(str(error_message)) > 100 else str(error_message)
                         self.task_logger.info(f"REPORT_ERROR: Sent error to server: {error_preview}")
 
@@ -409,15 +409,15 @@ class SubtaskExecutor:
             if self.task_logger:
                 self.task_logger.error(f"Error reporting subtask status: {e}")
 
-    def get_available_subtasks(self) -> List[str]:
+    def get_available_tasks(self) -> List[str]:
         """Get list of available subtasks on this client"""
-        return list_subtasks()
+        return list_tasks()
 
-    def test_subtask(self, subtask_name: str, *args, **kwargs) -> Dict[str, Any]:
+    def test_task(self, task_name: str, *args, **kwargs) -> Dict[str, Any]:
         """Test a subtask execution locally (for debugging)"""
         try:
-            logger.info(f"Testing subtask: {subtask_name}")
-            result = execute_subtask(subtask_name, *args, **kwargs)
+            logger.info(f"Testing subtask: {task_name}")
+            result = execute_task(task_name, *args, **kwargs)
             logger.info(f"Test result: {result}")
             return result
         except Exception as e:
@@ -428,15 +428,11 @@ class SubtaskExecutor:
                 'result': None
             }
 
-class TaskSubtaskAdapter:
-    """Adapter to handle both legacy tasks and new subtask-based tasks"""
+class TaskAdapter:
+    """Adapter to dispatch job task execution"""
 
     def __init__(self, server_url: str, client_name: str):
-        self.subtask_executor = SubtaskExecutor(server_url, client_name)
-
-        # Import legacy executor
-        from client.executor import TaskExecutor
-        self.legacy_executor = TaskExecutor()
+        self.executor = TaskExecutor(server_url, client_name)
 
     def execute_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -451,42 +447,29 @@ class TaskSubtaskAdapter:
         task_id = task_data.get('id')
         task_name = task_data.get('name', f'Task_{task_id}')
 
-        # Check if this is a subtask-based task
-        if 'subtasks' in task_data and task_data['subtasks']:
-            logger.info(f"Executing subtask-based task {task_id}: {task_name}")
-            return self._execute_subtask_task(task_id, task_name, task_data['subtasks'])
+        # Execute tasks from job data
+        if 'tasks' in task_data and task_data['tasks']:
+            logger.info(f"Executing job {task_id}: {task_name}")
+            return self._execute_task_job(task_id, task_name, task_data['tasks'])
         else:
-            logger.info(f"Executing legacy command-based task {task_id}: {task_name}")
-            return self._execute_legacy_task(task_data)
+            logger.warning(f"Job {task_id} has no tasks defined")
+            return {'success': False, 'error': 'No tasks defined in job'}
 
-    def _execute_subtask_task(self, task_id: int, task_name: str, subtasks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Execute subtask-based task"""
-        # Convert subtask data to SubtaskDefinition objects
-        subtasks = []
-        for subtask_data in subtasks_data:
-            subtask = SubtaskDefinition(
-                name=subtask_data.get('name', ''),
-                client=subtask_data.get('client', ''),
-                order=subtask_data.get('order', 0),
-                args=subtask_data.get('args', []),
-                kwargs=subtask_data.get('kwargs', {}),
-                timeout=subtask_data.get('timeout', 300),
-                retry_count=subtask_data.get('retry_count', 0),
-                max_retries=subtask_data.get('max_retries', 3)
+    def _execute_task_job(self, task_id: int, task_name: str, tasks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Execute tasks within a job"""
+        task_defs = []
+        for td in tasks_data:
+            task_def = TaskDefinition(
+                name=td.get('name', ''),
+                client=td.get('client', ''),
+                order=td.get('order', 0),
+                args=td.get('args', []),
+                kwargs=td.get('kwargs', {}),
+                timeout=td.get('timeout', 300),
+                retry_count=td.get('retry_count', 0),
+                max_retries=td.get('max_retries', 3)
             )
-            subtasks.append(subtask)
+            task_defs.append(task_def)
 
-        return self.subtask_executor.execute_task_subtasks(task_id, task_name, subtasks)
-
-    def _execute_legacy_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute legacy subtask-based task"""
-        command = task_data.get('command', '')
-        if not command:
-            return {
-                'success': False,
-                'error': 'No command specified in legacy task'
-            }
-
-        # Use legacy executor
-        return self.legacy_executor.execute(subtask)
+        return self.executor.execute_job_tasks(task_id, task_name, task_defs)
 
