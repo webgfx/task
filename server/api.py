@@ -666,7 +666,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Notify result collector about Task completion
             if result_collector and data['status'] in ['completed', 'failed']:
-                result_collector.on_TASK_completion(
+                result_collector.on_task_completion(
                     task_id=task_id,
                     client_name=data['client'],
                     task_name=data['task_name'],
@@ -731,7 +731,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/tasks/<string:task_name>/execute', methods=['POST'])
-    def execute_TASK_api(task_name):
+    def execute_task_api(task_name):
         """Execute a specific Task"""
         try:
             # Get any parameters from request body
@@ -752,7 +752,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/tasks/<string:task_name>/info', methods=['GET'])
-    def get_TASK_info(task_name):
+    def get_task_info(task_name):
         """Get information about a specific Task"""
         try:
             task_func = get_task(task_name)
@@ -803,7 +803,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/tasks/<task_name>/test', methods=['POST'])
-    def test_TASK(task_name):
+    def test_task(task_name):
         """Test a Task run (for debugging)"""
         try:
             from common.tasks import execute_task

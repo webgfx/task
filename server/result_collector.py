@@ -65,8 +65,8 @@ class TaskResultCollector:
         # For Outlook, minimal configuration is needed
         return bool(email_config.get('default_recipient') or email_config.get('to_emails'))
 
-    def on_TASK_completion(self, task_id: int, client_name: str, TASK_name: str,
-                            TASK_status: JobStatus, result: Any = None,
+    def on_task_completion(self, task_id: int, client_name: str, task_name: str,
+                            task_status: JobStatus, result: Any = None,
                             error_message: str = None, execution_time: float = None):
         """
         Handle Task completion event
@@ -74,14 +74,14 @@ class TaskResultCollector:
         Args:
             task_id: ID of the Job
             client_name: Name of the client that executed the Task
-            TASK_name: Name of the completed Task
-            TASK_status: Status of the Task execution
+            task_name: Name of the completed Task
+            task_status: Status of the Task execution
             result: Task execution result
             error_message: Error message if Task failed
             execution_time: Time taken to execute Task
         """
         try:
-            logger.info(f"Processing Task completion: Job {task_id}, Client {client_name}, Task {TASK_name}, Status {TASK_status.value}")
+            logger.info(f"Processing Task completion: Job {task_id}, Client {client_name}, Task {task_name}, Status {task_status.value}")
 
             # Check if all tasks for this Job are completed
             if self._check_task_completion(task_id):
@@ -112,7 +112,7 @@ class TaskResultCollector:
                     return False
 
                 # Get Job information
-                Job = self.database.get_task(task_id)
+                job = self.database.get_task(task_id)
                 if not Job:
                     logger.error(f"Job {task_id} not found")
                     return False
@@ -175,7 +175,7 @@ class TaskResultCollector:
             logger.info(f"Processing completion for Job {task_id}")
 
             # Get Job and update status
-            Job = self.database.get_task(task_id)
+            job = self.database.get_task(task_id)
             if not Job:
                 logger.error(f"Job {task_id} not found during completion processing")
                 return
@@ -305,7 +305,7 @@ class TaskResultCollector:
                         # Create a placeholder for missing Task execution
                         placeholder = Run(
                             task_id=Job.id,
-                            TASK_name=Task.name,
+                            task_name=Task.name,
                             TASK_order=Task.order,
                             client=client_name,
                             status=JobStatus.FAILED,
@@ -403,7 +403,7 @@ class TaskResultCollector:
             str: Path to generated report file, or None if failed
         """
         try:
-            Job = self.database.get_task(task_id)
+            job = self.database.get_task(task_id)
             if not Job:
                 logger.error(f"Job {task_id} not found")
                 return None
@@ -441,7 +441,7 @@ class TaskResultCollector:
                 logger.error("Email notifier not configured")
                 return False
 
-            Job = self.database.get_task(task_id)
+            job = self.database.get_task(task_id)
             if not Job:
                 logger.error(f"Job {task_id} not found")
                 return False
@@ -487,7 +487,7 @@ class TaskResultCollector:
                             task_id=Job.id,
                             task_name=Job.name,
                             client_name=client_name,
-                            TASK_name=execution.task_name,
+                            task_name=execution.task_name,
                             status=execution.status.value,
                             result=execution.result,
                             execution_time=execution.execution_time,
