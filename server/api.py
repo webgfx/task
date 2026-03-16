@@ -205,7 +205,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             database.update_task(task)
 
             # Broadcast task update event
-            socketio.emit('task_updated', task.to_dict())
+            socketio.emit('subtask_updated', task.to_dict())
 
             return jsonify({
                 'success': True,
@@ -443,13 +443,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             # Find the Task to delete
-            TASK_to_delete = None
+            task_to_delete = None
             for td in task.tasks:
                 if td.name == task_name and td.client == client:
-                    TASK_to_delete = Task
+                    task_to_delete = td
                     break
 
-            if not TASK_to_delete:
+            if not task_to_delete:
                 return jsonify({
                     'success': False,
                     'error': f'Task "{task_name}" for client "{client}" not found in task'
@@ -492,7 +492,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.info(f"TASK_DELETION: Deleted Task '{task_name}' from task {task_id} for client '{client}'")
 
             # Broadcast Task deletion event
-            socketio.emit('TASK_deleted', {
+            socketio.emit('task_deleted', {
                 'task_id': task_id,
                 'task_id': task_id,
                 'task_name': task_name,
@@ -505,7 +505,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'success': True,
                 'message': f'Task "{task_name}" deleted successfully',
                 'remaining_TASKs': len(task.tasks),
-                'task_status': task.status.value
+                'run_status': task.status.value
             })
 
         except Exception as e:
@@ -649,11 +649,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
                             t.order > data.get('order', 0))
                     ]
                     if remaining:
-                        next_task = min(remaining, key=lambda x: x.order)
+                        next_td = min(remaining, key=lambda x: x.order)
                         database.update_client_current_task(
                             data['client'],
                             task_id,
-                            next_TASK.task_id
+                            next_td.task_id
                         )
                     else:
                         # No more tasks, clear current task
@@ -670,7 +670,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     task_id=task_id,
                     client_name=data['client'],
                     task_name=data['task_name'],
-                    TASK_status=JobStatus(data['status']),
+                    run_status=JobStatus(data['status']),
                     result=data.get('result'),
                     error_message=data.get('error_message'),
                     execution_time=data.get('execution_time')
@@ -682,7 +682,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.info(f"DEBUG: Finished processing Task completion for task {task_id}")
 
             # Broadcast task run status update
-            socketio.emit('TASK_updated', {
+            socketio.emit('subtask_updated', {
                 'task_id': task_id,
                 'run_task_id': run.task_id,
                 'task_name': data['task_name'],
@@ -1344,7 +1344,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 404
 
             # Broadcast Task completion event to connected clients
-            socketio.emit('TASK_completed', {
+            socketio.emit('task_completed', {
                 'task_id': task_id,
                 'client_ip': client_ip,
                 'client_name': client_name,
@@ -1790,9 +1790,9 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 execution_map[key] = r
 
             # Check completion status
-            total_TASKs = len(task.tasks)
-            completed_TASKs = 0
-            failed_TASKs = 0
+            total_tasks_count = len(task.tasks)
+            completed_count = 0
+            failed_count = 0
 
             for td in task.tasks:
                 key = f"{td.name}_{td.client}"
@@ -1800,47 +1800,45 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
                 if run:
                     if run.status == JobStatus.COMPLETED:
-                        completed_TASKs += 1
+                        completed_count += 1
                     elif run.status == JobStatus.FAILED:
-                        failed_TASKs += 1
+                        failed_count += 1
 
             # Determine if task is complete
-            all_TASKs_finished = (completed_TASKs + failed_TASKs) == total_TASKs
+            all_finished = (completed_count + failed_count) == total_tasks_count
 
-            logger.info(f"TASK_COMPLETION: Task {task_id} '{td.name}' - Progress: {completed_TASKs}/{total_TASKs} completed, {failed_TASKs} failed")
+            logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' - Progress: {completed_count}/{total_tasks_count} completed, {failed_count} failed")
 
-            if all_TASKs_finished and task.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
+            if all_finished and task.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
                 # Update task status
                 task.completed_at = datetime.now()
 
-                if failed_TASKs > 0:
+                if failed_count > 0:
                     task.status = JobStatus.FAILED
-                    task.error_message = f"{failed_TASKs} out of {total_TASKs} tasks failed"
-                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{td.name}' FAILED - {failed_TASKs}/{total_TASKs} tasks failed")
+                    task.error_message = f"{failed_count} out of {total_tasks_count} tasks failed"
+                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{task.name}' FAILED - {failed_count}/{total_tasks_count} tasks failed")
                 else:
                     task.status = JobStatus.COMPLETED
-                    task.result = f"All {total_TASKs} tasks completed successfully"
-                    logger.info(f"TASK_COMPLETION: Task {task_id} '{td.name}' COMPLETED successfully - All {total_TASKs} tasks completed")
+                    task.result = f"All {total_tasks_count} tasks completed successfully"
+                    logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' COMPLETED successfully")
 
-                update_success = database.update_task(task)
+                database.update_task(task)
 
-                # Clear current task from all clients that were working on this task
+                # Clear current task from all clients
                 clients = task.get_all_clients()
                 for client_name in clients:
                     database.update_client_current_task(client_name, None, None)
-                    # Also update client status back to online if it was busy
                     database.update_client_heartbeat_by_name(client_name, ClientStatus.ONLINE)
 
                 # Broadcast task completion
-                logger.info(f"TASK_COMPLETION: Broadcasting completion event for task {task_id}")
                 socketio.emit('task_completed', {
                     'task_id': task_id,
                     'status': task.status.value,
                     'success': task.status == JobStatus.COMPLETED,
                     'completed_at': task.completed_at.isoformat(),
-                    'total_TASKs': total_TASKs,
-                    'completed_TASKs': completed_TASKs,
-                    'failed_TASKs': failed_TASKs,
+                    'total_tasks': total_tasks_count,
+                    'completed_tasks': completed_count,
+                    'failed_tasks': failed_count,
                     'result': task.result,
                     'error_message': task.error_message
                 })
