@@ -254,7 +254,7 @@ class TaskResultCollector:
             with self._completion_lock:
                 self._processing_tasks.discard(task_id)
 
-    def _collect_task_results(self, Job: Job) -> Dict[str, Any]:
+    def _collect_task_results(self, job: Job) -> Dict[str, Any]:
         """
         Collect all execution results for a Job organized by client
 
@@ -343,7 +343,7 @@ class TaskResultCollector:
         # Job succeeds if all clients succeed
         return all(data.get('overall_success', False) for data in client_results.values())
 
-    def _emit_task_completion_event(self, Job: Job, client_results: Dict[str, Any],
+    def _emit_task_completion_event(self, job: Job, client_results: Dict[str, Any],
                                   overall_success: bool):
         """
         Emit real-time Job completion event via WebSocket
@@ -467,7 +467,7 @@ class TaskResultCollector:
             return False
 
 
-    def _cache_task_results(self, Job: Job, client_results: Dict[str, Any]):
+    def _cache_task_results(self, job: Job, client_results: Dict[str, Any]):
         """
         Cache completed Job results to the task_results table for future reference.
 
