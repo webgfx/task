@@ -59,27 +59,27 @@ class TestExecutor:
             self.log(f"❌ Error getting clients: {e}", "ERROR")
             return []
     
-    def create_task(self, task_name, subtasks, clients):
+    def create_task(self, task_name, tasks, clients):
         """Create a new task"""
         try:
-            # Create subtask list with client for each subtask
+            # Create Task list with client for each Task
             formatted_subtasks = []
-            for subtask in subtasks:
-                # Create one subtask per target client
+            for Task in tasks:
+                # Create one Task per target client
                 for client in clients:
                     formatted_subtasks.append({
-                        "name": subtask["name"],
-                        "description": subtask.get("description", ""),
+                        "name": Task["name"],
+                        "description": Task.get("description", ""),
                         "client": client,
-                        "order": subtask.get("order", 0),
-                        "args": subtask.get("args", []),
-                        "kwargs": subtask.get("kwargs", {}),
-                        "timeout": subtask.get("timeout", 300)
+                        "order": Task.get("order", 0),
+                        "args": Task.get("args", []),
+                        "kwargs": Task.get("kwargs", {}),
+                        "timeout": Task.get("timeout", 300)
                     })
             
             task_data = {
                 "name": task_name,
-                "subtasks": formatted_subtasks
+                "tasks": formatted_subtasks
             }
             
             response = requests.post(
@@ -149,8 +149,8 @@ class TestExecutor:
         return False, None
     
     def test_single_subtask_single_client_now(self):
-        """Execute the single-subtask-single-client-now test scenario"""
-        self.log("🧪 Starting test: single-subtask-single-client-now")
+        """Execute the single-Task-single-client-now test scenario"""
+        self.log("🧪 Starting test: single-Task-single-client-now")
         
         # Step 1: Verify server is running
         if not self.verify_server_running():
@@ -166,8 +166,8 @@ class TestExecutor:
         client = online_clients[0]['name']
         self.log(f"Using target client: {client}")
         
-        # Step 3: Create task with get_hostname subtask
-        subtasks = [
+        # Step 3: Create task with get_hostname Task
+        tasks = [
             {
                 "name": "get_hostname",
                 "description": "Get system hostname",
@@ -177,7 +177,7 @@ class TestExecutor:
         
         task_id = self.create_task(
             task_name="Test Single Hostname Task",
-            subtasks=subtasks,
+            tasks=tasks,
             clients=[client]
         )
         
@@ -191,24 +191,24 @@ class TestExecutor:
             # Step 5: Verify results
             self.log("📊 Verifying task results...")
             
-            # Check if task has subtasks with results
-            subtasks_data = task_result.get('subtasks', [])
+            # Check if task has tasks with results
+            subtasks_data = task_result.get('tasks', [])
             if subtasks_data:
-                # Find the hostname subtask for our target client
+                # Find the hostname Task for our target client
                 hostname_subtask = None
-                for subtask in subtasks_data:
-                    if subtask.get('name') == 'get_hostname' and subtask.get('client') == client:
-                        hostname_subtask = subtask
+                for Task in subtasks_data:
+                    if Task.get('name') == 'get_hostname' and Task.get('client') == client:
+                        hostname_subtask = Task
                         break
                 
                 if hostname_subtask:
-                    self.log(f"Found hostname subtask: {hostname_subtask}")
-                    # We need to check the execution results, not just the subtask definition
+                    self.log(f"Found hostname Task: {hostname_subtask}")
+                    # We need to check the execution results, not just the task definition
                     self.log("💡 Checking execution results via API...")
                     
-                    # Get subtask execution results
+                    # Get Task execution results
                     try:
-                        exec_response = requests.get(f"{self.base_url}/api/tasks/{task_id}/subtask-executions")
+                        exec_response = requests.get(f"{self.base_url}/api/tasks/{task_id}/Task-executions")
                         if exec_response.status_code == 200:
                             exec_data = exec_response.json()
                             if exec_data.get('success'):
@@ -219,11 +219,11 @@ class TestExecutor:
                                         execution.get('status') == 'completed'):
                                         result = execution.get('result', '')
                                         if result:
-                                            self.log(f"✅ Hostname subtask completed successfully: {result}")
-                                            self.log("🎉 Test PASSED: single-subtask-single-client-now")
+                                            self.log(f"✅ Hostname Task completed successfully: {result}")
+                                            self.log("🎉 Test PASSED: single-Task-single-client-now")
                                             return True
                                         else:
-                                            self.log(f"❌ Empty result from hostname subtask", "ERROR")
+                                            self.log(f"❌ Empty result from hostname Task", "ERROR")
                                             break
                                 else:
                                     self.log("❌ No completed hostname execution found", "ERROR")
@@ -234,11 +234,11 @@ class TestExecutor:
                     except Exception as e:
                         self.log(f"❌ Error getting execution results: {e}", "ERROR")
                 else:
-                    self.log(f"❌ Hostname subtask not found for client {client}", "ERROR")
+                    self.log(f"❌ Hostname Task not found for client {client}", "ERROR")
             else:
-                self.log("❌ No subtask results found", "ERROR")
+                self.log("❌ No Task results found", "ERROR")
         
-        self.log("💥 Test FAILED: single-subtask-single-client-now")
+        self.log("💥 Test FAILED: single-Task-single-client-now")
         return False
 
 def main():
@@ -251,7 +251,7 @@ def main():
     
     # Available test scenarios
     test_scenarios = {
-        "single-subtask-single-client-now": executor.test_single_subtask_single_client_now
+        "single-Task-single-client-now": executor.test_single_subtask_single_client_now
     }
     
     if len(sys.argv) > 1:

@@ -197,7 +197,7 @@ class TaskClientService(win32serviceutil.ServiceFramework):
 
                 # Create a configuration data structure for the runner.
                 # The service runs directly from the repo, so code updates via
-                # git pull take effect automatically through subtask auto-reload.
+                # git pull take effect automatically through Task auto-reload.
                 runner_config = {
                     'server_url': config.get('server_url', 'http://localhost:5000'),
                     'client_name': config.get('client_name', 'default-client'),

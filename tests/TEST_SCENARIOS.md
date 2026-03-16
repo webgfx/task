@@ -20,11 +20,11 @@ Before running any test scenario, verify:
 
 ---
 
-## Test Scenario: single-subtask-single-client-now
+## Test Scenario: single-Task-single-client-now
 
-**Scenario ID**: `single-subtask-single-client-now`
+**Scenario ID**: `single-Task-single-client-now`
 
-**Description**: Verify that a single subtask can be created and executed immediately on one client client.
+**Description**: Verify that a single Task can be created and executed immediately on one client client.
 
 **Objective**: Test the basic task creation, distribution, and execution workflow with minimal complexity.
 
@@ -41,7 +41,7 @@ Before running any test scenario, verify:
 - [ ] Click "Create New Task" button
 - [ ] Fill in task details:
   - **Task Name**: `Test Single Hostname Task`
-  - **Subtasks**: Select `get_hostname` from predefined subtasks
+  - **tasks**: Select `get_hostname` from Predefined tasks
   - **Clients**: Select one connected client
   - **Execution**: Set to "Execute Now" (immediate execution)
 - [ ] Click "Create Task" button
@@ -52,14 +52,14 @@ Before running any test scenario, verify:
 - [ ] Verify task shows:
   - Status: "running" or "completed"
   - Selected client client in execution overview
-  - Subtask `get_hostname` with order 0
+  - Task `get_hostname` with order 0
 - [ ] Monitor real-time updates via WebSocket
 - [ ] Wait for task completion (should complete within 30 seconds)
 
 #### 4. Results Verification
 - [ ] Verify task status changes to "completed"
-- [ ] Check subtask execution results:
-  - Subtask status: "completed"
+- [ ] Check Task execution results:
+  - Task status: "completed"
   - Result contains hostname information
   - No error messages
   - Execution time is recorded
@@ -71,15 +71,15 @@ Before running any test scenario, verify:
   - Task creation event
   - Task distribution to client
   - Task execution start
-  - Subtask completion
+  - Task completion
   - Task completion
 - [ ] Confirm no error-level log entries
 
 ### Expected Results
 
 **Task Status**: `completed`
-**Subtask Status**: `completed`
-**Subtask Result**: Contains valid hostname (e.g., client client name)
+**Task Status**: `completed`
+**Task Result**: Contains valid hostname (e.g., client client name)
 **Execution Time**: < 30 seconds
 **Error Count**: 0
 **Log Entries**: All major events logged correctly
@@ -87,7 +87,7 @@ Before running any test scenario, verify:
 ### Success Criteria
 - ✅ Task created successfully
 - ✅ Task distributed to client immediately
-- ✅ Subtask executed without errors
+- ✅ Task executed without errors
 - ✅ Hostname result returned correctly
 - ✅ Real-time updates work properly
 - ✅ All events logged correctly
@@ -96,7 +96,7 @@ Before running any test scenario, verify:
 ### Failure Conditions
 - ❌ Task creation fails
 - ❌ Task not distributed to client
-- ❌ Subtask execution errors
+- ❌ Task execution errors
 - ❌ No result returned
 - ❌ Timeout (> 30 seconds)
 - ❌ WebSocket updates not working
@@ -108,14 +108,14 @@ Before running any test scenario, verify:
 
 ### Planned Test Scenarios
 
-1. **multi-subtask-single-client-now**
-   - Multiple subtasks on one client, immediate execution
+1. **multi-Task-single-client-now**
+   - Multiple tasks on one client, immediate execution
    
-2. **single-subtask-multi-client-now**
-   - Same subtask distributed to multiple clients simultaneously
+2. **single-Task-multi-client-now**
+   - Same Task distributed to multiple clients simultaneously
    
-3. **multi-subtask-multi-client-now**
-   - Multiple subtasks distributed across multiple clients
+3. **multi-Task-multi-client-now**
+   - Multiple tasks distributed across multiple clients
    
 4. **scheduled-task-execution**
    - Task scheduled for future execution
@@ -138,8 +138,8 @@ Before running any test scenario, verify:
 10. **large-task-dataset**
     - Tasks with large amounts of data
     
-11. **custom-subtask-execution**
-    - Tasks with custom command subtasks
+11. **custom-Task-execution**
+    - Tasks with custom command tasks
     
 12. **real-time-monitoring**
     - Verify WebSocket real-time updates work correctly
@@ -189,7 +189,7 @@ Before running any test scenario, verify:
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
-| 1.0 | 2025-07-02 | Initial version with single-subtask-single-client-now scenario | System |
+| 1.0 | 2025-07-02 | Initial version with single-Task-single-client-now scenario | System |
 
 ---
 

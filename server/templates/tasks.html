@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/subtasks.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
@@ -101,14 +101,14 @@
                 </div>
             </div>
 
-            <!-- Task list table with enhanced subtask-client view -->
+            <!-- Task list table with enhanced Task-client view -->
             <div class="task-table-container">
                 <table class="task-table enhanced-task-table">
                     <thead>
                         <tr>
                             <th class="task-name-col">Job Name</th>
-                            <th class="subtask-id-col">Task ID</th>
-                            <th class="subtask-name-col">Task Name</th>
+                            <th class="Task-id-col">Task ID</th>
+                            <th class="Task-name-col">Task Name</th>
                             <th class="client-col">Client</th>
                             <th class="status-col">Status</th>
                             <th class="result-col">Result</th>
@@ -152,22 +152,22 @@
                         </div>
                     </div>
 
-                    <!-- Subtask configuration (always shown, no task type switch) -->
-                    <div class="form-section" id="subtaskSection">
-                        <h4><i class="fas fa-list"></i> Subtasks Configuration</h4>
-                        <div class="subtasks-container">
-                            <div class="subtasks-header">
-                                <button type="button" class="btn btn-small btn-primary" onclick="addSubtask()">
-                                    <i class="fas fa-plus"></i> Add Subtask
+                    <!-- Task configuration (always shown, no task type switch) -->
+                    <div class="form-section" id="TASKSection">
+                        <h4><i class="fas fa-list"></i> tasks Configuration</h4>
+                        <div class="tasks-container">
+                            <div class="tasks-header">
+                                <button type="button" class="btn btn-small btn-primary" onclick="addTASK()">
+                                    <i class="fas fa-plus"></i> Add Task
                                 </button>
                             </div>
-                            <div id="subtasksList" class="subtasks-list">
-                                <!-- Subtasks will be added here dynamically -->
+                            <div id="TASKsList" class="tasks-list">
+                                <!-- tasks will be added here dynamically -->
                             </div>
                         </div>
                     </div>
 
-                    <!-- Legacy subtask configuration removed for simplified UI -->
+                    <!-- Legacy Task configuration removed for simplified UI -->
 
                     <!-- Schedule configuration -->
                     <div class="form-section">

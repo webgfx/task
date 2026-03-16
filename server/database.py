@@ -99,12 +99,12 @@ class Database:
             # Migrate old schema to new naming
             self._migrate_to_job_task_run_naming(cursor)
 
-            # Add subtasks column to tasks table if it doesn't exist
+            # Add tasks column to tasks table if it doesn't exist
             cursor.execute("PRAGMA table_info(tasks)")
             columns = [column[1] for column in cursor.fetchall()]
-            if 'subtasks' not in columns:
-                cursor.execute("ALTER TABLE tasks ADD COLUMN subtasks TEXT DEFAULT '[]'")
-                logger.info("Added subtasks column to tasks table")
+            if 'tasks' not in columns:
+                cursor.execute("ALTER TABLE tasks ADD COLUMN tasks TEXT DEFAULT '[]'")
+                logger.info("Added tasks column to tasks table")
 
             # Create task results cache table for storing completed task results
             cursor.execute('''
@@ -167,7 +167,7 @@ class Database:
 
             new_columns = [
                 ('clients', 'TEXT DEFAULT \'[]\''),
-                ('subtasks', 'TEXT DEFAULT \'[]\''),
+                ('tasks', 'TEXT DEFAULT \'[]\''),
                 ('execution_order', 'TEXT DEFAULT \'[]\'')
             ]
 
@@ -361,7 +361,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO tasks (name, command, clients, execution_order,
-                                 subtasks, schedule_time, cron_expression, client, status,
+                                 tasks, schedule_time, cron_expression, client, status,
                                  created_at, started_at, completed_at, result, error_message,
                                  retry_count, max_retries, send_email, email_recipients)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -406,7 +406,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 UPDATE tasks SET name=?, command=?, clients=?, execution_order=?,
-                               subtasks=?, schedule_time=?, cron_expression=?,
+                               tasks=?, schedule_time=?, cron_expression=?,
                                client=?, status=?, started_at=?, completed_at=?,
                                result=?, error_message=?, retry_count=?, max_retries=?,
                                send_email=?, email_recipients=?
@@ -428,34 +428,32 @@ class Database:
             conn.commit()
 
     def delete_task(self, task_id: int):
-        """Delete task and all related execution records"""
+        """Delete job and all related run records"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
-            # First, get task info for logging
             cursor.execute('SELECT name FROM tasks WHERE id = ?', (task_id,))
             task_row = cursor.fetchone()
             task_name = task_row[0] if task_row else f"ID:{task_id}"
 
-            # Delete subtask executions first (child records)
+            # Delete runs first (child records)
             cursor.execute('DELETE FROM runs WHERE job_id = ?', (task_id,))
-            subtask_deleted = cursor.rowcount
+            runs_deleted = cursor.rowcount
 
-            # Finally delete the task itself (parent record)
+            # Delete the job itself
             cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
             task_deleted = cursor.rowcount
 
             conn.commit()
 
             if task_deleted > 0:
-                logger.info(f"Deleted task '{task_name}' (ID: {task_id}) with {subtask_deleted} subtask executions")
+                logger.info(f"Deleted job '{task_name}' (ID: {task_id}) with {runs_deleted} runs")
 
-                # Broadcast task deletion via WebSocket if available
                 if self.socketio:
                     self.socketio.emit('task_deleted', {
                         'task_id': task_id,
                         'task_name': task_name,
-                        'subtask_records_deleted': subtask_deleted
+                        'runs_deleted': runs_deleted
                     })
 
                 return True
@@ -719,14 +717,14 @@ class Database:
             conn.commit()
 
     def get_runs(self, job_id: int) -> List[Run]:
-        """Get all subtask execution records for a task"""
+        """Get all run records for a job"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT * FROM runs
                 WHERE job_id = ?
                 ORDER BY task_order ASC, started_at ASC
-            ''', (task_id,))
+            ''', (job_id,))
             rows = cursor.fetchall()
             return [self._row_to_run(row) for row in rows]
 
@@ -744,14 +742,14 @@ class Database:
             return grouped
 
     def get_runs_by_client(self, job_id: int, client_name: str) -> List[Run]:
-        """Get subtask execution records for a specific task and client"""
+        """Get Task execution records for a specific task and client"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT * FROM runs
                 WHERE job_id = ? AND client = ?
                 ORDER BY task_order ASC, started_at ASC
-            ''', (task_id, client_name))
+            ''', (job_id, client_name))
             rows = cursor.fetchall()
             return [self._row_to_run(row) for row in rows]
 
@@ -1028,7 +1026,7 @@ class Database:
             return False
 
     def update_run(self, execution: Run):
-        """Update subtask execution record"""
+        """Update Task execution record"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1041,30 +1039,6 @@ class Database:
                 execution.execution_time, execution.id
             ))
             conn.commit()
-
-    def get_runs(self, job_id: int) -> List[Run]:
-        """Get all subtask execution records for a task"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT * FROM runs
-                WHERE job_id = ?
-                ORDER BY task_order ASC, started_at ASC
-            ''', (task_id,))
-            rows = cursor.fetchall()
-            return [self._row_to_run(row) for row in rows]
-
-    def get_runs_by_client(self, job_id: int, client_name: str) -> List[Run]:
-        """Get subtask execution records for a specific task and client"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT * FROM runs
-                WHERE job_id = ? AND client = ?
-                ORDER BY task_order ASC, started_at ASC
-            ''', (task_id, client_name))
-            rows = cursor.fetchall()
-            return [self._row_to_run(row) for row in rows]
 
     # Client aliases for backward compatibility and cleaner terminology
     def _migrate_task_ids(self, cursor):
@@ -1087,10 +1061,10 @@ class Database:
                 logger.info("Added current_task_id column to clients table")
 
         except Exception as e:
-            logger.error(f"Failed to migrate subtask IDs: {e}")
+            logger.error(f"Failed to migrate Task IDs: {e}")
 
     def delete_pending_runs(self, task_id: int, task_name: str, client: str):
-        """Delete pending subtask execution records for a specific subtask"""
+        """Delete pending Task execution records for a specific Task"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1101,7 +1075,7 @@ class Database:
             conn.commit()
 
             if deleted_count > 0:
-                logger.info(f"Deleted {deleted_count} pending subtask execution(s) for task {task_id}, subtask '{task_name}', client '{client}'")
+                logger.info(f"Deleted {deleted_count} pending Task execution(s) for task {task_id}, Task '{task_name}', client '{client}'")
 
             return deleted_count
 
@@ -1142,11 +1116,11 @@ class Database:
     # Additional methods for result collection system
     def get_runs_filtered(self, job_id: int, task_name: str = None, client_name: str = None) -> List[Run]:
         """
-        Get subtask execution records with optional filtering
+        Get Task execution records with optional filtering
 
         Args:
             task_id: ID of the task
-            task_name: Optional subtask name filter
+            task_name: Optional Task name filter
             client_name: Optional client name filter
 
         Returns:
@@ -1219,7 +1193,7 @@ class Database:
                 })
 
     def delete_pending_runs(self, task_id: int, task_name: str, client: str):
-        """Delete pending subtask execution records for a specific subtask"""
+        """Delete pending Task execution records for a specific Task"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -1233,11 +1207,11 @@ class Database:
                 deleted_count = cursor.rowcount
                 conn.commit()
 
-                logger.info(f"Deleted {deleted_count} pending subtask execution records for task {task_id}, subtask '{task_name}', client '{client}'")
+                logger.info(f"Deleted {deleted_count} pending Task execution records for task {task_id}, Task '{task_name}', client '{client}'")
                 return deleted_count > 0
 
         except Exception as e:
-            logger.error(f"Failed to delete pending subtask executions: {e}")
+            logger.error(f"Failed to delete pending Task executions: {e}")
             return False
 
     def _migrate_task_ids(self, cursor):
@@ -1260,7 +1234,7 @@ class Database:
                 logger.info("Added current_task_id column to clients table")
 
         except Exception as e:
-            logger.error(f"Failed to migrate subtask IDs: {e}")
+            logger.error(f"Failed to migrate Task IDs: {e}")
             raise
 
     def _migrate_machine_to_client_terminology(self, cursor):
@@ -1313,7 +1287,7 @@ class Database:
                 name TEXT NOT NULL,
                 command TEXT NOT NULL,
                 clients TEXT DEFAULT '[]',
-                subtasks TEXT DEFAULT '[]',
+                tasks TEXT DEFAULT '[]',
                 execution_order TEXT DEFAULT '[]',
                 schedule_time TEXT,
                 cron_expression TEXT,
@@ -1325,21 +1299,21 @@ class Database:
                 error_message TEXT,
                 retry_count INTEGER DEFAULT 0,
                 max_retries INTEGER DEFAULT 3,
-                subtasks TEXT DEFAULT '[]',
+                tasks TEXT DEFAULT '[]',
                 send_email INTEGER DEFAULT 0,
                 email_recipients TEXT
             )
         ''')
 
         cursor.execute('''
-            INSERT INTO tasks_new (id, name, command, clients, subtasks, execution_order,
+            INSERT INTO tasks_new (id, name, command, clients, tasks, execution_order,
                                  schedule_time, cron_expression, status, created_at, started_at,
                                  completed_at, result, error_message, retry_count, max_retries,
-                                 subtasks, send_email, email_recipients)
-            SELECT id, name, command, clients, subtasks, execution_order,
+                                 tasks, send_email, email_recipients)
+            SELECT id, name, command, clients, tasks, execution_order,
                    schedule_time, cron_expression, status, created_at, started_at,
                    completed_at, result, error_message, retry_count, max_retries,
-                   subtasks, send_email, email_recipients FROM tasks
+                   tasks, send_email, email_recipients FROM tasks
         ''')
 
         cursor.execute('DROP TABLE tasks')
@@ -1353,7 +1327,7 @@ class Database:
                 name TEXT NOT NULL,
                 command TEXT NOT NULL,
                 clients TEXT DEFAULT '[]',
-                subtasks TEXT DEFAULT '[]',
+                tasks TEXT DEFAULT '[]',
                 execution_order TEXT DEFAULT '[]',
                 schedule_time TEXT,
                 cron_expression TEXT,
@@ -1365,21 +1339,21 @@ class Database:
                 error_message TEXT,
                 retry_count INTEGER DEFAULT 0,
                 max_retries INTEGER DEFAULT 3,
-                subtasks TEXT DEFAULT '[]',
+                tasks TEXT DEFAULT '[]',
                 send_email INTEGER DEFAULT 0,
                 email_recipients TEXT
             )
         ''')
 
         cursor.execute('''
-            INSERT INTO tasks_new (id, name, command, clients, subtasks, execution_order,
+            INSERT INTO tasks_new (id, name, command, clients, tasks, execution_order,
                                  schedule_time, cron_expression, status, created_at, started_at,
                                  completed_at, result, error_message, retry_count, max_retries,
-                                 subtasks, send_email, email_recipients)
-            SELECT id, name, command, clients, subtasks, execution_order,
+                                 tasks, send_email, email_recipients)
+            SELECT id, name, command, clients, tasks, execution_order,
                    schedule_time, cron_expression, status, created_at, started_at,
                    completed_at, result, error_message, retry_count, max_retries,
-                   subtasks, send_email, email_recipients FROM tasks
+                   tasks, send_email, email_recipients FROM tasks
         ''')
 
         cursor.execute('DROP TABLE tasks')
@@ -1439,30 +1413,30 @@ class Database:
                     INSERT OR IGNORE INTO runs
                     (id, job_id, task_name, task_order, task_id, client,
                      started_at, completed_at, status, result, error_message, execution_time)
-                    SELECT id, task_id, subtask_name, subtask_order,
-                           COALESCE(subtask_id, ''), client,
+                    SELECT id, task_id, TASK_name, TASK_order,
+                           COALESCE(TASK_id, ''), client,
                            started_at, completed_at, status, result, error_message, execution_time
                     FROM executions
                 ''')
                 cursor.execute("DROP TABLE executions")
                 logger.info("Migrated executions → runs successfully")
 
-            # 2. Rename 'subtasks' column to 'tasks' in tasks table
+            # 2. Rename 'tasks' column to 'tasks' in tasks table
             cursor.execute("PRAGMA table_info(tasks)")
             cols = [c[1] for c in cursor.fetchall()]
-            if 'subtasks' in cols and 'tasks' not in cols:
-                cursor.execute("ALTER TABLE tasks RENAME COLUMN subtasks TO tasks")
-                logger.info("Renamed tasks.subtasks → tasks.tasks")
+            if 'tasks' in cols and 'tasks' not in cols:
+                cursor.execute("ALTER TABLE tasks RENAME COLUMN tasks TO tasks")
+                logger.info("Renamed tasks.tasks → tasks.tasks")
 
-            # 3. Rename client columns: current_task_id → current_job_id, current_subtask_id → current_task_id
+            # 3. Rename client columns: current_task_id → current_job_id, current_task_id → current_task_id
             cursor.execute("PRAGMA table_info(clients)")
             cols = [c[1] for c in cursor.fetchall()]
             if 'current_task_id' in cols and 'current_job_id' not in cols:
                 cursor.execute("ALTER TABLE clients RENAME COLUMN current_task_id TO current_job_id")
                 logger.info("Renamed clients.current_task_id → clients.current_job_id")
-            if 'current_subtask_id' in cols and 'current_task_id' not in cols:
-                cursor.execute("ALTER TABLE clients RENAME COLUMN current_subtask_id TO current_task_id")
-                logger.info("Renamed clients.current_subtask_id → clients.current_task_id")
+            if 'current_task_id' in cols and 'current_task_id' not in cols:
+                cursor.execute("ALTER TABLE clients RENAME COLUMN current_task_id TO current_task_id")
+                logger.info("Renamed clients.current_task_id → clients.current_task_id")
 
         except Exception as e:
             logger.error(f"Migration to job/task/run naming failed: {e}")
@@ -1479,13 +1453,13 @@ class Database:
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         # Sanitize names for safe filesystem paths
         safe_client = "".join(c if c.isalnum() or c in '-_.' else '_' for c in client_name)
-        safe_subtask = "".join(c if c.isalnum() or c in '-_.' else '_' for c in task_name)
+        safe_TASK = "".join(c if c.isalnum() or c in '-_.' else '_' for c in task_name)
 
         rel_dir = os.path.join(str(task_id), safe_client)
         abs_dir = os.path.join(self.RESULTS_DIR, rel_dir)
         os.makedirs(abs_dir, exist_ok=True)
 
-        filename = f"{safe_subtask}_{timestamp}.txt"
+        filename = f"{safe_TASK}_{timestamp}.txt"
         rel_path = os.path.join(rel_dir, filename)
         abs_path = os.path.join(self.RESULTS_DIR, rel_path)
 
@@ -1517,8 +1491,8 @@ class Database:
         Args:
             task_id: ID of the task
             task_name: Name of the task
-            client_name: Name of the client that executed the subtask
-            task_name: Name of the subtask
+            client_name: Name of the client that executed the Task
+            task_name: Name of the Task
             status: Execution status
             result: JSON-encoded result data (will be saved as a file)
             execution_time: Time taken to execute
@@ -1540,7 +1514,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO task_results
-                (task_id, task_name, client_name, subtask_name, status,
+                (task_id, task_name, client_name, TASK_name, status,
                  result, execution_time, completed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
@@ -1623,7 +1597,7 @@ class Database:
 
     def get_latest_result_for_client(self, client_name: str,
                                      task_name: str = None) -> Optional[Dict[str, Any]]:
-        """Get the latest cached result for a client, optionally filtered by subtask"""
+        """Get the latest cached result for a client, optionally filtered by Task"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
 

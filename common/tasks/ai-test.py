@@ -9,7 +9,7 @@ The ai-test project is expected as a sibling directory of the task repo:
 The entry point is always:
     node scripts/perf-test.js [options]
 
-Options are passed via subtask kwargs when scheduling the task:
+Options are passed via Task kwargs when scheduling the task:
     runtime:          Comma-separated runtimes, e.g. "ort,llamacpp" (default: "llamacpp")
     ort_backend:      ORT backend, e.g. "webgpu" or "cuda"
     llamacpp_backend: llama.cpp backend, e.g. "vulkan" or "cuda"

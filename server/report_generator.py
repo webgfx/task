@@ -19,45 +19,45 @@ logger = logging.getLogger(__name__)
 
 class ReportGenerator:
     """Generates HTML reports from Job execution results"""
-    
+
     def __init__(self, template_dir: Optional[str] = None):
         """
         Initialize the report generator
-        
+
         Args:
             template_dir: Directory containing HTML templates
         """
         if template_dir is None:
             template_dir = os.path.join(os.path.dirname(__file__), 'templates', 'reports')
-        
+
         self.template_dir = template_dir
         self.ensure_template_dir()
-        
+
         # Create Jinja2 environment
         self.jinja_env = Environment(
             loader=FileSystemLoader(self.template_dir),
             autoescape=True
         )
-        
+
         # Create default templates if they don't exist
         self.create_default_templates()
-    
+
     def ensure_template_dir(self):
         """Ensure the template directory exists"""
         os.makedirs(self.template_dir, exist_ok=True)
-    
+
     def create_default_templates(self):
         """Create default HTML templates"""
         # Main report template
         main_template_path = os.path.join(self.template_dir, 'task_report.html')
         if not os.path.exists(main_template_path):
             self.create_main_report_template(main_template_path)
-        
+
         # Email template
         email_template_path = os.path.join(self.template_dir, 'email_template.html')
         if not os.path.exists(email_template_path):
             self.create_email_template(email_template_path)
-    
+
     def create_main_report_template(self, template_path: str):
         """Create the main report HTML template"""
         template_content = """<!DOCTYPE html>
@@ -182,39 +182,39 @@ class ReportGenerator:
             border-top: none;
             border-radius: 0 0 8px 8px;
         }
-        .subtask {
+        .Task {
             padding: 15px 20px;
             border-bottom: 1px solid #dee2e6;
         }
-        .subtask:last-child {
+        .Task:last-child {
             border-bottom: none;
         }
-        .subtask-header {
+        .Task-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
         }
-        .subtask-name {
+        .Task-name {
             font-weight: bold;
             color: #495057;
         }
-        .subtask-time {
+        .Task-time {
             font-size: 0.9em;
             color: #6c757d;
         }
-        .subtask-result {
+        .Task-result {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 6px;
             border-left: 4px solid #007bff;
             margin-top: 10px;
         }
-        .subtask-result.success {
+        .Task-result.success {
             border-left-color: #28a745;
             background: #f0fff4;
         }
-        .subtask-result.error {
+        .Task-result.error {
             border-left-color: #dc3545;
             background: #fff5f5;
         }
@@ -277,7 +277,7 @@ class ReportGenerator:
             <h1>{{ Job.name }}</h1>
             <div class="subtitle">Job Execution Report</div>
         </div>
-        
+
         <div class="content">
             <!-- Job Summary -->
             <div class="summary">
@@ -300,17 +300,17 @@ class ReportGenerator:
                 </div>
                 {% endif %}
                 <div class="summary-card">
-                    <h3>{{ total_subtasks }}</h3>
-                    <p>Total Subtasks</p>
+                    <h3>{{ total_TASKs }}</h3>
+                    <p>Total tasks</p>
                 </div>
                 <div class="summary-card success">
-                    <h3>{{ successful_subtasks }}</h3>
-                    <p>Successful Subtasks</p>
+                    <h3>{{ successful_TASKs }}</h3>
+                    <p>Successful tasks</p>
                 </div>
-                {% if failed_subtasks > 0 %}
+                {% if failed_TASKs > 0 %}
                 <div class="summary-card error">
-                    <h3>{{ failed_subtasks }}</h3>
-                    <p>Failed Subtasks</p>
+                    <h3>{{ failed_TASKs }}</h3>
+                    <p>Failed tasks</p>
                 </div>
                 {% endif %}
                 <div class="summary-card">
@@ -318,7 +318,7 @@ class ReportGenerator:
                     <p>Total Time</p>
                 </div>
             </div>
-            
+
             <!-- Job Information -->
             <div class="section">
                 <h2>Job Information</h2>
@@ -351,7 +351,7 @@ class ReportGenerator:
                     </div>
                 </div>
             </div>
-            
+
             <!-- client Results -->
             <div class="section">
                 <h2>Execution Results by client</h2>
@@ -365,28 +365,28 @@ class ReportGenerator:
                             </span>
                         </h3>
                     </div>
-                    <div class="subtasks">
-                        {% for subtask in client_data.tasks %}
-                        <div class="subtask">
-                            <div class="subtask-header">
-                                <span class="subtask-name">{{ subtask.task_name }}</span>
-                                <span class="subtask-time">
-                                    {% if subtask.execution_time %}{{ "%.2f"|format(subtask.execution_time) }}s{% endif %}
+                    <div class="tasks">
+                        {% for Task in client_data.tasks %}
+                        <div class="Task">
+                            <div class="Task-header">
+                                <span class="Task-name">{{ Task.task_name }}</span>
+                                <span class="Task-time">
+                                    {% if Task.execution_time %}{{ "%.2f"|format(Task.execution_time) }}s{% endif %}
                                 </span>
                             </div>
-                            {% if subtask.status == 'completed' %}
-                            <div class="subtask-result success">
+                            {% if Task.status == 'completed' %}
+                            <div class="Task-result success">
                                 <strong>Result:</strong>
-                                <div class="result-content">{{ subtask.result or 'No result data' }}</div>
+                                <div class="result-content">{{ Task.result or 'No result data' }}</div>
                             </div>
-                            {% elif subtask.status == 'failed' %}
-                            <div class="subtask-result error">
+                            {% elif Task.status == 'failed' %}
+                            <div class="Task-result error">
                                 <strong>Error:</strong>
-                                <div class="result-content">{{ subtask.error_message or 'Unknown error' }}</div>
+                                <div class="result-content">{{ Task.error_message or 'Unknown error' }}</div>
                             </div>
                             {% else %}
-                            <div class="subtask-result">
-                                <strong>Status:</strong> {{ subtask.status|title }}
+                            <div class="Task-result">
+                                <strong>Status:</strong> {{ Task.status|title }}
                             </div>
                             {% endif %}
                         </div>
@@ -396,21 +396,21 @@ class ReportGenerator:
                 {% endfor %}
             </div>
         </div>
-        
+
         <div class="footer">
             Generated by Distributed Job Management System on {{ generation_time }}
         </div>
     </div>
 </body>
 </html>"""
-        
+
         try:
             with open(template_path, 'w', encoding='utf-8') as f:
                 f.write(template_content)
             logger.info(f"Created main report template: {template_path}")
         except Exception as e:
             logger.error(f"Failed to create main report template: {e}")
-    
+
     def create_email_template(self, template_path: str):
         """Create the email HTML template"""
         template_content = """<!DOCTYPE html>
@@ -479,58 +479,58 @@ class ReportGenerator:
         <h1>Job Completion Notification</h1>
         <p>{{ Job.name }}</p>
     </div>
-    
+
     <div class="content">
         <h2>Job Summary</h2>
         <div class="summary">
             <p><strong>Job:</strong> {{ Job.name }}</p>
-            <p><strong>Status:</strong> 
+            <p><strong>Status:</strong>
                 <span class="{% if overall_status == 'completed' %}status-success{% elif overall_status == 'failed' %}status-failed{% else %}status-partial{% endif %}">
                     {{ overall_status|title }}
                 </span>
             </p>
             <p><strong>clients:</strong> {{ successful_clients }}/{{ total_clients }} successful</p>
-            <p><strong>Subtasks:</strong> {{ successful_subtasks }}/{{ total_subtasks }} successful</p>
+            <p><strong>tasks:</strong> {{ successful_TASKs }}/{{ total_TASKs }} successful</p>
             <p><strong>Execution Time:</strong> {{ execution_time }}</p>
             <p><strong>Completed:</strong> {{ Job.completed_at or generation_time }}</p>
         </div>
-        
+
         <h3>client Results</h3>
         {% for client_name, client_data in client_results.items() %}
         <div class="client-summary">
-            <strong>{{ client_name }}:</strong> 
+            <strong>{{ client_name }}:</strong>
             <span class="{% if client_data.overall_success %}status-success{% else %}status-failed{% endif %}">
                 {% if client_data.overall_success %}Success{% else %}Failed{% endif %}
             </span>
-            ({{ client_data.successful_count }}/{{ client_data.total_count }} subtasks)
+            ({{ client_data.successful_count }}/{{ client_data.total_count }} tasks)
         </div>
         {% endfor %}
-        
+
         <p>A detailed report has been generated and is attached to this email.</p>
     </div>
-    
+
     <div class="footer">
         <p>Generated by Distributed Job Management System</p>
         <p>{{ generation_time }}</p>
     </div>
 </body>
 </html>"""
-        
+
         try:
             with open(template_path, 'w', encoding='utf-8') as f:
                 f.write(template_content)
             logger.info(f"Created email template: {template_path}")
         except Exception as e:
             logger.error(f"Failed to create email template: {e}")
-    
+
     def generate_task_report(self, Job: Job, client_results: Dict[str, Any]) -> str:
         """
         Generate HTML report for a completed Job
-        
+
         Args:
             Job: Job object
             client_results: Dictionary containing results organized by client
-            
+
         Returns:
             str: Generated HTML content
         """
@@ -539,19 +539,19 @@ class ReportGenerator:
             total_clients = len(client_results)
             successful_clients = sum(1 for data in client_results.values() if data.get('overall_success', False))
             failed_clients = total_clients - successful_clients
-            
-            total_subtasks = sum(data.get('total_count', 0) for data in client_results.values())
-            successful_subtasks = sum(data.get('successful_count', 0) for data in client_results.values())
-            failed_subtasks = total_subtasks - successful_subtasks
-            
+
+            total_TASKs = sum(data.get('total_count', 0) for data in client_results.values())
+            successful_TASKs = sum(data.get('successful_count', 0) for data in client_results.values())
+            failed_TASKs = total_TASKs - successful_TASKs
+
             # Determine overall status
-            if failed_clients == 0 and failed_subtasks == 0:
+            if failed_clients == 0 and failed_TASKs == 0:
                 overall_status = 'completed'
             elif successful_clients == 0:
                 overall_status = 'failed'
             else:
                 overall_status = 'partial'
-            
+
             # Calculate execution time
             execution_time = "N/A"
             if Job.started_at and Job.completed_at:
@@ -569,7 +569,7 @@ class ReportGenerator:
                             execution_time = f"{duration/3600:.1f}h"
                 except Exception:
                     execution_time = "N/A"
-            
+
             # Prepare template context
             context = {
                 'Job': Job,
@@ -578,24 +578,24 @@ class ReportGenerator:
                 'total_clients': total_clients,
                 'successful_clients': successful_clients,
                 'failed_clients': failed_clients,
-                'total_subtasks': total_subtasks,
-                'successful_subtasks': successful_subtasks,
-                'failed_subtasks': failed_subtasks,
+                'total_TASKs': total_TASKs,
+                'successful_TASKs': successful_TASKs,
+                'failed_TASKs': failed_TASKs,
                 'execution_time': execution_time,
                 'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
-            
+
             # Render template
             template = self.jinja_env.get_template('task_report.html')
             html_content = template.render(**context)
-            
+
             return html_content
-            
+
         except Exception as e:
             logger.error(f"Failed to generate Job report: {e}")
             # Return a simple fallback report
             return self._generate_fallback_report(Job, client_results)
-    
+
     def _generate_fallback_report(self, Job: Job, client_results: Dict[str, Any]) -> str:
         """Generate a simple fallback report if template rendering fails"""
         html = f"""<!DOCTYPE html>
@@ -617,57 +617,57 @@ class ReportGenerator:
         <p>Status: {Job.status.value if Job.status else 'Unknown'}</p>
         <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
-    
+
     <h2>client Results</h2>
 """
-        
+
         for client_name, data in client_results.items():
             success_class = "success" if data.get('overall_success', False) else "error"
             html += f"""
     <div class="client {success_class}">
         <h3>{client_name}</h3>
         <p>Status: {'Success' if data.get('overall_success', False) else 'Failed'}</p>
-        <p>Subtasks: {data.get('successful_count', 0)}/{data.get('total_count', 0)} successful</p>
+        <p>tasks: {data.get('successful_count', 0)}/{data.get('total_count', 0)} successful</p>
     </div>
 """
-        
+
         html += """
 </body>
 </html>"""
         return html
-    
+
     def save_report_to_file(self, html_content: str, Job: Job, output_dir: Optional[str] = None) -> str:
         """
         Save HTML report to file
-        
+
         Args:
             html_content: Generated HTML content
             Job: Job object
             output_dir: Directory to save the report (default: server/reports)
-            
+
         Returns:
             str: Path to the saved report file
         """
         try:
             if output_dir is None:
                 output_dir = os.path.join(os.path.dirname(__file__), 'reports')
-            
+
             os.makedirs(output_dir, exist_ok=True)
-            
+
             # Generate filename with timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             clean_task_name = "".join(c for c in Job.name if c.isalnum() or c in (' ', '-', '_')).strip()
             clean_task_name = clean_task_name.replace(' ', '_')
             filename = f"task_{Job.id}_{clean_task_name}_{timestamp}.html"
-            
+
             file_path = os.path.join(output_dir, filename)
-            
+
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
-            
+
             logger.info(f"Report saved to: {file_path}")
             return file_path
-            
+
         except Exception as e:
             logger.error(f"Failed to save report to file: {e}")
             raise
@@ -675,11 +675,11 @@ class ReportGenerator:
 
 class EmailNotifier:
     """Handles email notifications for Job completions using Outlook"""
-    
+
     def __init__(self, config: Dict[str, Any] = None):
         """
         Initialize email notifier
-        
+
         Args:
             config: Email configuration dictionary (optional for Outlook)
                 - default_sender: Default sender email
@@ -687,17 +687,17 @@ class EmailNotifier:
         """
         self.config = config or {}
         self.report_generator = ReportGenerator()
-    
+
     def send_email(self, subject: str, content: str = '', sender: str = '', to: str = '') -> Dict[str, Any]:
         """
         Send email using Outlook application
-        
+
         Args:
             subject: Email subject
             content: Email content (HTML)
             sender: Sender email (optional, uses default)
             to: Recipient email (optional, uses default)
-            
+
         Returns:
             Dict with success status and message
         """
@@ -726,9 +726,9 @@ class EmailNotifier:
             mail.Subject = subject
             mail.HTMLBody = content
             mail.Send()
-            
+
             logger.info(f"Email sent successfully via Outlook to {to} with subject '{subject}'")
-            
+
             return {
                 'success': True,
                 'message': f'Email sent successfully via Outlook to {to}',
@@ -736,110 +736,110 @@ class EmailNotifier:
                 'recipient': to,
                 'sender': sender
             }
-            
+
         except Exception as e:
             error_msg = f"Failed to send email via Outlook: {str(e)}"
             logger.error(error_msg)
-            
+
             return {
                 'success': False,
                 'error': error_msg,
                 'subject': subject,
                 'recipient': to
             }
-    
-    def send_task_completion_notification(self, Job: Job, client_results: Dict[str, Any], 
+
+    def send_task_completion_notification(self, Job: Job, client_results: Dict[str, Any],
                                         report_file_path: Optional[str] = None) -> bool:
         """
         Send email notification for Job completion
-        
+
         Args:
             Job: Completed Job
             client_results: Results organized by client
             report_file_path: Path to the detailed HTML report file
-            
+
         Returns:
             bool: True if email sent successfully, False otherwise
         """
         try:
             # Generate email content
             email_html = self._generate_email_content(Job, client_results)
-            
+
             # Determine client name for subject
             client_name = Job.name.split('/', 1)[0] if '/' in Job.name else socket.gethostname()
-            
+
             # Create email subject as requested: client_name-task_name
             subject = f"{client_name}-{Job.name}"
-            
+
             # Send email using Outlook
             result = self.send_email(
                 subject=subject,
                 content=email_html,
                 to=self.config.get('default_recipient', 'ygu@microsoft.com')
             )
-            
+
             return result.get('success', False)
-            
+
         except Exception as e:
             logger.error(f"Failed to send Job completion notification: {e}")
             return False
-    
-    def send_notification(self, task_name: str, client_name: str, report_html: str, 
+
+    def send_notification(self, task_name: str, client_name: str, report_html: str,
                          to_email: str = None) -> Dict[str, Any]:
         """
         Send email notification with HTML report
-        
+
         Args:
             task_name: Name of the completed Job
             client_name: Name of the client that completed the Job
             report_html: HTML content of the report
             to_email: Recipient email address (optional)
-            
+
         Returns:
             Dict with success status and message
         """
         try:
             # Create email subject as requested: client_name-task_name
             subject = f"{client_name}-{task_name}"
-            
+
             # Use the send_email method with Outlook
             result = self.send_email(
                 subject=subject,
                 content=report_html,
                 to=to_email or self.config.get('default_recipient', 'ygu@microsoft.com')
             )
-            
+
             return result
-            
+
         except Exception as e:
             error_msg = f"Failed to send email notification: {str(e)}"
             logger.error(error_msg)
-            
+
             return {
                 'success': False,
                 'error': error_msg,
                 'subject': f"{client_name}-{task_name}",
                 'recipient': to_email or 'unknown'
             }
-    
+
     def _generate_email_content(self, Job: Job, client_results: Dict[str, Any]) -> str:
         """Generate email HTML content"""
         try:
             # Calculate summary statistics (same as in report generator)
             total_clients = len(client_results)
             successful_clients = sum(1 for data in client_results.values() if data.get('overall_success', False))
-            
-            total_subtasks = sum(data.get('total_count', 0) for data in client_results.values())
-            successful_subtasks = sum(data.get('successful_count', 0) for data in client_results.values())
-            
+
+            total_TASKs = sum(data.get('total_count', 0) for data in client_results.values())
+            successful_TASKs = sum(data.get('successful_count', 0) for data in client_results.values())
+
             # Determine overall status
-            if successful_clients == total_clients and successful_subtasks == total_subtasks:
+            if successful_clients == total_clients and successful_TASKs == total_TASKs:
                 overall_status = 'completed'
             elif successful_clients == 0:
                 overall_status = 'failed'
             else:
                 overall_status = 'partial'
-            
+
             # Calculate execution time
             execution_time = "N/A"
             if Job.started_at and Job.completed_at:
@@ -857,7 +857,7 @@ class EmailNotifier:
                             execution_time = f"{duration/3600:.1f}h"
                 except Exception:
                     execution_time = "N/A"
-            
+
             # Prepare template context
             context = {
                 'Job': Job,
@@ -865,16 +865,16 @@ class EmailNotifier:
                 'overall_status': overall_status,
                 'total_clients': total_clients,
                 'successful_clients': successful_clients,
-                'total_subtasks': total_subtasks,
-                'successful_subtasks': successful_subtasks,
+                'total_TASKs': total_TASKs,
+                'successful_TASKs': successful_TASKs,
                 'execution_time': execution_time,
                 'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
-            
+
             # Render email template
             template = self.report_generator.jinja_env.get_template('email_template.html')
             return template.render(**context)
-            
+
         except Exception as e:
             logger.error(f"Failed to generate email content: {e}")
             # Return simple fallback email

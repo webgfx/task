@@ -35,7 +35,7 @@ task/
 │   ├── models.py          # Data model definitions
 │   ├── config.py          # Configuration management
 │   ├── common.cfg         # Common configuration (server settings, database)
-│   ├── predefined_subtasks.py # Built-in system subtasks
+│   ├── predefined_subtasks.py # Built-in system tasks
 │   ├── system_info.py     # System information collection
 │   └── utils.py           # Utility functions
 ├── server/                # Web server
@@ -228,7 +228,7 @@ The service automatically reads server address from `common/server.txt` file:
 
 3. **No manual server URL input required**
 
-#### **Service Management Subtasks**
+#### **Service Management tasks**
 ```batch
 # Service control
 service_manager.bat start    # Start service

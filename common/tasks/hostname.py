@@ -1,7 +1,7 @@
 """
-Hostname subtask for retrieving client hostname.
+Hostname Task for retrieving client hostname.
 
-This subtask provides functionality to get the hostname of the current client
+This Task provides functionality to get the hostname of the current client
 using multiple fallback methods for reliability.
 """
 
@@ -79,11 +79,11 @@ class GetHostnameTask(BaseTask):
         return self._last_result
 
     def get_description(self) -> str:
-        """Get a human-readable description of what this subtask does"""
+        """Get a human-readable description of what this Task does"""
         return "Get the hostname of the current client machine"
 
 
-# Register the subtask
+# Register the Task
 register_task_class('get_hostname', GetHostnameTask())
 
 
@@ -141,7 +141,7 @@ def validate_hostname(hostname: str) -> Dict[str, Any]:
 
 # Legacy function for backward compatibility
 def get_hostname() -> str:
-    """Legacy function - use GetHostnameSubtask class instead"""
-    subtask = GetHostnameSubtask()
-    return subtask.run()
+    """Legacy function - use GetHostnameTASK class instead"""
+    Task = GetHostnameTASK()
+    return Task.run()
 

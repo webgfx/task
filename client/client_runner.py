@@ -4,7 +4,7 @@ Handles client execution, server communication, and task processing.
 
 The runner is designed to execute from the repo directory so that updates to the
 repo (e.g. git pull) automatically take effect without reinstalling or restarting
-the service.  Subtask modules in common/tasks/ are periodically reloaded to
+the service.  task modules in common/tasks/ are periodically reloaded to
 pick up newly added or modified definitions.
 """
 import os
@@ -134,18 +134,18 @@ class TaskClientRunner:
         # Configuration update thread
         self.config_update_thread = None
 
-        # Subtask auto-reload: track known subtask files to detect repo changes
-        self._last_subtask_snapshot = self._snapshot_subtasks()
-        # Subtask reload interval (in seconds) — defaults to config_update_interval
-        self.subtask_reload_interval = self.cfg_manager.get_int(
-            'ADVANCED', 'subtask_reload_interval',
+        # Task auto-reload: track known task files to detect repo changes
+        self._last_task_snapshot = self._snapshot_tasks()
+        # task reload interval (in seconds) — defaults to config_update_interval
+        self.task_reload_interval = self.cfg_manager.get_int(
+            'ADVANCED', 'task_reload_interval',
             self.config_update_interval
         )
 
         logger.info(f"Client runner initialized: {self.client_name} ({self.local_ip}) -> {self.server_url}")
         logger.info(f"Heartbeat interval: {get_heartbeat_interval()} seconds")
         logger.info(f"Configuration update interval: {self.config_update_interval} seconds")
-        logger.info(f"Subtask reload interval: {self.subtask_reload_interval} seconds")
+        logger.info(f"task reload interval: {self.task_reload_interval} seconds")
 
         # Log configuration summary
         if self.cfg_manager.get_boolean('ADVANCED', 'verbose_logging', False):
@@ -218,34 +218,34 @@ class TaskClientRunner:
 
         @self.sio.event
         def task_dispatch(data):
-            """Receive task distribution (supports both legacy and subtask format)"""
+            """Receive task distribution (supports both legacy and Task format)"""
             try:
                 task_id = data.get('task_id')
                 task_name = data.get('name', f'Task-{task_id}')
 
-                # Check if this is a subtask-based task
-                if 'subtasks' in data and data['tasks']:
+                # Check if this is a task-based job
+                if 'tasks' in data and data['tasks']:
                     # Enhanced logging for task reception
-                    logger.info(f"📨 TASK_RECEIVED: '{task_name}' (ID: {task_id}) with {len(data['tasks'])} subtasks from server")
+                    logger.info(f"📨 TASK_RECEIVED: '{task_name}' (ID: {task_id}) with {len(data['tasks'])} tasks from server")
                     logger.info(f"TASK_DETAILS: Client '{self.client_name}' received task assignment")
 
-                    # Log subtasks assigned to this client
-                    my_subtasks = [s for s in data['tasks'] if s.get('client') == self.client_name]
-                    logger.info(f"TASK_ASSIGNMENT: {len(my_subtasks)}/{len(data['tasks'])} subtasks assigned to this client")
+                    # Log tasks assigned to this client
+                    my_tasks = [s for s in data['tasks'] if s.get('client') == self.client_name]
+                    logger.info(f"TASK_ASSIGNMENT: {len(my_tasks)}/{len(data['tasks'])} tasks assigned to this client")
 
-                    for i, subtask in enumerate(my_subtasks, 1):
-                        logger.info(f"ASSIGNED_SUBTASK[{i}]: '{subtask.get('name')}' (order: {subtask.get('order', 0)})")
+                    for i, Task in enumerate(my_tasks, 1):
+                        logger.info(f"ASSIGNED_TASK[{i}]: '{Task.get('name')}' (order: {Task.get('order', 0)})")
 
-                    logger.info(f"Received subtask-based task: {task_name} (ID: {task_id}) with {len(data['tasks'])} subtasks")
+                    logger.info(f"Received task-based job: {task_name} (ID: {task_id}) with {len(data['tasks'])} tasks")
 
-                    # Execute subtask-based task in new thread
+                    # Execute task-based job in new thread
                     threading.Thread(
                         target=self._execute_task_job,
                         args=(task_id, task_name, data),
                         daemon=True
                     ).start()
                 else:
-                    logger.warning(f"Received task without subtasks field: {task_name} (ID: {task_id}) - ignoring legacy format")
+                    logger.warning(f"Received task without tasks field: {task_name} (ID: {task_id}) - ignoring legacy format")
 
             except Exception as e:
                 logger.error(f"Failed to handle task distribution: {e}")
@@ -334,7 +334,7 @@ class TaskClientRunner:
                     additional_data = {
                         'client_ip': self.local_ip,
                         'current_task_id': getattr(self, 'current_task_id', None),
-                        'current_subtask_id': getattr(self, 'current_subtask_id', None)
+                        'current_task_id': getattr(self, 'current_task_id', None)
                     }
 
                     try:
@@ -359,7 +359,7 @@ class TaskClientRunner:
                             'status': current_status,
                             'timestamp': datetime.now().isoformat(),
                             'current_task_id': getattr(self, 'current_task_id', None),
-                            'current_subtask_id': getattr(self, 'current_subtask_id', None),
+                            'current_task_id': getattr(self, 'current_task_id', None),
                             'collection_source': 'ping_response_fallback'
                         })
                 else:
@@ -418,48 +418,48 @@ class TaskClientRunner:
                 logger.error(f"Failed to handle client unregistration: {e}")
 
         @self.sio.event
-        def reload_subtasks(data):
-            """Handle subtask reload request from server"""
+        def reload_tasks(data):
+            """Handle task reload request from server"""
             try:
                 client_name = data.get('client_name')
 
                 # If specific client requested or broadcast to all
                 if client_name == self.client_name or client_name is None:
-                    logger.info(f"🔄 SUBTASK_RELOAD: Received subtask reload request from server")
+                    logger.info(f"🔄 TASK_RELOAD: Received task reload request from server")
 
-                    # Reload subtasks
+                    # reload tasks
                     try:
                         from common.tasks import reload_tasks
                         reloaded_count = reload_tasks()
 
-                        logger.info(f"✅ SUBTASK_RELOAD: Successfully reloaded {reloaded_count} subtask modules")
+                        logger.info(f"✅ TASK_RELOAD: Successfully reloaded {reloaded_count} task modules")
 
                         # Send response back to server
-                        self.sio.emit('subtask_reload_response', {
+                        self.sio.emit('TASK_RELOAD_response', {
                             'client_name': self.client_name,
                             'success': True,
                             'reloaded_count': reloaded_count,
-                            'message': f'Successfully reloaded {reloaded_count} subtask modules',
+                            'message': f'Successfully reloaded {reloaded_count} task modules',
                             'timestamp': datetime.now().isoformat()
                         })
 
                     except Exception as e:
                         error_msg = str(e)
-                        logger.error(f"❌ SUBTASK_RELOAD: Failed to reload subtasks: {error_msg}")
+                        logger.error(f"❌ TASK_RELOAD: Failed to reload tasks: {error_msg}")
 
                         # Send error response back to server
-                        self.sio.emit('subtask_reload_response', {
+                        self.sio.emit('TASK_RELOAD_response', {
                             'client_name': self.client_name,
                             'success': False,
                             'error': error_msg,
-                            'message': f'Failed to reload subtasks: {error_msg}',
+                            'message': f'Failed to reload tasks: {error_msg}',
                             'timestamp': datetime.now().isoformat()
                         })
                 else:
-                    logger.debug(f"SUBTASK_RELOAD: Ignoring reload request for different client '{client_name}'")
+                    logger.debug(f"TASK_RELOAD: Ignoring reload request for different client '{client_name}'")
 
             except Exception as e:
-                logger.error(f"Failed to handle subtask reload request: {e}")
+                logger.error(f"Failed to handle task reload request: {e}")
 
             except Exception as e:
                 logger.error(f"Failed to handle client unregistration: {e}")
@@ -531,7 +531,7 @@ class TaskClientRunner:
             if hasattr(self, 'current_task_id') and self.current_task_id is not None:
                 return 'busy'
 
-            # Check subtask adapter status if available
+            # Check task adapter status if available
             if self.task_adapter and hasattr(self.task_adapter, 'is_executing'):
                 if self.task_adapter.is_executing():
                     return 'busy'
@@ -661,22 +661,22 @@ class TaskClientRunner:
             self.stop()
 
     def _start_config_update_thread(self):
-        """Start configuration and subtask update thread"""
+        """Start configuration and Task update thread"""
         def config_update_loop():
-            subtask_check_elapsed = 0
+            task_check_elapsed = 0
             while self.running:
                 try:
-                    time.sleep(min(self.config_update_interval, self.subtask_reload_interval, 60))
+                    time.sleep(min(self.config_update_interval, self.task_reload_interval, 60))
 
                     if not self.running:
                         break
 
-                    subtask_check_elapsed += min(self.config_update_interval, self.subtask_reload_interval, 60)
+                    task_check_elapsed += min(self.config_update_interval, self.task_reload_interval, 60)
 
-                    # Check for subtask changes periodically
-                    if subtask_check_elapsed >= self.subtask_reload_interval:
-                        subtask_check_elapsed = 0
-                        self._check_and_reload_subtasks()
+                    # Check for task changes periodically
+                    if task_check_elapsed >= self.task_reload_interval:
+                        task_check_elapsed = 0
+                        self._check_and_reload_tasks()
 
                     # Update configuration information
                     self._update_client_config()
@@ -687,7 +687,7 @@ class TaskClientRunner:
         self.config_update_thread = threading.Thread(target=config_update_loop, daemon=True)
         self.config_update_thread.start()
         logger.info(f"Started configuration update thread (interval: {self.config_update_interval}s)")
-        logger.info(f"Subtask auto-reload enabled (interval: {self.subtask_reload_interval}s)")
+        logger.info(f"Task auto-reload enabled (interval: {self.task_reload_interval}s)")
 
     def _update_client_config(self):
         """Update client configuration information to server"""
@@ -723,37 +723,37 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Failed to update client configuration: {e}")
 
-    def _snapshot_subtasks(self):
+    def _snapshot_tasks(self):
         """
-        Take a snapshot of subtask module files (name → mtime) so we can detect
-        when the repo is updated (e.g. git pull adds or modifies a subtask).
+        Take a snapshot of Task module files (name → mtime) so we can detect
+        when the repo is updated (e.g. git pull adds or modifies a Task).
         """
         snapshot = {}
         try:
-            import common.tasks as subtasks_pkg
-            subtasks_dir = os.path.dirname(subtasks_pkg.__file__)
-            for filename in os.listdir(subtasks_dir):
+            import common.tasks as tasks_pkg
+            tasks_dir = os.path.dirname(tasks_pkg.__file__)
+            for filename in os.listdir(tasks_dir):
                 if (filename.endswith('.py') and
                         filename not in ['__init__.py', 'base.py'] and
                         not filename.startswith('_')):
-                    filepath = os.path.join(subtasks_dir, filename)
+                    filepath = os.path.join(tasks_dir, filename)
                     snapshot[filename] = os.path.getmtime(filepath)
         except Exception as e:
-            logger.debug(f"Could not snapshot subtask files: {e}")
+            logger.debug(f"Could not snapshot task files: {e}")
         return snapshot
 
-    def _check_and_reload_subtasks(self):
+    def _check_and_reload_tasks(self):
         """
-        Compare the current subtask file snapshot against the saved one.
-        If files were added, removed, or modified, reload subtask modules.
+        Compare the current Task file snapshot against the saved one.
+        If files were added, removed, or modified, reload task modules.
         """
         try:
-            current = self._snapshot_subtasks()
-            if current != self._last_subtask_snapshot:
-                added = set(current.keys()) - set(self._last_subtask_snapshot.keys())
-                removed = set(self._last_subtask_snapshot.keys()) - set(current.keys())
-                modified = {f for f in current if f in self._last_subtask_snapshot
-                            and current[f] != self._last_subtask_snapshot[f]}
+            current = self._snapshot_tasks()
+            if current != self._last_task_snapshot:
+                added = set(current.keys()) - set(self._last_task_snapshot.keys())
+                removed = set(self._last_task_snapshot.keys()) - set(current.keys())
+                modified = {f for f in current if f in self._last_task_snapshot
+                            and current[f] != self._last_task_snapshot[f]}
 
                 changes = []
                 if added:
@@ -763,48 +763,48 @@ class TaskClientRunner:
                 if modified:
                     changes.append(f"modified: {', '.join(modified)}")
 
-                logger.info(f"Subtask changes detected ({'; '.join(changes)}), reloading...")
+                logger.info(f"task changes detected ({'; '.join(changes)}), reloading...")
 
                 from common.tasks import reload_tasks
                 reloaded = reload_tasks()
-                self._last_subtask_snapshot = current
-                logger.info(f"Subtask reload complete: {reloaded} modules loaded")
+                self._last_task_snapshot = current
+                logger.info(f"task reload complete: {reloaded} modules loaded")
             else:
-                logger.debug("No subtask changes detected")
+                logger.debug("No task changes detected")
         except Exception as e:
-            logger.error(f"Error checking/reloading subtasks: {e}")
+            logger.error(f"Error checking/reloading tasks: {e}")
 
     def _execute_task_job(self, task_id, task_name, task_data):
-        """Execute subtask-based task"""
+        """Execute task-based job"""
         try:
             # Set current executing task ID
             self.current_task_id = task_id
 
-            logger.info(f"Start executing subtask-based task: {task_name}")
+            logger.info(f"Start executing task-based job: {task_name}")
 
             # Notify server task execution started
             self._notify_task_start(task_id)
 
-            # Check if subtask adapter is available
+            # Check if task adapter is available
             if not self.task_adapter:
-                error_msg = "Subtask adapter not available"
+                error_msg = "task adapter not available"
                 logger.error(error_msg)
                 self._notify_task_completion(task_id, False, error_msg)
                 return
 
-            # Execute task using subtask adapter
+            # Execute task using task adapter
             result = self.task_adapter.execute_task(task_data)
 
             if result['success']:
-                logger.info(f"Subtask-based task {task_name} completed successfully")
-                logger.info(f"Executed {result['executed_count']}/{result['total_count']} subtasks")
+                logger.info(f"task-based job {task_name} completed successfully")
+                logger.info(f"Executed {result['executed_count']}/{result['total_count']} tasks")
                 self._notify_task_completion(task_id, True, result['message'])
             else:
-                logger.error(f"Subtask-based task {task_name} failed: {result.get('message', 'Unknown error')}")
+                logger.error(f"task-based job {task_name} failed: {result.get('message', 'Unknown error')}")
                 self._notify_task_completion(task_id, False, result.get('message', 'Task execution failed'))
 
         except Exception as e:
-            logger.error(f"Failed to execute subtask-based task {task_name}: {e}")
+            logger.error(f"Failed to execute task-based job {task_name}: {e}")
             self._notify_task_completion(task_id, False, str(e))
         finally:
             # Clear current task ID
@@ -857,7 +857,7 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Exception notifying task completion: {e}")
 
-    def _save_intermediate_result(self, task_id, subtask_id, result):
+    def _save_intermediate_result(self, task_id, run_task_id, result):
         """Save intermediate result locally"""
         try:
             # Create task results directory
@@ -865,38 +865,38 @@ class TaskClientRunner:
             os.makedirs(task_results_dir, exist_ok=True)
 
             # Save intermediate result
-            result_file = os.path.join(task_results_dir, f'task_{task_id}_subtask_{subtask_id}.json')
+            result_file = os.path.join(task_results_dir, f'task_{task_id}_task_{run_task_id}.json')
             with open(result_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
 
-            logger.debug(f"Saved intermediate result for task {task_id}, subtask {subtask_id}")
+            logger.debug(f"Saved intermediate result for task {task_id}, Task {TASK_id}")
 
         except Exception as e:
             logger.error(f"Failed to save intermediate result: {e}")
 
-    def _upload_subtask_result(self, task_id, subtask_result):
-        """Upload subtask result to server immediately"""
+    def _upload_task_result(self, task_id, task_result):
+        """Upload Task result to server immediately"""
         try:
             data = {
                 'task_id': task_id,
                 'client_name': self.client_name,
                 'client_ip': self.local_ip,
-                'subtask_result': subtask_result
+                'task_result': task_result
             }
 
             response = requests.post(
-                f"{self.server_url}/api/subtask_result",
+                f"{self.server_url}/api/task_result",
                 json=data,
                 timeout=10
             )
 
             if response.status_code == 200:
-                logger.debug(f"Uploaded subtask result for task {task_id}, subtask {subtask_result['subtask_id']}")
+                logger.debug(f"Uploaded Task result for task {task_id}, Task {task_result['TASK_id']}")
             else:
-                logger.warning(f"Failed to upload subtask result: {response.status_code}")
+                logger.warning(f"Failed to upload Task result: {response.status_code}")
 
         except Exception as e:
-            logger.error(f"Failed to upload subtask result: {e}")
+            logger.error(f"Failed to upload Task result: {e}")
 
     def _send_task_result(self, task_id, result):
         """Send task execution result"""

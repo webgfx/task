@@ -178,8 +178,8 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 task.command = data['command']
             if 'clients' in data:
                 task.clients = data['clients']
-            if 'subtasks' in data:
-                task.commands = data['subtasks']
+            if 'tasks' in data:
+                task.commands = data['tasks']
             if 'execution_order' in data:
                 task.execution_order = data['execution_order']
             if 'schedule_time' in data:
@@ -263,7 +263,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             # Create copied task data with defaults from original
             copied_task_data = {
                 'name': data.get('name', f"{original_task.name} (Copy)"),
-                'subtasks': [],
+                'tasks': [],
                 'send_email': data.get('send_email', original_task.send_email),
                 'email_recipients': data.get('email_recipients', original_task.email_recipients)
             }
@@ -275,27 +275,27 @@ def create_api_blueprint(database, socketio, result_collector=None):
             elif schedule_type == 'cron' and data.get('cron_expression'):
                 copied_task_data['cron_expression'] = data.get('cron_expression')
 
-            # Copy subtasks from original task
+            # Copy tasks from original task
             if original_task.tasks:
-                for subtask in original_task.tasks:
-                    copied_subtask = {
-                        'name': subtask.name,
-                        'client': subtask.client,
-                        'order': subtask.order,
-                        'args': subtask.args or [],
-                        'kwargs': subtask.kwargs or {},
-                        'timeout': subtask.timeout
-                        # Note: subtask_id will be auto-generated for new task
+                for Task in original_task.tasks:
+                    copied_TASK = {
+                        'name': Task.name,
+                        'client': Task.client,
+                        'order': Task.order,
+                        'args': Task.args or [],
+                        'kwargs': Task.kwargs or {},
+                        'timeout': Task.timeout
+                        # Note: TASK_id will be auto-generated for new task
                     }
-                    copied_task_data['subtasks'].append(copied_subtask)
+                    copied_task_data['tasks'].append(copied_TASK)
 
             # Apply any client modifications if specified
             if data.get('update_clients'):
                 client_updates = data.get('client_updates', {})
-                for subtask in copied_task_data['subtasks']:
-                    old_client = subtask['client']
+                for Task in copied_task_data['tasks']:
+                    old_client = Task['client']
                     if old_client in client_updates:
-                        subtask['client'] = client_updates[old_client]
+                        Task['client'] = client_updates[old_client]
 
             # Validate the copied task data using the same logic as create_task
             if not copied_task_data['name']:
@@ -304,49 +304,49 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'error': 'Task name cannot be empty'
                 }), 400
 
-            # Parse and validate subtasks
-            subtasks = []
-            for i, subtask_data in enumerate(copied_task_data['subtasks']):
-                # Validate subtask
-                if not subtask_data.get('name'):
+            # Parse and validate tasks
+            tasks = []
+            for i, TASK_data in enumerate(copied_task_data['tasks']):
+                # Validate Task
+                if not TASK_data.get('name'):
                     return jsonify({
                         'success': False,
-                        'error': f'Subtask {i+1}: name is required'
+                        'error': f'Task {i+1}: name is required'
                     }), 400
 
-                if not subtask_data.get('client'):
+                if not TASK_data.get('client'):
                     return jsonify({
                         'success': False,
-                        'error': f'Subtask {i+1}: client is required'
+                        'error': f'Task {i+1}: client is required'
                     }), 400
 
-                # Check if subtask exists in registry
-                if not get_task(subtask_data['name']):
+                # Check if Task exists in registry
+                if not get_task(TASK_data['name']):
                     return jsonify({
                         'success': False,
-                        'error': f'Subtask {i+1}: "{subtask_data["name"]}" is not a valid subtask'
+                        'error': f'Task {i+1}: "{TASK_data["name"]}" is not a valid Task'
                     }), 400
 
-                subtask = TaskDefinition(
-                    name=subtask_data['name'],
-                    client=subtask_data['client'],
-                    order=subtask_data.get('order', i),
-                    args=subtask_data.get('args', []),
-                    kwargs=subtask_data.get('kwargs', {}),
-                    timeout=subtask_data.get('timeout', 300),
+                Task = TaskDefinition(
+                    name=TASK_data['name'],
+                    client=TASK_data['client'],
+                    order=TASK_data.get('order', i),
+                    args=TASK_data.get('args', []),
+                    kwargs=TASK_data.get('kwargs', {}),
+                    timeout=TASK_data.get('timeout', 300),
                     retry_count=0,
                     max_retries=3,
-                    subtask_id=i  # New ID for copied task
+                    TASK_id=i  # New ID for copied task
                 )
-                subtasks.append(subtask)
+                tasks.append(Task)
 
-            # Sort subtasks by order
-            subtasks.sort(key=lambda x: x.order)
+            # Sort tasks by order
+            tasks.sort(key=lambda x: x.order)
 
             # Create the copied task
             task = Task(
                 name=copied_task_data['name'],
-                subtasks=subtasks,
+                tasks=tasks,
                 schedule_time=parse_datetime(copied_task_data.get('schedule_time')),
                 cron_expression=copied_task_data.get('cron_expression'),
                 send_email=copied_task_data.get('send_email', False),
@@ -414,9 +414,9 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Cancel taskFailed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/tasks/<int:task_id>/subtasks/<subtask_name>/delete', methods=['DELETE'])
-    def delete_subtask(task_id, subtask_name):
-        """Delete a specific subtask that hasn't started run yet"""
+    @api.route('/tasks/<int:task_id>/tasks/<TASK_name>/delete', methods=['DELETE'])
+    def delete_TASK(task_id, TASK_name):
+        """Delete a specific Task that hasn't started run yet"""
         try:
             data = request.get_json() or {}
             client = data.get('client')
@@ -435,86 +435,86 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'error': 'Task does not exist'
                 }), 404
 
-            # Check if task is in a state where subtasks can be deleted
+            # Check if task is in a state where tasks can be deleted
             if task.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
                 return jsonify({
                     'success': False,
-                    'error': f'Cannot delete subtasks from task with status: {task.status.value}'
+                    'error': f'Cannot delete tasks from task with status: {task.status.value}'
                 }), 400
 
-            # Find the subtask to delete
-            subtask_to_delete = None
-            for subtask in task.tasks:
-                if subtask.name == subtask_name and subtask.client == client:
-                    subtask_to_delete = subtask
+            # Find the Task to delete
+            TASK_to_delete = None
+            for Task in task.tasks:
+                if Task.name == TASK_name and Task.client == client:
+                    TASK_to_delete = Task
                     break
 
-            if not subtask_to_delete:
+            if not TASK_to_delete:
                 return jsonify({
                     'success': False,
-                    'error': f'Subtask "{subtask_name}" for client "{client}" not found in task'
+                    'error': f'Task "{TASK_name}" for client "{client}" not found in task'
                 }), 404
 
-            # Check if subtask has already started run and get subtask_id
-            subtask_id = None
+            # Check if Task has already started run and get TASK_id
+            TASK_id = None
             runs = database.get_runs_by_client(task_id, client)
             for run in runs:
-                if run.task_name == subtask_name:
+                if run.task_name == TASK_name:
                     if run.status in [JobStatus.RUNNING, JobStatus.COMPLETED, JobStatus.FAILED]:
                         return jsonify({
                             'success': False,
-                            'error': f'Cannot delete subtask "{subtask_name}" - it has already started run (status: {run.status.value})'
+                            'error': f'Cannot delete Task "{TASK_name}" - it has already started run (status: {run.status.value})'
                         }), 400
-                    # Store subtask_id for pending runs
+                    # Store TASK_id for pending runs
                     if run.status == JobStatus.PENDING:
-                        subtask_id = run.task_id
+                        TASK_id = run.task_id
 
-            # Remove the subtask from the task
+            # Remove the Task from the task
             task.tasks = [s for s in task.tasks
-                           if not (s.name == subtask_name and s.client == client)]
+                           if not (s.name == TASK_name and s.client == client)]
 
-            # Update clients list if no more subtasks target this client
+            # Update clients list if no more tasks target this client
             remaining_clients = set(s.client for s in task.tasks)
             task.clients = [m for m in task.clients if m in remaining_clients]
 
-            # If no subtasks remain, set task status to cancelled
+            # If No tasks remain, set task status to cancelled
             if not task.tasks:
                 task.status = JobStatus.CANCELLED
-                task.error_message = "All subtasks were deleted"
+                task.error_message = "All tasks were deleted"
                 task.completed_at = datetime.now()
 
             # Update the task in database
             database.update_task(task)
 
-            # Remove any pending subtask run records for this subtask
-            database.delete_pending_runs(task_id, subtask_name, client)
+            # Remove any pending Task run records for this Task
+            database.delete_pending_runs(task_id, TASK_name, client)
 
-            logger.info(f"SUBTASK_DELETION: Deleted subtask '{subtask_name}' from task {task_id} for client '{client}'")
+            logger.info(f"TASK_DELETION: Deleted Task '{TASK_name}' from task {task_id} for client '{client}'")
 
-            # Broadcast subtask deletion event
-            socketio.emit('subtask_deleted', {
+            # Broadcast Task deletion event
+            socketio.emit('TASK_deleted', {
                 'task_id': task_id,
-                'subtask_id': subtask_id,
-                'subtask_name': subtask_name,
+                'TASK_id': TASK_id,
+                'TASK_name': TASK_name,
                 'client': client,
                 'deleted_at': datetime.now().isoformat(),
-                'remaining_subtasks': len(task.tasks)
+                'remaining_TASKs': len(task.tasks)
             })
 
             return jsonify({
                 'success': True,
-                'message': f'Subtask "{subtask_name}" deleted successfully',
-                'remaining_subtasks': len(task.tasks),
+                'message': f'Task "{TASK_name}" deleted successfully',
+                'remaining_TASKs': len(task.tasks),
                 'task_status': task.status.value
             })
 
         except Exception as e:
-            logger.error(f"Delete subtask failed: {e}")
+            logger.error(f"Delete Task failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>/runs', methods=['GET'])
     def get_runs(task_id):
-        """Get subtask run records for a task"""
+        """Get Task run records for a task"""
         try:
             runs = database.get_runs(task_id)
             return jsonify({
@@ -522,12 +522,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'data': [r.to_dict() for r in runs]
             })
         except Exception as e:
-            logger.error(f"Get subtask run records failed: {e}")
+            logger.error(f"Get Task run records failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>/runs/<client_name>', methods=['GET'])
     def get_runs_by_client(task_id, client_name):
-        """Get subtask run records for a specific task and client"""
+        """Get Task run records for a specific task and client"""
         try:
             runs = database.get_runs_by_client(task_id, client_name)
             return jsonify({
@@ -535,46 +535,46 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'data': [r.to_dict() for r in runs]
             })
         except Exception as e:
-            logger.error(f"Get subtask run records by client failed: {e}")
+            logger.error(f"Get Task run records by client failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>/runs', methods=['POST'])
     def update_run(task_id):
-        """Update subtask run status (called by client)"""
+        """Update Task run status (called by client)"""
         try:
             data = request.get_json()
 
-            # Enhanced logging for subtask run status
-            subtask_name = data.get('task_name')
+            # Enhanced logging for Task run status
+            TASK_name = data.get('task_name')
             client = data.get('client')
             status = data.get('status')
             execution_time = data.get('execution_time')
             result = data.get('result')
             error_message = data.get('error_message')
 
-            # Enhanced logging for subtask result reception
-            logger.info(f"📨 RESULT_RECEIVED: Task {task_id} - '{subtask_name}' from client '{client}' - Status: {status}")
+            # Enhanced logging for Task result reception
+            logger.info(f"📨 RESULT_RECEIVED: Task {task_id} - '{TASK_name}' from client '{client}' - Status: {status}")
             if execution_time:
-                logger.info(f"RESULT_TIMING: Task {task_id} - '{subtask_name}' executed in {execution_time:.2f}s on '{client}'")
+                logger.info(f"RESULT_TIMING: Task {task_id} - '{TASK_name}' executed in {execution_time:.2f}s on '{client}'")
 
             # Log result details based on status
             if status == 'completed' and result:
                 result_preview = str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
-                logger.info(f"RESULT_SUCCESS: Task {task_id} - '{subtask_name}' → Result: {result_preview}")
+                logger.info(f"RESULT_SUCCESS: Task {task_id} - '{TASK_name}' → Result: {result_preview}")
             elif status == 'failed' and error_message:
                 error_preview = str(error_message)[:100] + "..." if len(str(error_message)) > 100 else str(error_message)
-                logger.info(f"RESULT_ERROR: Task {task_id} - '{subtask_name}' → Error: {error_preview}")
+                logger.info(f"RESULT_ERROR: Task {task_id} - '{TASK_name}' → Error: {error_preview}")
 
-            logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' on '{client}' - Status: {status}")
+            logger.info(f"TASK_EXECUTION: Task {task_id} - '{TASK_name}' on '{client}' - Status: {status}")
             if execution_time:
-                logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' run time: {execution_time}s")
+                logger.info(f"TASK_EXECUTION: Task {task_id} - '{TASK_name}' run time: {execution_time}s")
             if result:
-                logger.debug(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' result: {result[:200]}{'...' if len(str(result)) > 200 else ''}")
+                logger.debug(f"TASK_EXECUTION: Task {task_id} - '{TASK_name}' result: {result[:200]}{'...' if len(str(result)) > 200 else ''}")
             if error_message:
-                logger.warning(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' error: {error_message}")
+                logger.warning(f"TASK_EXECUTION: Task {task_id} - '{TASK_name}' error: {error_message}")
 
             # Validate required fields
-            required_fields = ['subtask_name', 'client', 'status']
+            required_fields = ['TASK_name', 'client', 'status']
             for field in required_fields:
                 if field not in data:
                     return jsonify({
@@ -614,7 +614,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     status=JobStatus(data['status'])
                 )
                 run.id = database.create_run(run)
-                logger.info(f"Created run record for job {task_id} - '{subtask_name}' on '{client}'")
+                logger.info(f"Created run record for job {task_id} - '{TASK_name}' on '{client}'")
 
             # Update run status
             run.status = JobStatus(data['status'])
@@ -653,24 +653,24 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         database.update_client_current_task(
                             data['client'],
                             task_id,
-                            next_subtask.task_id
+                            next_TASK.task_id
                         )
                     else:
-                        # No more subtasks, clear current task
+                        # No more tasks, clear current task
                         database.update_client_current_task(data['client'], None, None)
                         # Set client back to online
                         database.update_client_heartbeat_by_name(data['client'], ClientStatus.ONLINE)
 
-            # Check if all subtasks are completed and update overall task status
-            logger.debug(f"SUBTASK_EXECUTION: Checking task completion for task {task_id}")
+            # Check if all tasks are completed and update overall task status
+            logger.debug(f"TASK_EXECUTION: Checking task completion for task {task_id}")
 
-            # Notify result collector about subtask completion
+            # Notify result collector about Task completion
             if result_collector and data['status'] in ['completed', 'failed']:
-                result_collector.on_subtask_completion(
+                result_collector.on_TASK_completion(
                     task_id=task_id,
                     client_name=data['client'],
-                    subtask_name=data['task_name'],
-                    subtask_status=JobStatus(data['status']),
+                    TASK_name=data['task_name'],
+                    TASK_status=JobStatus(data['status']),
                     result=data.get('result'),
                     error_message=data.get('error_message'),
                     execution_time=data.get('execution_time')
@@ -679,10 +679,10 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 # Fallback to original completion check
                 check_and_update_task_completion(task_id)
 
-            logger.info(f"DEBUG: Finished processing subtask completion for task {task_id}")
+            logger.info(f"DEBUG: Finished processing Task completion for task {task_id}")
 
             # Broadcast task run status update
-            socketio.emit('subtask_updated', {
+            socketio.emit('TASK_updated', {
                 'task_id': task_id,
                 'run_task_id': run.task_id,
                 'task_name': data['task_name'],
@@ -699,7 +699,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             })
 
         except Exception as e:
-            logger.error(f"Update subtask run failed: {e}")
+            logger.error(f"Update Task run failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     # Task Types API
@@ -707,40 +707,40 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def get_available_tasks():
         """Get all available task types"""
         try:
-            subtasks = list_tasks()
-            subtask_info = []
+            tasks = list_tasks()
+            TASK_info = []
 
-            for subtask_name in subtasks:
-                subtask_instance = get_task(subtask_name)
-                if subtask_instance:
+            for TASK_name in tasks:
+                TASK_instance = get_task(TASK_name)
+                if TASK_instance:
                     # Get description from instance method
-                    description = subtask_instance.get_description() or "No description available"
-                    subtask_info.append({
-                        'name': subtask_name,
+                    description = TASK_instance.get_description() or "No description available"
+                    TASK_info.append({
+                        'name': TASK_name,
                         'description': description.strip(),
-                        'function': subtask_name  # Use the name instead of function name
+                        'function': TASK_name  # Use the name instead of function name
                     })
 
             return jsonify({
                 'success': True,
-                'data': subtask_info,
-                'count': len(subtask_info)
+                'data': TASK_info,
+                'count': len(TASK_info)
             })
         except Exception as e:
-            logger.error(f"Get available subtasks failed: {e}")
+            logger.error(f"Get available tasks failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/tasks/<string:subtask_name>/execute', methods=['POST'])
-    def execute_subtask_api(subtask_name):
-        """Execute a specific subtask"""
+    @api.route('/tasks/<string:TASK_name>/execute', methods=['POST'])
+    def execute_TASK_api(TASK_name):
+        """Execute a specific Task"""
         try:
             # Get any parameters from request body
             data = request.get_json() or {}
             args = data.get('args', [])
             kwargs = data.get('kwargs', {})
 
-            # Execute the subtask
-            result = execute_task(subtask_name, *args, **kwargs)
+            # Execute the Task
+            result = execute_task(TASK_name, *args, **kwargs)
 
             return jsonify({
                 'success': result['success'],
@@ -748,33 +748,33 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'error': result['error']
             })
         except Exception as e:
-            logger.error(f"Execute subtask {subtask_name} failed: {e}")
+            logger.error(f"Execute Task {TASK_name} failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/tasks/<string:subtask_name>/info', methods=['GET'])
-    def get_subtask_info(subtask_name):
-        """Get information about a specific subtask"""
+    @api.route('/tasks/<string:TASK_name>/info', methods=['GET'])
+    def get_TASK_info(TASK_name):
+        """Get information about a specific Task"""
         try:
-            subtask_func = get_task(subtask_name)
-            if not subtask_func:
+            TASK_func = get_task(TASK_name)
+            if not TASK_func:
                 return jsonify({
                     'success': False,
-                    'error': f'Subtask "{subtask_name}" not found'
+                    'error': f'Task "{TASK_name}" not found'
                 }), 404
 
-            # Get detailed information about the subtask
+            # Get detailed information about the Task
             info = {
-                'name': subtask_name,
-                'function': subtask_func.__class__.__name__,
-                'description': subtask_func.get_description(),
-                'module': subtask_func.__class__.__module__,
+                'name': TASK_name,
+                'function': TASK_func.__class__.__name__,
+                'description': TASK_func.get_description(),
+                'module': TASK_func.__class__.__module__,
             }
 
             # Try to get function signature if available
             try:
                 import inspect
                 # For class instances, inspect the run method
-                run_method = getattr(subtask_func, 'run', None)
+                run_method = getattr(TASK_func, 'run', None)
                 if run_method:
                     sig = inspect.signature(run_method)
                     info['parameters'] = {
@@ -799,12 +799,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'data': info
             })
         except Exception as e:
-            logger.error(f"Get subtask info for {subtask_name} failed: {e}")
+            logger.error(f"Get Task info for {TASK_name} failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/tasks/<subtask_name>/test', methods=['POST'])
-    def test_subtask(subtask_name):
-        """Test a subtask run (for debugging)"""
+    @api.route('/tasks/<TASK_name>/test', methods=['POST'])
+    def test_TASK(TASK_name):
+        """Test a Task run (for debugging)"""
         try:
             from common.tasks import execute_task
 
@@ -813,15 +813,15 @@ def create_api_blueprint(database, socketio, result_collector=None):
             args = data.get('args', [])
             kwargs = data.get('kwargs', {})
 
-            # Execute subtask
-            result = execute_task(subtask_name, *args, **kwargs)
+            # Execute Task
+            result = execute_task(TASK_name, *args, **kwargs)
 
             return jsonify({
                 'success': True,
                 'data': result
             })
         except Exception as e:
-            logger.error(f"Test subtask {subtask_name} failed: {e}")
+            logger.error(f"Test Task {TASK_name} failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     # Client Management API
@@ -1207,10 +1207,10 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Enhanced logging for task scheduling to client
             logger.info(f"TASK_SCHEDULING: Task {task_id} '{task.name}' scheduled to client '{client_name}' ({client_ip})")
-            logger.info(f"TASK_SCHEDULING: Task details - Subtasks: {len(task.tasks) if task.tasks else 0}, Status: {task.status.value}")
+            logger.info(f"TASK_SCHEDULING: Task details - tasks: {len(task.tasks) if task.tasks else 0}, Status: {task.status.value}")
             if task.tasks:
-                for i, subtask in enumerate(task.tasks):
-                    logger.debug(f"TASK_SCHEDULING: Task {task_id} Subtask {i+1}: '{subtask.name}' -> '{subtask.client}'")
+                for i, Task in enumerate(task.tasks):
+                    logger.debug(f"TASK_SCHEDULING: Task {task_id} Task {i+1}: '{Task.name}' -> '{Task.client}'")
 
             # Broadcast task start run event
             socketio.emit('task_started', {
@@ -1239,28 +1239,28 @@ def create_api_blueprint(database, socketio, result_collector=None):
             client_ip = data.get('client_ip', 'Unknown')  # IP as auxiliary information
 
             # Support both old and new result formats
-            if 'subtask_results' in data:
-                # New format with subtask results
+            if 'TASK_results' in data:
+                # New format with Task results
                 result_data = data
                 success = result_data.get('success', False)
-                subtask_results = result_data.get('subtask_results', [])
-                total_subtasks = result_data.get('total_subtasks', 0)
-                successful_subtasks = result_data.get('successful_subtasks', 0)
-                failed_subtasks = result_data.get('failed_subtasks', 0)
+                TASK_results = result_data.get('TASK_results', [])
+                total_TASKs = result_data.get('total_TASKs', 0)
+                successful_TASKs = result_data.get('successful_TASKs', 0)
+                failed_TASKs = result_data.get('failed_TASKs', 0)
                 error = result_data.get('error', '')
                 exit_code = result_data.get('exit_code', 0)
 
-                # Generate summary output from subtask results
+                # Generate summary output from Task results
                 output_parts = []
-                if subtask_results:
-                    output_parts.append(f"Task completed with {total_subtasks} subtasks: {successful_subtasks} successful, {failed_subtasks} failed\n")
-                    for subtask in subtask_results:
-                        output_parts.append(f"[Subtask {subtask.get('subtask_id')}: {subtask.get('subtask_name')}]")
-                        output_parts.append(f"Success: {subtask.get('success')}")
-                        if subtask.get('output'):
-                            output_parts.append(f"Output: {subtask.get('output')}")
-                        if subtask.get('error'):
-                            output_parts.append(f"Error: {subtask.get('error')}")
+                if TASK_results:
+                    output_parts.append(f"Task completed with {total_TASKs} tasks: {successful_TASKs} successful, {failed_TASKs} failed\n")
+                    for Task in TASK_results:
+                        output_parts.append(f"[Task {Task.get('TASK_id')}: {Task.get('TASK_name')}]")
+                        output_parts.append(f"Success: {Task.get('success')}")
+                        if Task.get('output'):
+                            output_parts.append(f"Output: {Task.get('output')}")
+                        if Task.get('error'):
+                            output_parts.append(f"Error: {Task.get('error')}")
                         output_parts.append("")
 
                 output = '\n'.join(output_parts)
@@ -1313,15 +1313,15 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Failed to submit result: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/subtask_result', methods=['POST'])
-    def submit_subtask_result():
-        """Receive subtask run result"""
+    @api.route('/task_result', methods=['POST'])
+    def submit_TASK_result():
+        """Receive Task run result"""
         try:
             data = request.get_json()
             task_id = data.get('task_id')
             client_name = data.get('client_name')  # Use client name as primary identifier
             client_ip = data.get('client_ip', 'Unknown')  # IP as auxiliary information
-            subtask_result = data.get('subtask_result', {})
+            task_result = data.get('task_result', {})
 
             if not task_id:
                 return jsonify({
@@ -1329,10 +1329,10 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'error': 'Task ID cannot be empty'
                 }), 400
 
-            if not subtask_result:
+            if not task_result:
                 return jsonify({
                     'success': False,
-                    'error': 'Subtask result cannot be empty'
+                    'error': 'Task result cannot be empty'
                 }), 400
 
             # Get task to verify it exists
@@ -1343,20 +1343,20 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'error': 'Task does not exist'
                 }), 404
 
-            # Broadcast subtask completion event to connected clients
-            socketio.emit('subtask_completed', {
+            # Broadcast Task completion event to connected clients
+            socketio.emit('TASK_completed', {
                 'task_id': task_id,
                 'client_ip': client_ip,
                 'client_name': client_name,
-                'subtask_result': subtask_result
+                'task_result': task_result
             })
 
-            logger.info(f"Received subtask result for task {task_id}, subtask {subtask_result.get('subtask_id')}")
+            logger.info(f"Received Task result for task {task_id}, Task {task_result.get('TASK_id')}")
 
             return jsonify({'success': True})
 
         except Exception as e:
-            logger.error(f"Failed to submit subtask result: {e}")
+            logger.error(f"Failed to submit Task result: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     # Report Generation and Email Notification API
@@ -1417,21 +1417,21 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/tasks/definitions', methods=['GET'])
-    def get_subtask_definitions():
-        """Get subtask definitions with result specifications"""
+    def get_TASK_definitions():
+        """Get task definitions with result specifications"""
         try:
             from common.tasks import list_tasks, get_task
 
             # Build definitions using the new class-based system
             result = {}
-            for subtask_name in list_tasks():
-                subtask_instance = get_task(subtask_name)
-                if subtask_instance:
-                    description = subtask_instance.get_description()
-                    result[subtask_name] = {
+            for TASK_name in list_tasks():
+                TASK_instance = get_task(TASK_name)
+                if TASK_instance:
+                    description = TASK_instance.get_description()
+                    result[TASK_name] = {
                         'description': description,
                         'result_definition': {
-                            'name': subtask_name,
+                            'name': TASK_name,
                             'description': description,
                             'result_type': 'any',
                             'required_fields': [],
@@ -1446,19 +1446,19 @@ def create_api_blueprint(database, socketio, result_collector=None):
             })
 
         except Exception as e:
-            logger.error(f"Get subtask definitions failed: {e}")
+            logger.error(f"Get task definitions failed: {e}")
             return jsonify({
                 'success': False,
                 'error': str(e)
             }), 500
 
     @api.route('/tasks/reload', methods=['POST'])
-    def reload_subtasks_endpoint():
-        """Reload all subtask modules to pick up changes without restarting the service"""
+    def reload_tasks_endpoint():
+        """Reload all task modules to pick up changes without restarting the service"""
         try:
             from common.tasks import reload_tasks
 
-            # Reload subtasks on server
+            # reload tasks on server
             reloaded_count = reload_tasks()
 
             # Get client name from request (optional - if not specified, broadcast to all)
@@ -1469,25 +1469,25 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if client_name:
                 # Send to specific client
                 socketio.emit('reload_tasks', {'client_name': client_name})
-                logger.info(f"Sent subtask reload request to client: {client_name}")
+                logger.info(f"Sent task reload request to client: {client_name}")
                 target_info = f"client '{client_name}'"
             else:
                 # Broadcast to all clients
                 socketio.emit('reload_tasks', {'client_name': None})
-                logger.info("Sent subtask reload request to all clients")
+                logger.info("Sent task reload request to all clients")
                 target_info = "all clients"
 
-            logger.info(f"Server subtasks reloaded via API: {reloaded_count} modules")
+            logger.info(f"Server tasks reloaded via API: {reloaded_count} modules")
 
             return jsonify({
                 'success': True,
-                'message': f'Successfully reloaded {reloaded_count} subtask modules on server and sent reload request to {target_info}',
+                'message': f'Successfully reloaded {reloaded_count} task modules on server and sent reload request to {target_info}',
                 'reloaded_count': reloaded_count,
                 'target': target_info
             })
 
         except Exception as e:
-            logger.error(f"Reload subtasks failed: {e}")
+            logger.error(f"reload tasks failed: {e}")
             return jsonify({
                 'success': False,
                 'error': str(e)
@@ -1767,60 +1767,60 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
     def check_and_update_task_completion(task_id):
         """
-        Check if all subtasks are completed and update overall task status
+        Check if all tasks are completed and update overall task status
 
         Args:
             task_id: ID of the task to check
         """
         try:
-            # Get task and its subtasks
+            # Get task and its tasks
             task = database.get_task(task_id)
             if not task or not task.tasks:
-                logger.warning(f"TASK_COMPLETION: Task {task_id} not found or has no subtasks")
+                logger.warning(f"TASK_COMPLETION: Task {task_id} not found or has No tasks")
                 return
 
-            # Get all subtask runs for this task
+            # Get all Task runs for this task
             runs = database.get_runs(task_id)
-            logger.debug(f"TASK_COMPLETION: Found {len(runs)} subtask runs for task {task_id}")
+            logger.debug(f"TASK_COMPLETION: Found {len(runs)} Task runs for task {task_id}")
 
-            # Create a map of executed subtasks
+            # Create a map of executed tasks
             execution_map = {}
             for r in runs:
                 key = f"{r.task_name}_{r.client}"
                 execution_map[key] = r
 
             # Check completion status
-            total_subtasks = len(task.tasks)
-            completed_subtasks = 0
-            failed_subtasks = 0
+            total_TASKs = len(task.tasks)
+            completed_TASKs = 0
+            failed_TASKs = 0
 
-            for subtask in task.tasks:
-                key = f"{subtask.name}_{subtask.client}"
+            for Task in task.tasks:
+                key = f"{Task.name}_{Task.client}"
                 run = execution_map.get(key)
 
                 if run:
                     if run.status == JobStatus.COMPLETED:
-                        completed_subtasks += 1
+                        completed_TASKs += 1
                     elif run.status == JobStatus.FAILED:
-                        failed_subtasks += 1
+                        failed_TASKs += 1
 
             # Determine if task is complete
-            all_subtasks_finished = (completed_subtasks + failed_subtasks) == total_subtasks
+            all_TASKs_finished = (completed_TASKs + failed_TASKs) == total_TASKs
 
-            logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' - Progress: {completed_subtasks}/{total_subtasks} completed, {failed_subtasks} failed")
+            logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' - Progress: {completed_TASKs}/{total_TASKs} completed, {failed_TASKs} failed")
 
-            if all_subtasks_finished and task.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
+            if all_TASKs_finished and task.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
                 # Update task status
                 task.completed_at = datetime.now()
 
-                if failed_subtasks > 0:
+                if failed_TASKs > 0:
                     task.status = JobStatus.FAILED
-                    task.error_message = f"{failed_subtasks} out of {total_subtasks} subtasks failed"
-                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{task.name}' FAILED - {failed_subtasks}/{total_subtasks} subtasks failed")
+                    task.error_message = f"{failed_TASKs} out of {total_TASKs} tasks failed"
+                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{task.name}' FAILED - {failed_TASKs}/{total_TASKs} tasks failed")
                 else:
                     task.status = JobStatus.COMPLETED
-                    task.result = f"All {total_subtasks} subtasks completed successfully"
-                    logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' COMPLETED successfully - All {total_subtasks} subtasks completed")
+                    task.result = f"All {total_TASKs} tasks completed successfully"
+                    logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' COMPLETED successfully - All {total_TASKs} tasks completed")
 
                 update_success = database.update_task(task)
 
@@ -1838,9 +1838,9 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'status': task.status.value,
                     'success': task.status == JobStatus.COMPLETED,
                     'completed_at': task.completed_at.isoformat(),
-                    'total_subtasks': total_subtasks,
-                    'completed_subtasks': completed_subtasks,
-                    'failed_subtasks': failed_subtasks,
+                    'total_TASKs': total_TASKs,
+                    'completed_TASKs': completed_TASKs,
+                    'failed_TASKs': failed_TASKs,
                     'result': task.result,
                     'error_message': task.error_message
                 })
@@ -1855,13 +1855,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
             data = request.get_json()
             client_name = data.get('client_name')
             task_id = data.get('task_id')
-            subtask_id = data.get('subtask_id')
+            TASK_id = data.get('TASK_id')
 
-            success = database.update_client_current_task(client_name, task_id, subtask_id)
+            success = database.update_client_current_task(client_name, task_id, TASK_id)
 
             return jsonify({
                 'success': success,
-                'message': f"Updated client '{client_name}' current task to {task_id}, subtask {subtask_id}"
+                'message': f"Updated client '{client_name}' current task to {task_id}, Task {TASK_id}"
             })
 
         except Exception as e:
@@ -2033,11 +2033,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def get_client_latest_result(client_name):
         """Get the latest cached result for a specific client"""
         try:
-            subtask_name = request.args.get('subtask_name')
+            TASK_name = request.args.get('TASK_name')
 
             result = database.get_latest_result_for_client(
                 client_name=client_name,
-                subtask_name=subtask_name
+                TASK_name=TASK_name
             )
 
             if not result:
@@ -2088,7 +2088,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'id': rid,
                     'task_name': r.get('task_name', ''),
                     'client_name': r.get('client_name', ''),
-                    'subtask_name': r.get('subtask_name', ''),
+                    'TASK_name': r.get('TASK_name', ''),
                     'completed_at': r.get('completed_at', ''),
                     'result': result_data,
                 })
@@ -2106,7 +2106,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
                 # Detect source type
                 source = 'unknown'
-                if result.get('llamacpp_available') or item['subtask_name'] == 'ai_test':
+                if result.get('llamacpp_available') or item['TASK_name'] == 'ai_test':
                     source = 'llamacpp'
                 inner_results = result.get('results', bench_results)
                 if isinstance(inner_results, dict) and 'results' in inner_results:

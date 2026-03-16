@@ -4,7 +4,7 @@
 
 let allResults = [];
 let clientsList = [];
-let subtasksList = [];
+let TASKsList = [];
 
 // Initialize after page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function initializeResultsPage() {
     await loadClients();
-    await loadSubtasks();
+    await loadTASKs();
     await refreshResults();
     populateFilters();
 }
@@ -28,13 +28,13 @@ async function loadClients() {
     }
 }
 
-// Load subtask definitions for filter dropdown
-async function loadSubtasks() {
+// Load task definitions for filter dropdown
+async function loadTASKs() {
     try {
         const response = await apiGet('/api/tasks');
-        subtasksList = response.data || [];
+        TASKsList = response.data || [];
     } catch (error) {
-        console.error('Failed to load subtasks:', error);
+        console.error('Failed to load tasks:', error);
     }
 }
 
@@ -52,20 +52,20 @@ function populateFilters() {
         });
     }
 
-    const subtaskFilter = document.getElementById('subtaskFilter');
-    if (subtaskFilter) {
-        subtaskFilter.innerHTML = '<option value="">All Subtasks</option>';
-        // Extract unique subtask names from results
-        const uniqueSubtasks = new Set();
-        allResults.forEach(r => uniqueSubtasks.add(r.task_name));
-        // Also add from subtask definitions
-        subtasksList.forEach(s => uniqueSubtasks.add(s.name));
+    const TASKFilter = document.getElementById('TASKFilter');
+    if (TASKFilter) {
+        TASKFilter.innerHTML = '<option value="">All tasks</option>';
+        // Extract unique Task names from results
+        const uniqueTASKs = new Set();
+        allResults.forEach(r => uniqueTASKs.add(r.task_name));
+        // Also add from task definitions
+        TASKsList.forEach(s => uniqueTASKs.add(s.name));
 
-        uniqueSubtasks.forEach(name => {
+        uniqueTASKs.forEach(name => {
             const option = document.createElement('option');
             option.value = name;
             option.textContent = name;
-            subtaskFilter.appendChild(option);
+            TASKFilter.appendChild(option);
         });
     }
 }
@@ -86,11 +86,11 @@ async function refreshResults() {
 // Filter results based on selected criteria
 function filterResults() {
     const clientFilter = document.getElementById('clientFilter');
-    const subtaskFilter = document.getElementById('subtaskFilter');
+    const TASKFilter = document.getElementById('TASKFilter');
     const statusFilter = document.getElementById('statusFilter');
 
     const clientValue = clientFilter ? clientFilter.value : '';
-    const subtaskValue = subtaskFilter ? subtaskFilter.value : '';
+    const TASKValue = TASKFilter ? TASKFilter.value : '';
     const statusValue = statusFilter ? statusFilter.value : '';
 
     let filtered = allResults;
@@ -98,8 +98,8 @@ function filterResults() {
     if (clientValue) {
         filtered = filtered.filter(r => r.client_name === clientValue);
     }
-    if (subtaskValue) {
-        filtered = filtered.filter(r => r.task_name === subtaskValue);
+    if (TASKValue) {
+        filtered = filtered.filter(r => r.task_name === TASKValue);
     }
     if (statusValue) {
         filtered = filtered.filter(r => r.status === statusValue);
@@ -144,7 +144,7 @@ function renderResults(results) {
                     </div>
                 </td>
                 <td>${escapeHtml(result.client_name)}</td>
-                <td><span class="subtask-name">${escapeHtml(result.task_name).replace(/_/g, '-')}</span></td>
+                <td><span class="Task-name">${escapeHtml(result.task_name).replace(/_/g, '-')}</span></td>
                 <td><span class="status-badge ${result.status}">${statusLabel}</span></td>
                 <td><span class="execution-time">${execTime}</span></td>
                 <td>${completedAt}</td>
@@ -207,7 +207,7 @@ async function viewResultDetail(resultId) {
                     <span>${escapeHtml(result.client_name)}</span>
                 </div>
                 <div class="detail-row">
-                    <strong>Subtask:</strong>
+                    <strong>Task:</strong>
                     <span><code>${escapeHtml(result.task_name)}</code></span>
                 </div>
                 <div class="detail-row">

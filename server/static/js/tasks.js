@@ -1,12 +1,12 @@
 /**
- * Task Management page JavaScript with Subtask Support
+ * Task Management page JavaScript with Task Support
  */
 
 console.log('Loading tasks.js...');
 
 let allTasks = [];
 let clientsList = [];
-let availableSubtasks = [];
+let availableTasks = [];
 let filteredTasks = [];
 let tasksCurrentPage = 1;
 const tasksItemsPerPage = 10;
@@ -23,9 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // Setup WebSocket listeners for real-time updates
 function setupWebSocketListeners() {
     if (typeof socket !== 'undefined' && socket) {
-        // Listen for subtask status updates
-        socket.on('subtask_updated', function(data) {
-            console.log('Subtask updated:', data);
+        // Listen for Task status updates
+        socket.on('TASK_updated', function(data) {
+            console.log('Task updated:', data);
 
             // Update task details view if it's open and matches this task
             const taskDetailModal = document.getElementById('taskDetailModal');
@@ -43,13 +43,13 @@ function setupWebSocketListeners() {
 
             // Show notification for completion or failure
             if (data.status === 'completed') {
-                const subtaskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
-                showNotification('Task Completed',
-                    `Task ${subtaskDisplay} completed on client ${data.client}`, 'success');
+                const taskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
+                showNotification('Task Passed',
+                    `Task ${taskDisplay} passed on client ${data.client}`, 'success');
             } else if (data.status === 'failed') {
-                const subtaskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
+                const taskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
                 showNotification('Task Failed',
-                    `Task ${subtaskDisplay} failed on client ${data.client}`, 'error');
+                    `Task ${taskDisplay} failed on client ${data.client}`, 'error');
             }
         });
 
@@ -67,9 +67,9 @@ function setupWebSocketListeners() {
             }
         });
 
-        // Listen for subtask deletion events
-        socket.on('subtask_deleted', function(data) {
-            console.log('Subtask deleted:', data);
+        // Listen for Task deletion events
+        socket.on('TASK_deleted', function(data) {
+            console.log('Task deleted:', data);
 
             // Update task details view if it's open and matches this task
             const taskDetailModal = document.getElementById('taskDetailModal');
@@ -86,12 +86,12 @@ function setupWebSocketListeners() {
             }
 
             // Show notification
-            const subtaskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
+            const taskDisplay = data.task_id !== null && data.task_id !== undefined ? `"${data.task_name}" (ID: ${data.task_id})` : `"${data.task_name}"`;
             showNotification('Task Deleted',
-                `Task ${subtaskDisplay} deleted from client ${data.client}`, 'info');
+                `Task ${taskDisplay} deleted from client ${data.client}`, 'info');
 
             // If All tasks were deleted, show task cancellation notice
-            if (data.remaining_subtasks === 0) {
+            if (data.remaining_TASKs === 0) {
                 showNotification('Task Cancelled',
                     'All tasks were deleted - task has been cancelled', 'warning');
             }
@@ -151,7 +151,7 @@ function setupWebSocketListeners() {
 // Initialize task page
 async function initializeTasksPage() {
     await loadClients();
-    await loadAvailableSubtasks();
+    await loadAvailableTasks();
     await refreshTasks();
     populateClientFilter();
     setupEventListeners();
@@ -194,16 +194,16 @@ async function loadClients() {
     }
 }
 
-// Load available subtasks from server
-async function loadAvailableSubtasks() {
+// Load available tasks from server
+async function loadAvailableTasks() {
     try {
-        // Try to load enhanced subtask definitions first
+        // Try to load enhanced task definitions first
         let response;
         try {
             response = await apiGet('/api/tasks/definitions');
             if (response.success && response.data) {
                 // Enhanced format with result definitions
-                availableSubtasks = Object.keys(response.data).map(name => {
+                availableTasks = Object.keys(response.data).map(name => {
                     const def = response.data[name];
                     return {
                         name: name,
@@ -211,66 +211,66 @@ async function loadAvailableSubtasks() {
                         result_definition: def.result_definition
                     };
                 });
-                console.log('Loaded enhanced subtask definitions:', availableSubtasks);
+                console.log('Loaded enhanced task definitions:', availableTasks);
                 return;
             }
         } catch (error) {
-            console.warn('Enhanced subtasks endpoint not available, falling back to basic subtasks');
+            console.warn('Enhanced tasks endpoint not available, falling back to basic tasks');
         }
 
-        // Fallback to basic subtasks list
+        // Fallback to basic tasks list
         response = await apiGet('/api/tasks');
         if (response.success && response.data) {
-            availableSubtasks = response.data.map(subtask => ({
-                name: subtask.name,
-                description: subtask.description || 'No description available',
+            availableTasks = response.data.map(Task => ({
+                name: Task.name,
+                description: Task.description || 'No description available',
                 result_definition: null
             }));
         } else {
-            availableSubtasks = [];
+            availableTasks = [];
         }
-        console.log('Loaded basic subtasks:', availableSubtasks);
+        console.log('Loaded basic tasks:', availableTasks);
     } catch (error) {
-        console.error('Failed to load available subtasks:', error);
-        showNotification('Error', 'Failed to load available subtasks', 'error');
-        availableSubtasks = [];
+        console.error('Failed to load available tasks:', error);
+        showNotification('Error', 'Failed to load available tasks', 'error');
+        availableTasks = [];
     }
 }
 
-// Add a new subtask row
-function addSubtask() {
-    const subtasksList = document.getElementById('subtasksList');
-    if (!subtasksList) {
-        console.error('Could not find subtasksList element');
+// Add a new task row
+function addTASK() {
+    const TASKsList = document.getElementById('TASKsList');
+    if (!TASKsList) {
+        console.error('Could not find TASKsList element');
         return;
     }
 
-    const subtaskIndex = subtasksList.children.length;
+    const TASKIndex = TASKsList.children.length;
 
-    const subtaskRow = document.createElement('div');
-    subtaskRow.className = 'subtask-row';
-    subtaskRow.innerHTML = `
-        <div class="subtask-header">
-            <h5>Subtask ${subtaskIndex + 1}</h5>
-            <div class="subtask-id-display" style="display: none;">
-                <small class="text-muted">ID: <span class="subtask-id-value">Not assigned</span></small>
+    const TASKRow = document.createElement('div');
+    TASKRow.className = 'Task-row';
+    TASKRow.innerHTML = `
+        <div class="Task-header">
+            <h5>Task ${TASKIndex + 1}</h5>
+            <div class="Task-id-display" style="display: none;">
+                <small class="text-muted">ID: <span class="Task-id-value">Not assigned</span></small>
             </div>
-            <button type="button" class="btn btn-small btn-danger" onclick="removeSubtask(this)">
+            <button type="button" class="btn btn-small btn-danger" onclick="removeTASK(this)">
                 <i class="fas fa-trash"></i> Remove
             </button>
         </div>
-        <div class="subtask-content">
+        <div class="Task-content">
             <div class="form-row">
                 <div class="form-group">
-                    <label>Select Subtask <span class="required">*</span></label>
-                    <select class="subtask-name" onchange="updateSubtaskDescription(this)" required>
-                        <option value="">Select Subtask...</option>
-                        ${availableSubtasks.map(subtask => {
-                            let displayName = subtask.name;
-                            let description = subtask.description || 'No description available';
+                    <label>Select Task <span class="required">*</span></label>
+                    <select class="Task-name" onchange="updateTASKDescription(this)" required>
+                        <option value="">Select Task...</option>
+                        ${availableTasks.map(Task => {
+                            let displayName = Task.name;
+                            let description = Task.description || 'No description available';
                             // Truncate description for the option data attribute
                             let shortDescription = description.length > 100 ? description.substring(0, 100) + '...' : description;
-                            return `<option value="${subtask.name}" data-description="${shortDescription}">${displayName}</option>`;
+                            return `<option value="${Task.name}" data-description="${shortDescription}">${displayName}</option>`;
                         }).join('')}
                     </select>
                 </div>
@@ -294,24 +294,24 @@ function addSubtask() {
                     </div>
                 </div>
             </div>
-            <div class="subtask-description">
-                <small class="description-text">Select a subtask to see its description</small>
+            <div class="Task-description">
+                <small class="description-text">Select a Task to see its description</small>
             </div>
         </div>
     `;
 
-    subtasksList.appendChild(subtaskRow);
-    updateSubtaskNumbers();
+    TASKsList.appendChild(TASKRow);
+    updateTASKNumbers();
 }
 
 // Toggle all clients selection
 function toggleAllClients(checkbox) {
     if (!checkbox) return;
 
-    const subtaskRow = checkbox.closest('.subtask-row');
-    if (!subtaskRow) return;
+    const TASKRow = checkbox.closest('.Task-row');
+    if (!TASKRow) return;
 
-    const clientCheckboxes = subtaskRow.querySelectorAll('.client-checkbox');
+    const clientCheckboxes = TASKRow.querySelectorAll('.client-checkbox');
 
     clientCheckboxes.forEach(cb => {
         cb.checked = checkbox.checked;
@@ -322,12 +322,12 @@ function toggleAllClients(checkbox) {
 function updateClientSelection(checkbox) {
     if (!checkbox) return;
 
-    const subtaskRow = checkbox.closest('.subtask-row');
-    if (!subtaskRow) return;
+    const TASKRow = checkbox.closest('.Task-row');
+    if (!TASKRow) return;
 
-    const allClientsCheckbox = subtaskRow.querySelector('.all-clients-checkbox');
-    const clientCheckboxes = subtaskRow.querySelectorAll('.client-checkbox');
-    const checkedBoxes = subtaskRow.querySelectorAll('.client-checkbox:checked');
+    const allClientsCheckbox = TASKRow.querySelector('.all-clients-checkbox');
+    const clientCheckboxes = TASKRow.querySelectorAll('.client-checkbox');
+    const checkedBoxes = TASKRow.querySelectorAll('.client-checkbox:checked');
 
     if (!allClientsCheckbox) return;
 
@@ -344,28 +344,28 @@ function updateClientSelection(checkbox) {
     }
 }
 
-// Remove a subtask row
-function removeSubtask(button) {
+// Remove a Task row
+function removeTASK(button) {
     if (!button) return;
 
-    const subtaskRow = button.closest('.subtask-row');
-    if (subtaskRow) {
-        subtaskRow.remove();
-        updateSubtaskNumbers();
+    const TASKRow = button.closest('.Task-row');
+    if (TASKRow) {
+        TASKRow.remove();
+        updateTASKNumbers();
     }
 }
 
-// Update subtask numbers after add/remove
-function updateSubtaskNumbers() {
-    const subtaskRows = document.querySelectorAll('.subtask-row');
-    subtaskRows.forEach((row, index) => {
-        const header = row.querySelector('.subtask-header h5');
+// Update Task numbers after add/remove
+function updateTASKNumbers() {
+    const TASKRows = document.querySelectorAll('.Task-row');
+    TASKRows.forEach((row, index) => {
+        const header = row.querySelector('.Task-header h5');
         if (header) {
             header.textContent = `Task ${index + 1}`;
         }
 
         // Only try to update order input if it exists
-        const orderInput = row.querySelector('.subtask-order');
+        const orderInput = row.querySelector('.Task-order');
         if (orderInput) {
             if (orderInput.value == index + 1 || orderInput.value == index) {
                 orderInput.value = index;
@@ -374,31 +374,31 @@ function updateSubtaskNumbers() {
     });
 }
 
-// Update subtask description when type is selected
-function updateSubtaskDescription(selectElement) {
+// Update Task description when type is selected
+function updateTASKDescription(selectElement) {
     if (!selectElement) return;
 
-    const subtaskName = selectElement.value;
-    const subtaskRow = selectElement.closest('.subtask-row');
+    const TASKName = selectElement.value;
+    const TASKRow = selectElement.closest('.Task-row');
 
-    if (!subtaskRow) return;
+    if (!TASKRow) return;
 
-    const descriptionDiv = subtaskRow.querySelector('.subtask-description');
+    const descriptionDiv = TASKRow.querySelector('.Task-description');
 
     if (!descriptionDiv) return;
 
-    if (subtaskName) {
-        const subtask = availableSubtasks.find(s => s.name === subtaskName);
-        if (subtask) {
+    if (TASKName) {
+        const Task = availableTasks.find(s => s.name === TASKName);
+        if (Task) {
             let descriptionHTML = `
                 <small class="help-text">
-                    <strong>Description:</strong> ${subtask.description || 'No description available'}
+                    <strong>Description:</strong> ${Task.description || 'No description available'}
             `;
             descriptionHTML += '</small>';
             descriptionDiv.innerHTML = descriptionHTML;
         }
     } else {
-        descriptionDiv.innerHTML = '<small class="help-text">Select a subtask to see its description and result specification</small>';
+        descriptionDiv.innerHTML = '<small class="help-text">Select a Task to see its description and result specification</small>';
     }
 }
 
@@ -414,17 +414,17 @@ function openTaskModal(taskId = null) {
     form.reset();
     document.getElementById('taskId').value = '';
 
-    // Clear subtasks
-    const subtasksList = document.getElementById('subtasksList');
-    subtasksList.innerHTML = '';
+    // Clear tasks
+    const TASKsList = document.getElementById('TASKsList');
+    TASKsList.innerHTML = '';
 
     if (taskId) {
-        modalTitle.textContent = 'Edit Task';
+        modalTitle.textContent = 'Edit Job';
         loadTaskForEdit(taskId);
     } else {
-        modalTitle.textContent = 'Create Task';
-        // Add initial subtask for new tasks
-        addSubtask();
+        modalTitle.textContent = 'Create Job';
+        // Add initial Task for new tasks
+        addTASK();
     }
 
     modal.style.display = 'block';
@@ -484,13 +484,13 @@ async function saveTask() {
             }
         }
 
-        // Collect subtasks
-        const subtasks = collectSubtasks();
-        if (subtasks.length === 0) {
-            showNotification('Validation Error', 'At least one subtask is required', 'error');
+        // Collect tasks
+        const tasks = collectTASKs();
+        if (tasks.length === 0) {
+            showNotification('Validation Error', 'At least one Task is required', 'error');
             return;
         }
-        taskData.tasks = subtasks;
+        taskData.tasks = tasks;
 
         // Handle email notification settings
         const sendEmail = document.getElementById('sendEmail').checked;
@@ -539,40 +539,40 @@ async function saveTask() {
     }
 }
 
-// Display generated subtask IDs after task creation
-async function displayGeneratedSubtaskIds(taskId) {
+// Display generated Task IDs after task creation
+async function displayGeneratedTaskIds(taskId) {
     try {
-        console.log('Fetching subtask IDs for task:', taskId);
+        console.log('Fetching Task IDs for task:', taskId);
         const response = await apiGet(`/api/jobs/${taskId}`);
         console.log('Fetched task data:', response);
 
         if (response.success && response.data.tasks && response.data.tasks.length > 0) {
             const task = response.data;
-            const subtaskRows = document.querySelectorAll('.subtask-row');
+            const TASKRows = document.querySelectorAll('.Task-row');
 
-            console.log('Found subtask rows:', subtaskRows.length);
-            console.log('Server subtasks:', task.tasks.length);
+            console.log('Found Task rows:', TASKRows.length);
+            console.log('Server tasks:', task.tasks.length);
 
             // Create a simple mapping based on order
             let idsUpdated = 0;
-            subtaskRows.forEach((subtaskRow, rowIndex) => {
-                // Find subtasks for this row (by order)
-                const matchingSubtasks = task.tasks.filter(st => st.order === rowIndex);
+            TASKRows.forEach((TASKRow, rowIndex) => {
+                // Find tasks for this row (by order)
+                const matchingTasks = task.tasks.filter(st => st.order === rowIndex);
 
-                if (matchingSubtasks.length > 0) {
-                    const firstSubtask = matchingSubtasks[0];
-                    console.log(`Updating row ${rowIndex} with subtask ID:`, firstSubtask.task_id);
+                if (matchingTasks.length > 0) {
+                    const firstTask = matchingTasks[0];
+                    console.log(`Updating row ${rowIndex} with Task ID:`, firstTask.task_id);
 
-                    subtaskRow.setAttribute('data-subtask-id', firstSubtask.task_id);
+                    TASKRow.setAttribute('data-Task-id', firstTask.task_id);
 
-                    // Display the subtask ID in the UI
-                    const idDisplay = subtaskRow.querySelector('.subtask-id-display');
-                    const idValue = subtaskRow.querySelector('.subtask-id-value');
+                    // Display the Task ID in the UI
+                    const idDisplay = TASKRow.querySelector('.Task-id-display');
+                    const idValue = TASKRow.querySelector('.Task-id-value');
                     if (idDisplay && idValue) {
-                        if (matchingSubtasks.length === 1) {
-                            idValue.textContent = firstSubtask.task_id;
+                        if (matchingTasks.length === 1) {
+                            idValue.textContent = firstTask.task_id;
                         } else {
-                            idValue.textContent = `${firstSubtask.task_id} (+${matchingSubtasks.length - 1} more)`;
+                            idValue.textContent = `${firstTask.task_id} (+${matchingTasks.length - 1} more)`;
                         }
                         idDisplay.style.display = 'block';
                         idsUpdated++;
@@ -580,12 +580,12 @@ async function displayGeneratedSubtaskIds(taskId) {
                 }
             });
 
-            console.log('Updated IDs for', idsUpdated, 'subtask rows');
+            console.log('Updated IDs for', idsUpdated, 'Task rows');
 
             // Show IDs for 3 seconds, then close
             if (idsUpdated > 0) {
-                showNotification('Subtask IDs Generated',
-                    `Unique IDs assigned to ${task.tasks.length} subtasks.`,
+                showNotification('Task IDs Generated',
+                    `Unique IDs assigned to ${task.tasks.length} tasks.`,
                     'info', 100);
 
                 setTimeout(() => {
@@ -598,35 +598,35 @@ async function displayGeneratedSubtaskIds(taskId) {
                 }, 1000);
             }
         } else {
-            console.warn('No subtasks in response, closing modal');
+            console.warn('No tasks in response, closing modal');
             setTimeout(() => {
                 closeTaskModal();
             }, 1000);
         }
     } catch (error) {
-        console.error('Failed to load generated subtask IDs:', error);
+        console.error('Failed to load generated Task IDs:', error);
         setTimeout(() => {
             closeTaskModal();
         }, 1000);
     }
 }
 
-// Collect subtasks from form
-function collectSubtasks() {
-    const subtaskRows = document.querySelectorAll('.subtask-row');
-    const subtasks = [];
+// Collect tasks from form
+function collectTASKs() {
+    const TASKRows = document.querySelectorAll('.Task-row');
+    const tasks = [];
 
-    subtaskRows.forEach((row, index) => {
-        const name = row.querySelector('.subtask-name').value;
+    TASKRows.forEach((row, index) => {
+        const name = row.querySelector('.Task-name').value;
         const checkedClients = Array.from(row.querySelectorAll('.client-checkbox:checked')).map(cb => cb.value);
-        const existingSubtaskId = row.getAttribute('data-subtask-id'); // Get preserved subtask ID
+        const existingTASKId = row.getAttribute('data-Task-id'); // Get preserved Task ID
 
         if (name && checkedClients.length > 0) {
-            // For editing: if we have an existing subtask ID and only one client is selected,
-            // preserve the ID. For new subtasks or when multiple clients are selected,
+            // For editing: if we have an existing Task ID and only one client is selected,
+            // preserve the ID. For new tasks or when multiple clients are selected,
             // each will get a new/separate ID on the server side.
             checkedClients.forEach((clientName, clientIndex) => {
-                const subtaskData = {
+                const TASKData = {
                     name: name,
                     client: clientName,
                     order: index,
@@ -635,17 +635,17 @@ function collectSubtasks() {
                     timeout: 300
                 };
 
-                // Preserve subtask ID only for the first client if editing
-                if (existingSubtaskId && clientIndex === 0) {
-                    subtaskData.task_id = existingSubtaskId;
+                // Preserve Task ID only for the first client if editing
+                if (existingTASKId && clientIndex === 0) {
+                    TASKData.task_id = existingTASKId;
                 }
 
-                subtasks.push(subtaskData);
+                tasks.push(TASKData);
             });
         }
     });
 
-    return subtasks;
+    return tasks;
 }
 
 // Load tasks from server and get run data
@@ -669,7 +669,7 @@ async function refreshTasks() {
     }
 }
 
-// Enhanced task rendering with subtask-client combinations
+// Enhanced task rendering with Task-client combinations
 function renderEnhancedTasks() {
     const tasksTableBody = document.getElementById('taskTableBody');
     if (!tasksTableBody) {
@@ -715,7 +715,7 @@ function initializeToggleIconStates() {
     });
 }
 
-// Render a complete task group with all subtask-client combinations
+// Render a complete task group with all Task-client combinations
 function renderTaskGroup(task, container) {
     // Calculate task statistics
     const taskStats = calculateTaskStatistics(task);
@@ -757,7 +757,7 @@ function renderTaskGroup(task, container) {
     `;
     container.appendChild(groupRow);
 
-    // Create subtask run rows
+    // Create Task run rows
     const taskRuns = generateTaskRuns(task);
     taskRuns.forEach(run => {
         const runRow = createTaskRunRow(task, run);
@@ -765,29 +765,29 @@ function renderTaskGroup(task, container) {
     });
 }
 
-// Generate subtask run combinations
+// Generate Task run combinations
 function generateTaskRuns(task) {
     const runs = [];
 
     if (task.tasks && task.tasks.length > 0) {
-        // Group subtasks by name and order, then create run for each target client
-        task.tasks.forEach(subtask => {
-            const runData = findExecutionData(task, subtask.name, subtask.client);
+        // Group tasks by name and order, then create run for each target client
+        task.tasks.forEach(Task => {
+            const runData = findExecutionData(task, Task.name, Task.client);
 
             // Determine the task_id: prefer run data, fall back to task definition
-            let subtaskId = null;
+            let TASKId = null;
             if (runData && runData.task_id !== undefined && runData.task_id !== null) {
-                subtaskId = runData.task_id;
-            } else if (subtask.task_id !== undefined && subtask.task_id !== null) {
-                subtaskId = subtask.task_id;
+                TASKId = runData.task_id;
+            } else if (Task.task_id !== undefined && Task.task_id !== null) {
+                TASKId = Task.task_id;
             }
 
             runs.push({
-                task_id: subtaskId,
-                task_name: subtask.name,
-                client: subtask.client,
-                order: subtask.order,
-                timeout: subtask.timeout,
+                task_id: TASKId,
+                task_name: Task.name,
+                client: Task.client,
+                order: Task.order,
+                timeout: Task.timeout,
                 status: runData ? runData.status : 'pending',
                 started_at: runData ? runData.started_at : null,
                 completed_at: runData ? runData.completed_at : null,
@@ -797,14 +797,14 @@ function generateTaskRuns(task) {
             });
         });
     } else {
-        // Legacy subtask-based task
+        // Legacy task-based job
         const targetClients = task.clients && task.clients.length > 0
             ? task.clients
             : [task.client || 'Any Available'];
 
         targetClients.forEach(client => {
             runs.push({
-                task_name: 'Subtask run',
+                task_name: 'Task run',
                 client: client,
                 order: 0,
                 timeout: 300,
@@ -829,12 +829,12 @@ function generateTaskRuns(task) {
     return runs;
 }
 
-// Find run data for a specific subtask-client combination
-function findExecutionData(task, subtaskName, targetClient) {
+// Find run data for a specific Task-client combination
+function findExecutionData(task, TASKName, targetClient) {
     if (!task.runs) return null;
 
     return task.runs.find(exec =>
-        exec.task_name === subtaskName &&
+        exec.task_name === TASKName &&
         exec.client === targetClient
     );
 }
@@ -854,7 +854,7 @@ function getClientWorkingStatus(client, allTasks) {
     const isWorking = allTasks.some(task => {
         if (task.status !== 'running') return false;
 
-        // Check if this client has running subtasks in this task
+        // Check if this client has running tasks in this task
         if (task.runs) {
             return task.runs.some(run =>
                 run.client === client.name &&
@@ -870,7 +870,7 @@ function getClientWorkingStatus(client, allTasks) {
     return isWorking ? 'busy' : 'free';
 }
 
-// Create a subtask run row
+// Create a Task run row
 function createTaskRunRow(task, run) {
     const row = document.createElement('tr');
     row.className = `task-run-row task-${task.id}-runs`;
@@ -887,12 +887,12 @@ function createTaskRunRow(task, run) {
 
     row.innerHTML = `
         <td class="task-name-col"></td>
-        <td class="subtask-id-col">
-            ${run.task_id !== null && run.task_id !== undefined ? `<span class="subtask-id-badge">${run.task_id}</span>` : '<span class="no-id">—</span>'}
+        <td class="Task-id-col">
+            ${run.task_id !== null && run.task_id !== undefined ? `<span class="Task-id-badge">${run.task_id}</span>` : '<span class="no-id">—</span>'}
         </td>
-        <td class="subtask-name-col">
-            <div class="subtask-name-info">
-                <span class="subtask-name">${run.task_name.replace(/_/g, '-')}</span>
+        <td class="Task-name-col">
+            <div class="Task-name-info">
+                <span class="Task-name">${run.task_name.replace(/_/g, '-')}</span>
             </div>
         </td>
         <td class="client-col">
@@ -1058,17 +1058,17 @@ function toggleAllTaskDetails() {
 }
 
 // Show run error details
-function showExecutionError(subtaskName, targetClient, errorMessage, subtaskId = null) {
-    const subtaskDisplay = subtaskId ? `${subtaskName} (ID: ${subtaskId})` : subtaskName;
+function showExecutionError(TASKName, targetClient, errorMessage, TASKId = null) {
+    const taskDisplay = TASKId ? `${TASKName} (ID: ${TASKId})` : TASKName;
     showNotification('run Error',
-        `Error in ${subtaskDisplay} on ${targetClient}:\n\n${errorMessage}`, 'error');
+        `Error in ${taskDisplay} on ${targetClient}:\n\n${errorMessage}`, 'error');
 }
 
 // Show run result details
-function showExecutionResult(subtaskName, targetClient, result, subtaskId = null) {
-    const subtaskDisplay = subtaskId ? `${subtaskName} (ID: ${subtaskId})` : subtaskName;
+function showExecutionResult(TASKName, targetClient, result, TASKId = null) {
+    const taskDisplay = TASKId ? `${TASKName} (ID: ${TASKId})` : TASKName;
     showNotification('run Result',
-        `Result from ${subtaskDisplay} on ${targetClient}:\n\n${result}`, 'info');
+        `Result from ${taskDisplay} on ${targetClient}:\n\n${result}`, 'info');
 }
 
 // Filter tasks based on current filters
@@ -1083,7 +1083,7 @@ function filterTasks() {
             return false;
         }
 
-        // Client filter - check if task has any subtasks or runs on the specified client
+        // Client filter - check if task has any tasks or runs on the specified client
         if (clientFilter) {
             const hasTargetClient = task.tasks && task.tasks.some(st => st.client === clientFilter) ||
                                    task.clients && task.clients.includes(clientFilter) ||
@@ -1097,12 +1097,12 @@ function filterTasks() {
         if (searchInput) {
             const searchTerm = searchInput.toLowerCase();
             const matchesName = task.name.toLowerCase().includes(searchTerm);
-            const matchesSubtaskLegacy = task.command && task.command.toLowerCase().includes(searchTerm);
-            const matchesSubtask = task.tasks && task.tasks.some(st =>
+            const matchesTASKLegacy = task.command && task.command.toLowerCase().includes(searchTerm);
+            const matchesTASK = task.tasks && task.tasks.some(st =>
                 st.name.toLowerCase().includes(searchTerm)
             );
 
-            if (!matchesName && !matchesSubtaskLegacy && !matchesSubtask) {
+            if (!matchesName && !matchesTASKLegacy && !matchesTASK) {
                 return false;
             }
         }
@@ -1394,16 +1394,16 @@ async function batchDeleteTasks() {
     updateBatchDeleteButton();
 }
 
-// Delete subtask run that hasn't started yet
-async function deletePendingTask(taskId, subtaskName, targetClient, subtaskId = null) {
-    const subtaskDisplay = subtaskId ? `"${subtaskName}" (ID: ${subtaskId})` : `"${subtaskName}"`;
+// Delete Task run that hasn't started yet
+async function deletePendingTask(taskId, TASKName, targetClient, TASKId = null) {
+    const taskDisplay = TASKId ? `"${TASKName}" (ID: ${TASKId})` : `"${TASKName}"`;
 
-    if (!confirm(`Are you sure you want to delete the pending task ${subtaskDisplay} for client "${targetClient}"?\n\nThis action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete the pending task ${taskDisplay} for client "${targetClient}"?\n\nThis action cannot be undone.`)) {
         return;
     }
 
     try {
-        const response = await fetch(`/api/jobs/${taskId}/tasks/${encodeURIComponent(subtaskName)}/delete`, {
+        const response = await fetch(`/api/jobs/${taskId}/tasks/${encodeURIComponent(TASKName)}/delete`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
@@ -1416,13 +1416,13 @@ async function deletePendingTask(taskId, subtaskName, targetClient, subtaskId = 
         const result = await response.json();
 
         if (result.success) {
-            const successMessage = subtaskId ?
-                `Task "${subtaskName}" (ID: ${subtaskId}) deleted successfully` :
-                `Task "${subtaskName}" deleted successfully`;
+            const successMessage = TASKId ?
+                `Task "${TASKName}" (ID: ${TASKId}) deleted successfully` :
+                `Task "${TASKName}" deleted successfully`;
             showNotification('Task Deleted', successMessage, 'success');
 
             // Check if All tasks were deleted
-            if (result.remaining_subtasks === 0) {
+            if (result.remaining_TASKs === 0) {
                 showNotification('Task Status', 'All tasks deleted - task has been cancelled', 'info');
             }
 
@@ -1448,7 +1448,7 @@ async function viewTaskDetails(taskId) {
         if (response.success) {
             const task = response.data;
 
-            // Get subtask run status
+            // Get Task run status
             const executionsResponse = await apiGet(`/api/jobs/${taskId}/runs`);
             const runs = executionsResponse.success ? executionsResponse.data : [];
 
@@ -1472,11 +1472,11 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
             <h4>Basic Information</h4>
             <div class="detail-grid">
                 <div class="detail-item">
-                    <label>Task ID:</label>
+                    <label>Job ID:</label>
                     <span>${task.id}</span>
                 </div>
                 <div class="detail-item">
-                    <label>Name:</label>
+                    <label>Job Name:</label>
                     <span>${task.name}</span>
                 </div>
                 <div class="detail-item">
@@ -1503,55 +1503,55 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
             executionMap[key] = exec;
         });
 
-        // Calculate overall subtask statistics
-        const totalSubtasks = task.tasks.length;
-        const completedSubtasks = runs.filter(e => e.status === 'completed').length;
-        const failedSubtasks = runs.filter(e => e.status === 'failed').length;
-        const runningSubtasks = runs.filter(e => e.status === 'running').length;
-        const pendingSubtasks = totalSubtasks - completedSubtasks - failedSubtasks - runningSubtasks;
+        // Calculate overall Task statistics
+        const totalTasks = task.tasks.length;
+        const completedTasks = runs.filter(e => e.status === 'completed').length;
+        const failedTasks = runs.filter(e => e.status === 'failed').length;
+        const runningTasks = runs.filter(e => e.status === 'running').length;
+        const pendingTasks = totalTasks - completedTasks - failedTasks - runningTasks;
 
         detailsHtml += `
             <div class="task-detail-section">
-                <h4>Subtask run Overview</h4>
-                <div class="subtask-overview">
+                <h4>Run Overview</h4>
+                <div class="Task-overview">
                     <div class="overview-stats">
                         <div class="stat-item">
-                            <span class="stat-number">${totalSubtasks}</span>
+                            <span class="stat-number">${totalTasks}</span>
                             <span class="stat-label">Total</span>
                         </div>
                         <div class="stat-item completed">
-                            <span class="stat-number">${completedSubtasks}</span>
-                            <span class="stat-label">Completed</span>
+                            <span class="stat-number">${completedTasks}</span>
+                            <span class="stat-label">Passed</span>
                         </div>
                         <div class="stat-item running">
-                            <span class="stat-number">${runningSubtasks}</span>
+                            <span class="stat-number">${runningTasks}</span>
                             <span class="stat-label">Running</span>
                         </div>
                         <div class="stat-item failed">
-                            <span class="stat-number">${failedSubtasks}</span>
+                            <span class="stat-number">${failedTasks}</span>
                             <span class="stat-label">Failed</span>
                         </div>
                         <div class="stat-item pending">
-                            <span class="stat-number">${pendingSubtasks}</span>
+                            <span class="stat-number">${pendingTasks}</span>
                             <span class="stat-label">Pending</span>
                         </div>
                     </div>
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${totalSubtasks > 0 ? (completedSubtasks / totalSubtasks * 100) : 0}%"></div>
+                        <div class="progress-fill" style="width: ${totalTasks > 0 ? (completedTasks / totalTasks * 100) : 0}%"></div>
                     </div>
-                    <div class="progress-text">${totalSubtasks > 0 ? Math.round(completedSubtasks / totalSubtasks * 100) : 0}% Complete</div>
+                    <div class="progress-text">${totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0}% Complete</div>
                 </div>
             </div>
         `;
 
         detailsHtml += `
             <div class="task-detail-section">
-                <h4>Subtask Details (${task.tasks.length})</h4>
-                <div class="subtasks-detail">
+                <h4>Task Details (${task.tasks.length})</h4>
+                <div class="tasks-detail">
         `;
 
-        task.tasks.forEach((subtask, index) => {
-            const executionKey = `${subtask.name}_${subtask.client}`;
+        task.tasks.forEach((taskDef, index) => {
+            const executionKey = `${taskDef.name}_${taskDef.client}`;
             const run = executionMap[executionKey];
 
             // Determine status and timing
@@ -1563,29 +1563,29 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
             const errorMessage = run && run.error_message ? run.error_message : '';
 
             detailsHtml += `
-                <div class="subtask-detail-item">
-                    <div class="subtask-detail-header">
-                        <h5>Subtask ${index + 1}: ${subtask.name}</h5>
-                        <div class="subtask-status-info">
-                            <span class="status-badge ${status}">${status}</span>
-                            ${run && run.task_id !== null && run.task_id !== undefined ? `<span class="subtask-id-badge">ID: ${run.task_id}</span>` : ''}
+                <div class="Task-detail-item">
+                    <div class="Task-detail-header">
+                        <h5>Task ${index + 1}: ${taskDef.name}</h5>
+                        <div class="Task-status-info">
+                            <span class="status-badge ${status}">${status === 'completed' ? 'PASSED' : status.toUpperCase()}</span>
+                            ${run && run.task_id !== null && run.task_id !== undefined ? `<span class="Task-id-badge">ID: ${run.task_id}</span>` : ''}
                         </div>
                     </div>
-                    <div class="subtask-detail-content">
+                    <div class="Task-detail-content">
                         <div class="detail-grid">
                             ${run && run.task_id !== null && run.task_id !== undefined ? `
                                 <div class="detail-item">
-                                    <label>Subtask ID:</label>
+                                    <label>Run ID:</label>
                                     <span>${run.task_id}</span>
                                 </div>
                             ` : ''}
                             <div class="detail-item">
-                                <label>Subtask Name:</label>
-                                <span>${subtask.name}</span>
+                                <label>Task Name:</label>
+                                <span>${taskDef.name}</span>
                             </div>
                             <div class="detail-item">
                                 <label>Target Client:</label>
-                                <span>${subtask.client}</span>
+                                <span>${taskDef.client}</span>
                             </div>
                             <div class="detail-item">
                                 <label>Started At:</label>
@@ -1596,7 +1596,7 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
                                 <span>${endTime}</span>
                             </div>
                             <div class="detail-item">
-                                <label>run Time:</label>
+                                <label>Run Time:</label>
                                 <span>${executionTime}</span>
                             </div>
                             <div class="detail-item">
@@ -1605,11 +1605,11 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
                             </div>
                             <div class="detail-item">
                                 <label>Arguments:</label>
-                                <span><code>${JSON.stringify(subtask.args || [])}</code></span>
+                                <span><code>${JSON.stringify(taskDef.args || [])}</code></span>
                             </div>
                             <div class="detail-item">
                                 <label>Keyword Arguments:</label>
-                                <span><code>${JSON.stringify(subtask.kwargs || {})}</code></span>
+                                <span><code>${JSON.stringify(taskDef.kwargs || {})}</code></span>
                             </div>
                         </div>
                         ${errorMessage ? `
@@ -1630,8 +1630,8 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
     } else if (task.command) {
         detailsHtml += `
             <div class="task-detail-section">
-                <h4>Legacy Subtask</h4>
-                <div class="subtask-detail">
+                <h4>Legacy Task</h4>
+                <div class="Task-detail">
                     <code>${task.command}</code>
                 </div>
                 <div class="detail-grid">
@@ -1681,7 +1681,7 @@ function displayTaskDetailsWithExecutions(task, runs = []) {
                 </div>
                 <p class="help-text">
                     <small>
-                        • Generate Report: Creates a detailed HTML report with all subtask results<br>
+                        • Generate Report: Creates a detailed HTML report with all Task results<br>
                         • Send Email: Sends notification email with attached report (requires email configuration)
                     </small>
                 </p>
@@ -1743,7 +1743,7 @@ function openTaskCopyModal(originalTask) {
     document.getElementById('copyScheduleType').value = 'immediate';
 
     // Update modal title
-    document.getElementById('copyModalTitle').textContent = `Copy Task: ${originalTask.name}`;
+    document.getElementById('copyModalTitle').textContent = `Copy Job: ${originalTask.name}`;
 
     // Populate client updates list
     populateClientUpdatesList(originalTask);
@@ -1783,7 +1783,7 @@ function populateClientUpdatesList(originalTask) {
     const clientUpdatesList = document.getElementById('clientUpdatesList');
 
     if (!originalTask.tasks || originalTask.tasks.length === 0) {
-        clientUpdatesList.innerHTML = '<p class="help-text">No subtasks to configure client assignments.</p>';
+        clientUpdatesList.innerHTML = '<p class="help-text">No tasks to configure client assignments.</p>';
         return;
     }
 
@@ -1869,12 +1869,12 @@ async function saveTaskCopy() {
             closeTaskCopyModal();
             await refreshTasks();
         } else {
-            showNotification('Error', response.error || 'Failed to copy task', 'error');
+            showNotification('Error', response.error || 'Failed to copy job', 'error');
         }
 
     } catch (error) {
-        console.error('Failed to copy task:', error);
-        showNotification('Error', 'Failed to copy task', 'error');
+        console.error('Failed to Copy Job:', error);
+        showNotification('Error', 'Failed to copy job', 'error');
     }
 }
 
@@ -1890,7 +1890,7 @@ async function refreshTaskDetails(taskId) {
         if (response.success) {
             const task = response.data;
 
-            // Get subtask run status
+            // Get Task run status
             const executionsResponse = await apiGet(`/api/jobs/${taskId}/runs`);
             const runs = executionsResponse.success ? executionsResponse.data : [];
 
@@ -1914,32 +1914,32 @@ async function loadTaskForEdit(taskId) {
             // Set basic fields
             document.getElementById('taskName').value = task.name;
 
-            // Load subtasks (always subtask-based now)
+            // Load tasks (always Task-based now)
             if (task.tasks && task.tasks.length > 0) {
-                // Create a subtask row for each individual subtask (preserving unique IDs)
-                task.tasks.forEach(subtask => {
-                    addSubtask();
-                    const subtaskRows = document.querySelectorAll('.subtask-row');
-                    const subtaskRow = subtaskRows[subtaskRows.length - 1];
+                // Create a Task row for each individual Task (preserving unique IDs)
+                task.tasks.forEach(Task => {
+                    addTASK();
+                    const TASKRows = document.querySelectorAll('.Task-row');
+                    const TASKRow = TASKRows[TASKRows.length - 1];
 
-                    // Set subtask name
-                    subtaskRow.querySelector('.subtask-name').value = subtask.name;
+                    // Set Task name
+                    TASKRow.querySelector('.Task-name').value = Task.name;
 
-                    // Store the subtask ID for preservation during save
-                    if (subtask.task_id) {
-                        subtaskRow.setAttribute('data-subtask-id', subtask.task_id);
+                    // Store the Task ID for preservation during save
+                    if (Task.task_id) {
+                        TASKRow.setAttribute('data-Task-id', Task.task_id);
 
-                        // Display the subtask ID in the UI
-                        const idDisplay = subtaskRow.querySelector('.subtask-id-display');
-                        const idValue = subtaskRow.querySelector('.subtask-id-value');
+                        // Display the Task ID in the UI
+                        const idDisplay = TASKRow.querySelector('.Task-id-display');
+                        const idValue = TASKRow.querySelector('.Task-id-value');
                         if (idDisplay && idValue) {
-                            idValue.textContent = subtask.task_id;
+                            idValue.textContent = Task.task_id;
                             idDisplay.style.display = 'block';
                         }
                     }
 
-                    // Select the target client for this specific subtask
-                    const clientCheckbox = subtaskRow.querySelector(`.client-checkbox[value="${subtask.client}"]`);
+                    // Select the target client for this specific Task
+                    const clientCheckbox = TASKRow.querySelector(`.client-checkbox[value="${Task.client}"]`);
                     if (clientCheckbox) {
                         clientCheckbox.checked = true;
                         // Update client selection state
@@ -1947,7 +1947,7 @@ async function loadTaskForEdit(taskId) {
                     }
 
                     // Update description
-                    updateSubtaskDescription(subtaskRow.querySelector('.subtask-name'));
+                    updateTASKDescription(TASKRow.querySelector('.Task-name'));
                 });
             }
 
@@ -2001,11 +2001,11 @@ function populateClientFilter() {
     const clientNames = new Set();
 
     allTasks.forEach(task => {
-        // Add clients from subtasks
+        // Add clients from tasks
         if (task.tasks) {
-            task.tasks.forEach(subtask => {
-                if (subtask.client && subtask.client !== 'any_available') {
-                    clientNames.add(subtask.client);
+            task.tasks.forEach(Task => {
+                if (Task.client && Task.client !== 'any_available') {
+                    clientNames.add(Task.client);
                 }
             });
         }

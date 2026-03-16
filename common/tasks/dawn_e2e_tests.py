@@ -1,7 +1,7 @@
 """
-Dawn E2E tests subtask for downloading and running Dawn end-to-end tests.
+Dawn E2E tests Task for downloading and running Dawn end-to-end tests.
 
-This subtask downloads the latest Dawn E2E test binary based on the system
+This Task downloads the latest Dawn E2E test binary based on the system
 architecture and OS, extracts it, runs the tests, and reports failures.
 """
 
@@ -48,7 +48,7 @@ class DawnE2ETestsTask(BaseTask):
                 self.task_context = {
                     'task_name': 'dawn_task',
                     'task_timestamp': start_time.strftime('%Y%m%d%H%M%S'),
-                    'subtask_name': 'dawn_e2e_tests'
+                    'TASK_name': 'dawn_e2e_tests'
                 }
 
             # Step 1: Determine architecture and OS
@@ -157,7 +157,7 @@ class DawnE2ETestsTask(BaseTask):
         return self.result
 
     def get_description(self) -> str:
-        """Get a simple description of this subtask."""
+        """Get a simple description of this Task."""
         return "Run Dawn E2E tests"
 
     def get_system_architecture(self) -> Dict[str, Any]:
@@ -369,15 +369,15 @@ class DawnE2ETestsTask(BaseTask):
             if hasattr(self, 'task_context') and self.task_context:
                 task_name = self.task_context.get('task_name', 'dawn_task')
                 task_timestamp = self.task_context.get('task_timestamp', datetime.now().strftime('%Y%m%d%H%M%S'))
-                subtask_name = self.task_context.get('subtask_name', 'dawn_e2e_tests')
+                TASK_name = self.task_context.get('TASK_name', 'dawn_e2e_tests')
             else:
                 task_name = 'dawn_task'
                 task_timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                subtask_name = 'dawn_e2e_tests'
+                TASK_name = 'dawn_e2e_tests'
 
             # Use absolute path for log directory - go up to project root
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # Go up to project root
-            output_dir = os.path.join(base_dir, "ignore", "client", "logs", f"{task_timestamp}-{task_name}", subtask_name)
+            output_dir = os.path.join(base_dir, "ignore", "client", "logs", f"{task_timestamp}-{task_name}", TASK_name)
             os.makedirs(output_dir, exist_ok=True)
 
             json_output_path = os.path.join(output_dir, "dawn.json")
@@ -440,15 +440,15 @@ class DawnE2ETestsTask(BaseTask):
             if hasattr(self, 'task_context') and self.task_context:
                 task_name = self.task_context.get('task_name', 'dawn_task')
                 task_timestamp = self.task_context.get('task_timestamp', datetime.now().strftime('%Y%m%d%H%M%S'))
-                subtask_name = self.task_context.get('subtask_name', 'dawn_e2e_tests')
+                TASK_name = self.task_context.get('TASK_name', 'dawn_e2e_tests')
             else:
                 task_name = 'dawn_task'
                 task_timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                subtask_name = 'dawn_e2e_tests'
+                TASK_name = 'dawn_e2e_tests'
 
             # Use absolute path for log directory - go up to project root
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # Go up to project root
-            output_dir = os.path.join(base_dir, "ignore", "client", "logs", f"{task_timestamp}-{task_name}", subtask_name)
+            output_dir = os.path.join(base_dir, "ignore", "client", "logs", f"{task_timestamp}-{task_name}", TASK_name)
             json_output_path = os.path.join(output_dir, "dawn.json")
 
             # Check if JSON output file exists
@@ -732,15 +732,15 @@ class DawnE2ETestsTask(BaseTask):
             return False
 
 
-# Register the subtask class instance
+# Register the Task class instance
 register_task_class('dawn_e2e_tests', DawnE2ETestsTask())
 
 
 # Legacy function wrapper for backward compatibility
 def dawn_e2e_tests() -> Dict[str, Any]:
-    """Legacy function wrapper for dawn_e2e_tests subtask."""
-    subtask = DawnE2ETestsSubtask()
-    return subtask.run()
+    """Legacy function wrapper for dawn_e2e_tests Task."""
+    Task = DawnE2ETestsTASK()
+    return Task.run()
 
 
 def get_dawn_test_summary() -> Dict[str, Any]:

@@ -474,9 +474,9 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Subtask reload functionality
-async function reloadSubtasks() {
-    const button = document.getElementById('reloadSubtasksBtn');
+// task reload functionality
+async function reloadTASKs() {
+    const button = document.getElementById('reloadTASKsBtn');
     if (!button) return;
     
     // Disable button and show loading state
@@ -495,15 +495,15 @@ async function reloadSubtasks() {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Subtasks Reloaded', 
-                `Successfully reloaded ${result.reloaded_count} subtask modules on ${result.target}`, 
+            showNotification('tasks Reloaded', 
+                `Successfully reloaded ${result.reloaded_count} task modules on ${result.target}`, 
                 'success');
-            console.log('Subtask reload successful:', result);
+            console.log('task reload successful:', result);
         } else {
             showNotification('Reload Failed', 
-                result.error || 'Failed to reload subtasks', 
+                result.error || 'Failed to reload tasks', 
                 'error');
-            console.error('Subtask reload failed:', result);
+            console.error('task reload failed:', result);
         }
         
     } catch (error) {

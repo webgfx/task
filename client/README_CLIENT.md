@@ -232,7 +232,7 @@ python config_tool.py --interactive
 python config_tool.py --validate
 ```
 
-### Management Subtasks
+### Management tasks
 
 ```bash
 # Check installation status

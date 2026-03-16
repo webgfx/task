@@ -1,7 +1,7 @@
 """
-System information subtask for comprehensive system details.
+System information Task for comprehensive system details.
 
-This subtask provides detailed information about the system including
+This Task provides detailed information about the system including
 OS details, Python environment, hardware specs, and more.
 """
 
@@ -201,11 +201,11 @@ class GetSystemInfoTask(BaseTask):
         return self._last_result
 
     def get_description(self) -> str:
-        """Get a human-readable description of what this subtask does"""
+        """Get a human-readable description of what this Task does"""
         return "Get comprehensive system information including OS, Python environment, and hardware details"
 
 
-# Register the subtask
+# Register the Task
 register_task_class('get_system_info', GetSystemInfoTask())
 
 
@@ -217,8 +217,8 @@ def get_system_summary() -> Dict[str, Any]:
         Dict[str, Any]: Condensed system information suitable for logging or quick display
     """
     try:
-        subtask = GetSystemInfoSubtask()
-        full_info = subtask.run()
+        Task = GetSystemInfoTASK()
+        full_info = Task.run()
 
         summary = {
             'hostname': full_info.get('hostname', 'unknown'),
@@ -250,6 +250,6 @@ def get_system_summary() -> Dict[str, Any]:
 
 # Legacy function for backward compatibility
 def get_system_info() -> Dict[str, Any]:
-    """Legacy function - use GetSystemInfoSubtask class instead"""
-    subtask = GetSystemInfoSubtask()
-    return subtask.run()
+    """Legacy function - use GetSystemInfoTASK class instead"""
+    Task = GetSystemInfoTASK()
+    return Task.run()

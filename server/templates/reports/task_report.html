@@ -115,44 +115,44 @@
             background-color: #fff3cd;
             color: #856404;
         }
-        .subtasks {
+        .tasks {
             border: 1px solid #dee2e6;
             border-top: none;
             border-radius: 0 0 8px 8px;
         }
-        .subtask {
+        .Task {
             padding: 15px 20px;
             border-bottom: 1px solid #dee2e6;
         }
-        .subtask:last-child {
+        .Task:last-child {
             border-bottom: none;
         }
-        .subtask-header {
+        .Task-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
         }
-        .subtask-name {
+        .Task-name {
             font-weight: bold;
             color: #495057;
         }
-        .subtask-time {
+        .Task-time {
             font-size: 0.9em;
             color: #6c757d;
         }
-        .subtask-result {
+        .Task-result {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 6px;
             border-left: 4px solid #007bff;
             margin-top: 10px;
         }
-        .subtask-result.success {
+        .Task-result.success {
             border-left-color: #28a745;
             background: #f0fff4;
         }
-        .subtask-result.error {
+        .Task-result.error {
             border-left-color: #dc3545;
             background: #fff5f5;
         }
@@ -239,16 +239,16 @@
                 {% endif %}
                 <div class="summary-card">
                     <h3>{{ total_subtasks }}</h3>
-                    <p>Total Subtasks</p>
+                    <p>Total tasks</p>
                 </div>
                 <div class="summary-card success">
                     <h3>{{ successful_subtasks }}</h3>
-                    <p>Successful Subtasks</p>
+                    <p>Successful tasks</p>
                 </div>
                 {% if failed_subtasks > 0 %}
                 <div class="summary-card error">
                     <h3>{{ failed_subtasks }}</h3>
-                    <p>Failed Subtasks</p>
+                    <p>Failed tasks</p>
                 </div>
                 {% endif %}
                 <div class="summary-card">
@@ -303,28 +303,28 @@
                             </span>
                         </h3>
                     </div>
-                    <div class="subtasks">
-                        {% for subtask in client_data.subtasks %}
-                        <div class="subtask">
-                            <div class="subtask-header">
-                                <span class="subtask-name">{{ subtask.subtask_name }}</span>
-                                <span class="subtask-time">
-                                    {% if subtask.execution_time %}{{ "%.2f"|format(subtask.execution_time) }}s{% endif %}
+                    <div class="tasks">
+                        {% for Task in client_data.tasks %}
+                        <div class="Task">
+                            <div class="Task-header">
+                                <span class="Task-name">{{ Task.subtask_name }}</span>
+                                <span class="Task-time">
+                                    {% if Task.execution_time %}{{ "%.2f"|format(Task.execution_time) }}s{% endif %}
                                 </span>
                             </div>
-                            {% if subtask.status == 'completed' %}
-                            <div class="subtask-result success">
+                            {% if Task.status == 'completed' %}
+                            <div class="Task-result success">
                                 <strong>Result:</strong>
-                                <div class="result-content">{{ subtask.result or 'No result data' }}</div>
+                                <div class="result-content">{{ Task.result or 'No result data' }}</div>
                             </div>
-                            {% elif subtask.status == 'failed' %}
-                            <div class="subtask-result error">
+                            {% elif Task.status == 'failed' %}
+                            <div class="Task-result error">
                                 <strong>Error:</strong>
-                                <div class="result-content">{{ subtask.error_message or 'Unknown error' }}</div>
+                                <div class="result-content">{{ Task.error_message or 'Unknown error' }}</div>
                             </div>
                             {% else %}
-                            <div class="subtask-result">
-                                <strong>Status:</strong> {{ subtask.status|title }}
+                            <div class="Task-result">
+                                <strong>Status:</strong> {{ Task.status|title }}
                             </div>
                             {% endif %}
                         </div>

@@ -75,7 +75,7 @@
                 </span>
             </p>
             <p><strong>Clients:</strong> {{ successful_clients }}/{{ total_clients }} successful</p>
-            <p><strong>Subtasks:</strong> {{ successful_subtasks }}/{{ total_subtasks }} successful</p>
+            <p><strong>tasks:</strong> {{ successful_subtasks }}/{{ total_subtasks }} successful</p>
             <p><strong>Execution Time:</strong> {{ execution_time }}</p>
             <p><strong>Completed:</strong> {{ task.completed_at or generation_time }}</p>
         </div>
@@ -87,7 +87,7 @@
             <span class="{% if client_data.overall_success %}status-success{% else %}status-failed{% endif %}">
                 {% if client_data.overall_success %}Success{% else %}Failed{% endif %}
             </span>
-            ({{ client_data.successful_count }}/{{ client_data.total_count }} subtasks)
+            ({{ client_data.successful_count }}/{{ client_data.total_count }} tasks)
         </div>
         {% endfor %}
         

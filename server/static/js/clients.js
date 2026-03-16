@@ -216,7 +216,7 @@ function createClientTableRow(client) {
     const taskId = client.current_job_id || '-';
     const taskName = client.current_task_name || '-';
     const currentTaskId = client.current_task_id || '-';
-    const currentTaskName = client.current_task_id ? getSubtaskDisplayName(client.current_task_id) : '-';
+    const currentTaskName = client.current_task_id ? getTASKDisplayName(client.current_task_id) : '-';
 
     // Main client row
     const mainRow = `
@@ -239,12 +239,12 @@ function createClientTableRow(client) {
                     <span class="task-name">${escapeHtml(taskName)}</span>
                 </div>
             </td>
-            <td class="subtask-id-col">
-                ${currentTaskId !== '-' ? `<span class="subtask-id-badge">${escapeHtml(currentTaskId)}</span>` : '<span class="no-id">—</span>'}
+            <td class="Task-id-col">
+                ${currentTaskId !== '-' ? `<span class="Task-id-badge">${escapeHtml(currentTaskId)}</span>` : '<span class="no-id">—</span>'}
             </td>
-            <td class="subtask-name-col">
-                <div class="subtask-name-info">
-                    <span class="subtask-name">${escapeHtml(currentTaskName)}</span>
+            <td class="Task-name-col">
+                <div class="Task-name-info">
+                    <span class="Task-name">${escapeHtml(currentTaskName)}</span>
                 </div>
             </td>
             <td class="heartbeat-col">
@@ -477,12 +477,12 @@ function formatClientDetails(client, tasks) {
     `;
 }
 
-// Get display name for subtask (convert ID to readable name)
-function getSubtaskDisplayName(subtaskId) {
+// Get display name for Task (convert ID to readable name)
+function getTASKDisplayName(TASKId) {
     // Convert snake_case or camelCase to readable names
-    if (!subtaskId || subtaskId === '-' || subtaskId === '') return '—';
+    if (!TASKId || TASKId === '-' || TASKId === '') return '—';
 
-    // Common subtask name mappings
+    // Common Task name mappings
     const nameMap = {
         'get_hostname': 'Get Hostname',
         'get_system_info': 'Get System Info',
@@ -496,12 +496,12 @@ function getSubtaskDisplayName(subtaskId) {
     };
 
     // Check if we have a predefined mapping
-    if (nameMap[subtaskId]) {
-        return nameMap[subtaskId];
+    if (nameMap[TASKId]) {
+        return nameMap[TASKId];
     }
 
     // Convert snake_case to readable format
-    return subtaskId
+    return TASKId
         .replace(/_/g, ' ')
         .replace(/\b\w/g, l => l.toUpperCase());
 }

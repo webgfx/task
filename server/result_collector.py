@@ -1,8 +1,8 @@
 """
 Job Result Collection and Report Generation Service
 
-This service collects subtask results from all clients and generates reports
-when all subtasks for a Job are completed.
+This service collects Task results from all clients and generates reports
+when all tasks for a Job are completed.
 """
 
 import logging
@@ -65,25 +65,25 @@ class TaskResultCollector:
         # For Outlook, minimal configuration is needed
         return bool(email_config.get('default_recipient') or email_config.get('to_emails'))
 
-    def on_subtask_completion(self, task_id: int, client_name: str, subtask_name: str,
-                            subtask_status: JobStatus, result: Any = None,
+    def on_TASK_completion(self, task_id: int, client_name: str, TASK_name: str,
+                            TASK_status: JobStatus, result: Any = None,
                             error_message: str = None, execution_time: float = None):
         """
-        Handle subtask completion event
+        Handle Task completion event
 
         Args:
             task_id: ID of the Job
-            client_name: Name of the client that executed the subtask
-            subtask_name: Name of the completed subtask
-            subtask_status: Status of the subtask execution
-            result: Subtask execution result
-            error_message: Error message if subtask failed
-            execution_time: Time taken to execute subtask
+            client_name: Name of the client that executed the Task
+            TASK_name: Name of the completed Task
+            TASK_status: Status of the Task execution
+            result: Task execution result
+            error_message: Error message if Task failed
+            execution_time: Time taken to execute Task
         """
         try:
-            logger.info(f"Processing subtask completion: Job {task_id}, Client {client_name}, Subtask {subtask_name}, Status {subtask_status.value}")
+            logger.info(f"Processing Task completion: Job {task_id}, Client {client_name}, Task {TASK_name}, Status {TASK_status.value}")
 
-            # Check if all subtasks for this Job are completed
+            # Check if all tasks for this Job are completed
             if self._check_task_completion(task_id):
                 # Process Job completion in a separate thread to avoid blocking
                 threading.Thread(
@@ -93,17 +93,17 @@ class TaskResultCollector:
                 ).start()
 
         except Exception as e:
-            logger.error(f"Error processing subtask completion: {e}")
+            logger.error(f"Error processing Task completion: {e}")
 
     def _check_task_completion(self, task_id: int) -> bool:
         """
-        Check if all subtasks for a Job are completed
+        Check if all tasks for a Job are completed
 
         Args:
             task_id: ID of the Job to check
 
         Returns:
-            bool: True if all subtasks are completed, False otherwise
+            bool: True if all tasks are completed, False otherwise
         """
         try:
             with self._completion_lock:
@@ -130,18 +130,18 @@ class TaskResultCollector:
                 # Check completion status for each client
                 all_completed = True
                 for client_name in clients:
-                    client_subtasks = Job.get_tasks_for_client(client_name)
-                    if not client_subtasks:
-                        continue  # No subtasks for this client
+                    client_TASKs = Job.get_tasks_for_client(client_name)
+                    if not client_TASKs:
+                        continue  # No tasks for this client
 
-                    # Check if all subtasks for this client are completed
-                    for subtask in client_subtasks:
+                    # Check if all tasks for this client are completed
+                    for Task in client_TASKs:
                         executions = self.database.get_runs_filtered(
-                            task_id, subtask.name, client_name
+                            task_id, Task.name, client_name
                         )
 
                         if not executions:
-                            # Subtask not started yet
+                            # Task not started yet
                             all_completed = False
                             break
 
@@ -271,24 +271,24 @@ class TaskResultCollector:
             clients = Job.get_all_clients()
 
             for client_name in clients:
-                client_subtasks = Job.get_tasks_for_client(client_name)
+                client_TASKs = Job.get_tasks_for_client(client_name)
 
-                if not client_subtasks:
+                if not client_TASKs:
                     continue
 
                 client_data = {
                     'client_name': client_name,
-                    'subtasks': [],
-                    'total_count': len(client_subtasks),
+                    'tasks': [],
+                    'total_count': len(client_TASKs),
                     'successful_count': 0,
                     'failed_count': 0,
                     'overall_success': False
                 }
 
-                for subtask in client_subtasks:
-                    # Get subtask execution results
+                for Task in client_TASKs:
+                    # Get Task execution results
                     executions = self.database.get_runs_filtered(
-                        Job.id, subtask.name, client_name
+                        Job.id, Task.name, client_name
                     )
 
                     if executions:
@@ -300,25 +300,25 @@ class TaskResultCollector:
                         else:
                             client_data['failed_count'] += 1
 
-                        client_data['subtasks'].append(latest_execution)
+                        client_data['tasks'].append(latest_execution)
                     else:
-                        # Create a placeholder for missing subtask execution
+                        # Create a placeholder for missing Task execution
                         placeholder = Run(
                             task_id=Job.id,
-                            subtask_name=subtask.name,
-                            subtask_order=subtask.order,
+                            TASK_name=Task.name,
+                            TASK_order=Task.order,
                             client=client_name,
                             status=JobStatus.FAILED,
-                            error_message="Subtask was not executed"
+                            error_message="Task was not executed"
                         )
-                        client_data['subtasks'].append(placeholder)
+                        client_data['tasks'].append(placeholder)
                         client_data['failed_count'] += 1
 
                 # Determine client overall success
                 client_data['overall_success'] = (client_data['failed_count'] == 0)
 
-                # Sort subtasks by order
-                client_data['subtasks'].sort(key=lambda x: x.task_order)
+                # Sort tasks by order
+                client_data['tasks'].sort(key=lambda x: x.task_order)
 
                 client_results[client_name] = client_data
 
@@ -359,8 +359,8 @@ class TaskResultCollector:
             total_clients = len(client_results)
             successful_clients = sum(1 for data in client_results.values() if data.get('overall_success', False))
 
-            total_subtasks = sum(data.get('total_count', 0) for data in client_results.values())
-            successful_subtasks = sum(data.get('successful_count', 0) for data in client_results.values())
+            total_TASKs = sum(data.get('total_count', 0) for data in client_results.values())
+            successful_TASKs = sum(data.get('successful_count', 0) for data in client_results.values())
 
             event_data = {
                 'task_id': Job.id,
@@ -371,8 +371,8 @@ class TaskResultCollector:
                 'summary': {
                     'total_clients': total_clients,
                     'successful_clients': successful_clients,
-                    'total_subtasks': total_subtasks,
-                    'successful_subtasks': successful_subtasks
+                    'total_TASKs': total_TASKs,
+                    'successful_TASKs': successful_TASKs
                 },
                 'client_results': {
                     name: {
@@ -481,13 +481,13 @@ class TaskResultCollector:
             import json
 
             for client_name, client_data in client_results.items():
-                for execution in client_data.get('subtasks', []):
+                for execution in client_data.get('tasks', []):
                     try:
                         self.database.cache_task_result(
                             task_id=Job.id,
                             task_name=Job.name,
                             client_name=client_name,
-                            subtask_name=execution.task_name,
+                            TASK_name=execution.task_name,
                             status=execution.status.value,
                             result=execution.result,
                             execution_time=execution.execution_time,
@@ -495,7 +495,7 @@ class TaskResultCollector:
                                          if execution.completed_at else None)
                         )
                     except Exception as e:
-                        logger.error(f"Failed to cache result for subtask "
+                        logger.error(f"Failed to cache result for Task "
                                    f"'{execution.task_name}' on '{client_name}': {e}")
 
             logger.info(f"Cached results for Job {Job.id} ({Job.name})")

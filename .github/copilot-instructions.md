@@ -8,7 +8,7 @@ This is a distributed task management and execution system built with Flask and 
 - 🌐 **Web Interface Management** - Intuitive task and client management interface
 - 🔄 **Multi-client Distributed Execution** - Tasks can be distributed across multiple client clients
 - 📊 **Real-time Monitoring** - WebSocket-based real-time status updates
-- 📋 **Subtask Support** - Complex tasks can be broken down into subtasks
+- 📋 **Task Support** - Complex tasks can be broken down into tasks
 - 🕐 **Flexible Scheduling** - Support for immediate execution, scheduled execution, and cron expressions
 - 🔐 **Client Name Based Identity** - Uses client names as unique identifiers instead of IP addresses
 
@@ -27,13 +27,13 @@ This is a distributed task management and execution system built with Flask and 
 - **`client_runner.py`** - Client execution engine
 - **`service.py`** - Windows service implementation
 - **`executor.py`** - Task execution logic
-- **`task_executor.py`** - Subtask execution handling
+- **`task_executor.py`** - Task execution handling
 - **`heartbeat.py`** - Client health monitoring
 
 ### Common Components (`common/`)
-- **`models.py`** - Data models (Task, Client, SubtaskDefinition)
+- **`models.py`** - Data models (Task, Client, TASKDefinition)
 - **`config.py`** - Configuration management
-- **`tasks package`** - Predefined subtask definitions
+- **`tasks package`** - Predefined task definitions
 - **`utils.py`** - Utility functions
 
 ## File Organization and Structure
@@ -113,14 +113,14 @@ unique_id = client.get_unique_id()  # Returns client.name
 is_same = client.is_same_client(other_client)
 ```
 
-### Task Creation with Subtasks
+### Task Creation with tasks
 ```python
-# Tasks should include subtask definitions
+# Tasks should include task definitions
 task_data = {
     'name': 'Task Name',
-    'subtasks': [
+    'tasks': [
         {
-            'name': 'subtask_type',
+            'name': 'task_type',
             'description': 'Human readable description',
             'order': 0
         }
@@ -196,7 +196,7 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 ### Task Execution Flow
 1. **Task Creation**: Web interface → API → Database
 2. **Task Distribution**: Scheduler → Client via HTTP API
-3. **Execution**: Client executes subtasks in order
+3. **Execution**: Client executes tasks in order
 4. **Status Updates**: Client → Server via WebSocket
 5. **Monitoring**: Real-time updates via WebSocket
 

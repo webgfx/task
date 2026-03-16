@@ -35,17 +35,17 @@ To run official test scenarios that verify core system functionality:
 tests\run_tests.bat
 
 # Windows - Run specific test scenario
-tests\run_tests.bat single-subtask-single-client-now
+tests\run_tests.bat single-Task-single-client-now
 
 # Linux/Mac - Run all test scenarios
 python tests/run_official_tests.py
 
 # Linux/Mac - Run specific test scenario
-python tests/run_official_tests.py single-subtask-single-client-now
+python tests/run_official_tests.py single-Task-single-client-now
 ```
 
 ### Available Test Scenarios
-- **`single-subtask-single-client-now`**: Basic task with one subtask on one client, immediate execution
+- **`single-Task-single-client-now`**: Basic task with one Task on one client, immediate execution
 
 ### Test Scenario Documentation
 See `TEST_SCENARIOS.md` for detailed documentation of all official test scenarios, including:
