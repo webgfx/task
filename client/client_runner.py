@@ -240,7 +240,7 @@ class TaskClientRunner:
 
                     # Execute task-based job in new thread
                     threading.Thread(
-                        target=self._execute_task_job,
+                        target=self._execute_job,
                         args=(task_id, task_name, data),
                         daemon=True
                     ).start()
@@ -774,7 +774,7 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Error checking/reloading tasks: {e}")
 
-    def _execute_task_job(self, task_id, task_name, task_data):
+    def _execute_job(self, task_id, task_name, task_data):
         """Execute task-based job"""
         try:
             # Set current executing task ID
