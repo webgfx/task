@@ -184,7 +184,7 @@ class Database:
             # Check if clients table exists and if system info columns exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
             clients_exists = cursor.fetchone() is not None
-            
+
             if clients_exists:
                 cursor.execute("PRAGMA table_info(clients)")
                 columns = [column[1] for column in cursor.fetchall()]
@@ -213,21 +213,21 @@ class Database:
             # Check if clients table exists
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
             clients_exists = cursor.fetchone() is not None
-            
+
             if not clients_exists:
                 logger.info("clients table doesn't exist - no primary key migration needed")
                 return
-                
+
             # Check if table exists and what its current structure is
             cursor.execute("PRAGMA table_info(clients)")
             columns_info = cursor.fetchall()
-            
+
             # Check if the primary key is currently ip_address
             primary_key_columns = [col for col in columns_info if col[5] == 1]  # pk column
-            
+
             if primary_key_columns and primary_key_columns[0][1] == 'ip_address':
                 logger.info("Migrating clients table to use name as primary key...")
-                
+
                 # Create new table with name as primary key
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS clients_new (
@@ -246,7 +246,7 @@ class Database:
                         system_summary TEXT
                     )
                 ''')
-                
+
                 # Copy data from old table, handling potential duplicates by name
                 cursor.execute('''
                     INSERT OR REPLACE INTO clients_new
@@ -256,15 +256,15 @@ class Database:
                     FROM clients
                     WHERE name IS NOT NULL AND name != ''
                 ''')
-                
+
                 # Drop old table and rename new table
                 cursor.execute('DROP TABLE clients')
                 cursor.execute('ALTER TABLE clients_new RENAME TO clients')
-                
+
                 logger.info("Successfully migrated clients table to use name as primary key")
             else:
                 logger.info("clients table already uses name as primary key")
-                
+
         except Exception as e:
             logger.warning(f"clients table primary key migration warning: {e}")
 
@@ -279,14 +279,14 @@ class Database:
             # Check if machines table exists (old table name)
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='machines'")
             machines_exists = cursor.fetchone() is not None
-            
+
             # Check if clients table exists (new table name)
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clients'")
             clients_exists = cursor.fetchone() is not None
-            
+
             if machines_exists and clients_exists:
                 logger.info("Both machines and clients tables exist, copying data from machines to clients...")
-                
+
                 # Copy data from machines to clients, mapping columns correctly
                 cursor.execute('''
                     INSERT OR REPLACE INTO clients
@@ -296,26 +296,26 @@ class Database:
                            current_task_id, cpu_info, memory_info, gpu_info, os_info, disk_info, system_summary
                     FROM machines
                 ''')
-                
+
                 # Check how many records were copied
                 cursor.execute("SELECT COUNT(*) FROM clients")
                 clients_count = cursor.fetchone()[0]
-                
+
                 # Drop the old machines table
                 cursor.execute('DROP TABLE machines')
-                
+
                 logger.info(f"Successfully migrated {clients_count} records from machines to clients and removed machines table")
-                
+
             elif machines_exists and not clients_exists:
                 logger.info("Migrating machines table to clients table...")
-                
+
                 # Rename machines table to clients
                 cursor.execute('ALTER TABLE machines RENAME TO clients')
-                
+
                 logger.info("Successfully migrated machines table to clients table")
             else:
                 logger.info("Clients table already exists or machines table doesn't exist - no migration needed")
-                
+
         except Exception as e:
             logger.warning(f"clients to clients table migration warning: {e}")
 
@@ -410,25 +410,25 @@ class Database:
         """Delete task and all related execution records"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # First, get task info for logging
             cursor.execute('SELECT name FROM tasks WHERE id = ?', (task_id,))
             task_row = cursor.fetchone()
             task_name = task_row[0] if task_row else f"ID:{task_id}"
-            
+
             # Delete subtask executions first (child records)
             cursor.execute('DELETE FROM executions WHERE task_id = ?', (task_id,))
             subtask_deleted = cursor.rowcount
-            
+
             # Finally delete the task itself (parent record)
             cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
             task_deleted = cursor.rowcount
-            
+
             conn.commit()
-            
+
             if task_deleted > 0:
                 logger.info(f"Deleted task '{task_name}' (ID: {task_id}) with {subtask_deleted} subtask executions")
-                
+
                 # Broadcast task deletion via WebSocket if available
                 if self.socketio:
                     self.socketio.emit('task_deleted', {
@@ -436,7 +436,7 @@ class Database:
                         'task_name': task_name,
                         'subtask_records_deleted': subtask_deleted
                     })
-                
+
                 return True
             else:
                 logger.warning(f"Task with ID {task_id} not found for deletion")
@@ -459,11 +459,11 @@ class Database:
         """Register or update client with system information (using client name as unique identifier)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Validate client name uniqueness
             if not self._validate_client_name_uniqueness(client.name, client.ip_address):
                 raise ValueError(f"Client name '{client.name}' conflicts with existing client on different IP")
-            
+
             cursor.execute('''
                 INSERT OR REPLACE INTO clients
                 (name, ip_address, port, status, last_heartbeat, last_config_update, current_task_id, current_subtask_id,
@@ -490,10 +490,10 @@ class Database:
     def client_name_exists(self, client_name: str) -> bool:
         """
         Check if client name already exists
-        
+
         Args:
             client_name: Client name to check
-            
+
         Returns:
             True if exists, False otherwise
         """
@@ -505,7 +505,7 @@ class Database:
     def get_client_names(self) -> List[str]:
         """
         Get all client names list
-        
+
         Returns:
             List of client names
         """
@@ -518,7 +518,7 @@ class Database:
     def get_online_client_names(self) -> List[str]:
         """
         Get all online client names list
-        
+
         Returns:
             List of online client names
         """
@@ -536,11 +536,11 @@ class Database:
         """
         Validate client name uniqueness
         Ensure the same client name is not assigned to different IP addresses
-        
+
         Args:
             client_name: Client name to validate
             client_ip: Client IP address
-            
+
         Returns:
             True if unique or belongs to same IP, False if conflicts
         """
@@ -548,11 +548,11 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('SELECT ip_address FROM clients WHERE name = ?', (client_name,))
             result = cursor.fetchone()
-            
+
             if result is None:
                 # New client name, allow registration
                 return True
-            
+
             # Check if it's the same IP address
             existing_ip = result[0]
             return existing_ip == client_ip
@@ -639,12 +639,12 @@ class Database:
             cursor.execute('SELECT * FROM clients')
             rows = cursor.fetchall()
             clients = [self._row_to_client(row) for row in rows]
-            
+
             # Update status based on heartbeat timing and current task
             current_time = datetime.now()
             from common.config import Config
             offline_threshold = timedelta(seconds=Config.CLIENT_TIMEOUT)  # Use configured timeout for offline detection
-            
+
             for client in clients:
                 if client.last_heartbeat is None:
                     # Never sent heartbeat, mark as offline
@@ -660,7 +660,7 @@ class Database:
                     else:
                         # Has recent heartbeat but no current task, mark as free (online)
                         client.status = ClientStatus.ONLINE
-            
+
             return clients
 
     def get_online_clients(self) -> List[Client]:
@@ -861,7 +861,7 @@ class Database:
             ))
             conn.commit()
             logger.debug(f"Logged client action: {client_ip} - {action}")
-            
+
             # Emit real-time log update via WebSocket
             if self.socketio:
                 log_entry = {
@@ -990,19 +990,19 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 cursor.execute('''
-                    UPDATE clients 
-                    SET current_task_id = ?, current_subtask_id = ? 
+                    UPDATE clients
+                    SET current_task_id = ?, current_subtask_id = ?
                     WHERE name = ?
                 ''', (task_id, subtask_id, client_name))
-                
+
                 if cursor.rowcount == 0:
                     logger.warning(f"Client '{client_name}' not found when updating current task")
                     return False
-                
+
                 conn.commit()
-                
+
                 # Log the update
                 if task_id and subtask_id:
                     logger.debug(f"Client '{client_name}' assigned to task {task_id}, subtask '{subtask_id}'")
@@ -1012,7 +1012,7 @@ class Database:
                     logger.debug(f"Client '{client_name}' freed from current task")
 
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to update client current task: {e}")
             return False
@@ -1063,19 +1063,19 @@ class Database:
             # Check if subtask_id column exists in executions table
             cursor.execute("PRAGMA table_info(executions)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'subtask_id' not in columns:
                 cursor.execute("ALTER TABLE executions ADD COLUMN subtask_id TEXT")
                 logger.info("Added subtask_id column to executions table")
-            
+
             # Check if current_subtask_id column exists in clients table
             cursor.execute("PRAGMA table_info(clients)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'current_subtask_id' not in columns:
                 cursor.execute("ALTER TABLE clients ADD COLUMN current_subtask_id TEXT")
                 logger.info("Added current_subtask_id column to clients table")
-                
+
         except Exception as e:
             logger.error(f"Failed to migrate subtask IDs: {e}")
 
@@ -1084,24 +1084,24 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                DELETE FROM executions 
+                DELETE FROM executions
                 WHERE task_id = ? AND subtask_name = ? AND client = ? AND status = 'pending'
             ''', (task_id, subtask_name, client))
             deleted_count = cursor.rowcount
             conn.commit()
-            
+
             if deleted_count > 0:
                 logger.info(f"Deleted {deleted_count} pending subtask execution(s) for task {task_id}, subtask '{subtask_name}', client '{client}'")
-            
+
             return deleted_count
-    
+
     def client_name_exists(self, client_name: str) -> bool:
         """Check if client name exists"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (client_name,))
             return cursor.fetchone()[0] > 0
-    
+
     def get_client_names(self) -> List[str]:
         """Get client names"""
         with self.get_connection() as conn:
@@ -1109,7 +1109,7 @@ class Database:
             cursor.execute('SELECT name FROM clients ORDER BY name ASC')
             rows = cursor.fetchall()
             return [row['name'] for row in rows]
-    
+
     def get_online_client_names(self) -> List[str]:
         """Get free client names using real-time status"""
         online_clients = self.get_online_clients()  # This uses real-time status calculation
@@ -1128,45 +1128,45 @@ class Database:
         """Get offline client names using real-time status"""
         offline_clients = self.get_offline_clients()  # This uses real-time status calculation
         return [client.name for client in offline_clients]
-    
+
     # Additional methods for result collection system
     def get_executions_filtered(self, task_id: int, subtask_name: str = None, client_name: str = None) -> List[SubtaskExecution]:
         """
         Get subtask execution records with optional filtering
-        
+
         Args:
             task_id: ID of the task
             subtask_name: Optional subtask name filter
             client_name: Optional client name filter
-            
+
         Returns:
             List of SubtaskExecution objects
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             query = 'SELECT * FROM executions WHERE task_id = ?'
             params = [task_id]
-            
+
             if subtask_name:
                 query += ' AND subtask_name = ?'
                 params.append(subtask_name)
-            
+
             if client_name:
                 query += ' AND client = ?'
                 params.append(client_name)
-            
+
             query += ' ORDER BY subtask_order ASC, started_at ASC'
-            
+
             cursor.execute(query, params)
             rows = cursor.fetchall()
             return [self._row_to_subtask_execution(row) for row in rows]
 
-    def update_task_status(self, task_id: int, status: TaskStatus, completed_at: datetime = None, 
+    def update_task_status(self, task_id: int, status: TaskStatus, completed_at: datetime = None,
                           result: str = None, error_message: str = None):
         """
         Update task status and completion information
-        
+
         Args:
             task_id: ID of the task to update
             status: New task status
@@ -1176,30 +1176,30 @@ class Database:
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             update_fields = ['status = ?']
             params = [status.value]
-            
+
             if completed_at:
                 update_fields.append('completed_at = ?')
                 params.append(completed_at.isoformat())
-            
+
             if result:
                 update_fields.append('result = ?')
                 params.append(result)
-            
+
             if error_message:
                 update_fields.append('error_message = ?')
                 params.append(error_message)
-            
+
             query = f'UPDATE tasks SET {", ".join(update_fields)} WHERE id = ?'
             params.append(task_id)
-            
+
             cursor.execute(query, params)
             conn.commit()
-            
+
             logger.debug(f"Updated task {task_id} status to {status.value}")
-            
+
             # Emit real-time update
             if self.socketio:
                 self.socketio.emit('task_status_updated', {
@@ -1213,19 +1213,19 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 # Only delete records that are pending (haven't started execution)
                 cursor.execute('''
-                    DELETE FROM executions 
+                    DELETE FROM executions
                     WHERE task_id = ? AND subtask_name = ? AND client = ? AND status = ?
                 ''', (task_id, subtask_name, client, TaskStatus.PENDING.value))
-                
+
                 deleted_count = cursor.rowcount
                 conn.commit()
-                
+
                 logger.info(f"Deleted {deleted_count} pending subtask execution records for task {task_id}, subtask '{subtask_name}', client '{client}'")
                 return deleted_count > 0
-                
+
         except Exception as e:
             logger.error(f"Failed to delete pending subtask executions: {e}")
             return False
@@ -1235,19 +1235,19 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 cursor.execute('''
-                    UPDATE clients 
-                    SET current_task_id = ?, current_subtask_id = ? 
+                    UPDATE clients
+                    SET current_task_id = ?, current_subtask_id = ?
                     WHERE name = ?
                 ''', (task_id, subtask_id, client_name))
-                
+
                 if cursor.rowcount == 0:
                     logger.warning(f"No client found with name: {client_name}")
                     return False
-                
+
                 conn.commit()
-                
+
                 # Log the update
                 if task_id and subtask_id:
                     logger.info(f"Client '{client_name}' started executing task {task_id}, subtask '{subtask_id}'")
@@ -1255,7 +1255,7 @@ class Database:
                     logger.info(f"Client '{client_name}' started executing task {task_id}")
                 else:
                     logger.info(f"Client '{client_name}' finished executing tasks")
-                
+
                 # Emit real-time update
                 if self.socketio:
                     self.socketio.emit('client_task_updated', {
@@ -1263,9 +1263,9 @@ class Database:
                         'task_id': task_id,
                         'subtask_id': subtask_id
                     })
-                
+
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to update client current task: {e}")
             return False
@@ -1276,19 +1276,19 @@ class Database:
             # Check if subtask_id column exists in executions table
             cursor.execute("PRAGMA table_info(executions)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'subtask_id' not in columns:
                 cursor.execute("ALTER TABLE executions ADD COLUMN subtask_id TEXT")
                 logger.info("Added subtask_id column to executions table")
-            
+
             # Check if current_subtask_id column exists in clients table
             cursor.execute("PRAGMA table_info(clients)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'current_subtask_id' not in columns:
                 cursor.execute("ALTER TABLE clients ADD COLUMN current_subtask_id TEXT")
                 logger.info("Added current_subtask_id column to clients table")
-                
+
         except Exception as e:
             logger.error(f"Failed to migrate subtask IDs: {e}")
             raise
@@ -1299,7 +1299,7 @@ class Database:
             # 1. Update tasks table: target_machines -> clients (if still exists), target_machine -> client (if still exists)
             cursor.execute("PRAGMA table_info(tasks)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             # Check if old target_machines column still exists (should be replaced by clients)
             if 'target_machines' in columns and 'clients' not in columns:
                 # Rename target_machines to clients
@@ -1311,17 +1311,17 @@ class Database:
                 # SQLite doesn't support DROP COLUMN directly, so we'll recreate the table
                 self._recreate_tasks_table_without_target_machines(cursor)
                 logger.info("Migrated data from target_machines to clients and removed old column")
-            
+
             # Check if old target_machine column still exists (should be removed as it's legacy)
             if 'target_machine' in columns:
                 # SQLite doesn't support DROP COLUMN directly, so we'll recreate the table
                 self._recreate_tasks_table_without_target_machine(cursor)
                 logger.info("Removed target_machine column from tasks table")
-            
+
             # 2. Update executions table: target_machine -> client
             cursor.execute("PRAGMA table_info(executions)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'target_machine' in columns and 'client' not in columns:
                 cursor.execute("ALTER TABLE executions RENAME COLUMN target_machine TO client")
                 logger.info("Renamed target_machine column to client in executions table")
@@ -1330,7 +1330,7 @@ class Database:
                 cursor.execute("UPDATE executions SET client = target_machine WHERE client IS NULL")
                 self._recreate_executions_table_without_target_machine(cursor)
                 logger.info("Migrated data from target_machine to client and removed old column")
-                
+
         except Exception as e:
             logger.error(f"Failed to migrate machine to client terminology: {e}")
             raise
@@ -1360,7 +1360,7 @@ class Database:
                 email_recipients TEXT
             )
         ''')
-        
+
         cursor.execute('''
             INSERT INTO tasks_new (id, name, command, clients, subtasks, execution_order,
                                  schedule_time, cron_expression, status, created_at, started_at,
@@ -1371,7 +1371,7 @@ class Database:
                    completed_at, result, error_message, retry_count, max_retries,
                    subtasks, send_email, email_recipients FROM tasks
         ''')
-        
+
         cursor.execute('DROP TABLE tasks')
         cursor.execute('ALTER TABLE tasks_new RENAME TO tasks')
 
@@ -1400,7 +1400,7 @@ class Database:
                 email_recipients TEXT
             )
         ''')
-        
+
         cursor.execute('''
             INSERT INTO tasks_new (id, name, command, clients, subtasks, execution_order,
                                  schedule_time, cron_expression, status, created_at, started_at,
@@ -1434,7 +1434,7 @@ class Database:
                 FOREIGN KEY (task_id) REFERENCES tasks (id)
             )
         ''')
-        
+
         cursor.execute('''
             INSERT INTO executions_new (id, task_id, subtask_name, subtask_order, client,
                                               started_at, completed_at, status, result, error_message,
@@ -1443,7 +1443,7 @@ class Database:
                    started_at, completed_at, status, result, error_message,
                    execution_time, subtask_id FROM executions
         ''')
-        
+
         cursor.execute('DROP TABLE executions')
         cursor.execute('ALTER TABLE executions_new RENAME TO executions')
 

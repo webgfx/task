@@ -262,9 +262,9 @@ function addSubtask() {
         <div class="subtask-content">
             <div class="form-row">
                 <div class="form-group">
-                    <label>Description <span class="required">*</span></label>
+                    <label>Select Subtask <span class="required">*</span></label>
                     <select class="subtask-name" onchange="updateSubtaskDescription(this)" required>
-                        <option value="">Select subtask...</option>
+                        <option value="">Select Subtask...</option>
                         ${availableSubtasks.map(subtask => {
                             let displayName = subtask.name;
                             let description = subtask.description || 'No description available';
@@ -393,23 +393,7 @@ function updateSubtaskDescription(selectElement) {
             let descriptionHTML = `
                 <small class="help-text">
                     <strong>Description:</strong> ${subtask.description || 'No description available'}
-            `;
-            
-            // Add result definition information if available
-            if (subtask.result_definition) {
-                const rd = subtask.result_definition;
-                
-                if (rd.format_hint) {
-                    descriptionHTML += `<br>
-                    <strong>Format:</strong> ${rd.format_hint}`;
-                }
-                
-                if (rd.required_fields && rd.required_fields.length > 0) {
-                    descriptionHTML += `<br>
-                    <strong>Required Fields:</strong> ${rd.required_fields.join(', ')}`;
-                }
-            }
-            
+            `;           
             descriptionHTML += '</small>';
             descriptionDiv.innerHTML = descriptionHTML;
         }
@@ -539,15 +523,10 @@ async function saveTask() {
                 closeTaskModal();
                 await refreshTasks();
             } else {
-                // For new tasks, show the generated subtask IDs briefly, then close
+                // For new tasks, close immediately as well
                 showNotification('Success', 'Task created successfully', 'success');
                 console.log('Task creation response:', response.data);
-                if (response.data && response.data.id) {
-                    await displayGeneratedSubtaskIds(response.data.id);
-                } else {
-                    console.warn('No task ID in response, closing modal');
-                    closeTaskModal();
-                }
+                closeTaskModal();
                 await refreshTasks();
             }
         } else {

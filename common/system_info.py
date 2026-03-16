@@ -83,20 +83,21 @@ def get_gpu_info() -> List[Dict[str, Any]]:
             
             # Method 2: If primary method fails, try to get the adapter being used by the current session
             # Focus on enabled devices (ConfigManagerErrorCode -eq 0) and exclude disabled ones (ErrorCode 22)
+            # Also exclude Microsoft Remote Display Adapter
             if not active_gpu_pnp_id:
                 result = subprocess.run([
                     'powershell', '-Command', 
-                    "Get-CimInstance -ClassName Win32_VideoController | Where-Object {$_.Name -notlike '*Basic*' -and $_.ConfigManagerErrorCode -eq 0 -and $_.Status -eq 'OK'} | Sort-Object AdapterRAM -Descending | Select-Object -First 1 -ExpandProperty PNPDeviceID"
+                    "Get-CimInstance -ClassName Win32_VideoController | Where-Object {$_.Name -notlike '*Basic*' -and $_.Name -notlike '*Remote Display*' -and $_.ConfigManagerErrorCode -eq 0 -and $_.Status -eq 'OK'} | Sort-Object AdapterRAM -Descending | Select-Object -First 1 -ExpandProperty PNPDeviceID"
                 ], capture_output=True, text=True, timeout=10)
                 
                 if result.returncode == 0 and result.stdout.strip():
                     active_gpu_pnp_id = result.stdout.strip()
             
-            # Method 3: If still no active GPU found, get any functioning GPU (not disabled)
+            # Method 3: If still no active GPU found, get any functioning GPU (not disabled, not remote display)
             if not active_gpu_pnp_id:
                 result = subprocess.run([
                     'powershell', '-Command', 
-                    "Get-CimInstance -ClassName Win32_VideoController | Where-Object {$_.ConfigManagerErrorCode -ne 22 -and $_.Name -notlike '*Basic*'} | Sort-Object AdapterRAM -Descending | Select-Object -First 1 -ExpandProperty PNPDeviceID"
+                    "Get-CimInstance -ClassName Win32_VideoController | Where-Object {$_.ConfigManagerErrorCode -ne 22 -and $_.Name -notlike '*Basic*' -and $_.Name -notlike '*Remote Display*'} | Sort-Object AdapterRAM -Descending | Select-Object -First 1 -ExpandProperty PNPDeviceID"
                 ], capture_output=True, text=True, timeout=10)
                 
                 if result.returncode == 0 and result.stdout.strip():
@@ -158,6 +159,10 @@ def get_gpu_info() -> List[Dict[str, Any]]:
                                     
                                     # Skip empty entries
                                     if not name or name.lower() in ['', 'null']:
+                                        continue
+                                    
+                                    # Skip Microsoft Remote Display Adapter (virtual display adapter)
+                                    if 'microsoft remote display' in name.lower() or 'remote display' in name.lower():
                                         continue
                                     
                                     # Check if GPU is disabled in Device Manager
@@ -397,6 +402,10 @@ def get_gpu_info() -> List[Dict[str, Any]]:
                                     name = parts[4] if len(parts) > 4 and parts[4] != 'NULL' else 'Unknown GPU'
                                     
                                     if not name or name == 'Unknown GPU':
+                                        continue
+                                    
+                                    # Skip Microsoft Remote Display Adapter (virtual display adapter)
+                                    if 'microsoft remote display' in name.lower() or 'remote display' in name.lower():
                                         continue
                                     
                                     # Clean up driver date

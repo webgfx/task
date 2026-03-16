@@ -230,15 +230,15 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"Failed to check pending execution tasks: {e}")
     
-    def _find_available_client(self, client=None):
+    def _find_available_client(self, client_name=None):
         """Find available clients"""
         try:
             online_clients = self.database.get_online_clients()
             
-            if client:
+            if client_name:
                 # Find specified client - accept both online and busy clients
                 for client in online_clients:
-                    if client.name == client and client.status in [ClientStatus.ONLINE, ClientStatus.BUSY]:
+                    if client.name == client_name and client.status in [ClientStatus.ONLINE, ClientStatus.BUSY]:
                         return client
                 return None
             else:
@@ -249,7 +249,6 @@ class TaskScheduler:
                 # If no online clients, try busy clients
                 for client in online_clients:
                     if client.status == ClientStatus.BUSY:
-                        return client
                         return client
                 return None
                 

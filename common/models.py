@@ -51,6 +51,7 @@ class SubtaskDefinition:
         }
 
 @dataclass
+@dataclass
 class Task:
     id: Optional[int] = None
     name: str = ""

@@ -23,7 +23,7 @@ class ClientInstaller:
     def __init__(self, install_dir=None, service_name=None):
         """
         Initialize client installer
-        
+
         Args:
             install_dir: Installation directory (default: ~/.task_client)
             service_name: Service name for registration (default: task-client)
@@ -33,17 +33,17 @@ class ClientInstaller:
         self.config_file = os.path.join(self.install_dir, 'config.json')
         self.log_dir = os.path.join(self.install_dir, 'logs')
         self.work_dir = os.path.join(self.install_dir, 'work')
-        
+
         # Ensure install directory exists
         os.makedirs(self.install_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
         os.makedirs(self.work_dir, exist_ok=True)
-    
+
     def install(self, server_url, client_name, **kwargs):
         """Install client with configuration"""
         try:
             logger.info(f"Installing task client to: {self.install_dir}")
-            
+
             # Create configuration
             config = {
                 'server_url': server_url,
@@ -58,47 +58,47 @@ class ClientInstaller:
                 'installed_at': kwargs.get('installed_at'),
                 'version': kwargs.get('version', '1.0.0')
             }
-            
+
             # Save configuration
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-            
+
             logger.info(f"Configuration saved to: {self.config_file}")
-            
+
             # Copy core files to installation directory
             self._copy_core_files()
-            
+
             # Create and customize client.cfg
             self._create_client_cfg(kwargs)
-            
+
             # Create startup scripts
             self._create_startup_scripts(config)
-            
+
             # Register as service (optional)
             if kwargs.get('register_service', False):
                 self._register_service(config)
-            
+
             logger.info("Client installation completed successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Installation failed: {e}")
             return False
-    
+
     def uninstall(self, remove_data=False):
         """Uninstall client"""
         try:
             logger.info("Uninstalling task client...")
-            
+
             # Stop service if running
             self._stop_service()
-            
+
             # Unregister service
             self._unregister_service()
-            
+
             # Remove startup scripts
             self._remove_startup_scripts()
-            
+
             # Remove core files (keep config and logs unless specified)
             if remove_data:
                 logger.info(f"Removing all data from: {self.install_dir}")
@@ -112,52 +112,52 @@ class ClientInstaller:
                     if os.path.exists(file_path):
                         os.remove(file_path)
                         logger.info(f"Removed: {file_path}")
-            
+
             logger.info("Client uninstallation completed")
             return True
-            
+
         except Exception as e:
             logger.error(f"Uninstallation failed: {e}")
             return False
-    
+
     def update_core_files(self):
         """Update only core execution files without changing configuration"""
         try:
             logger.info("Updating core client files...")
-            
+
             # Copy updated core files
             self._copy_core_files()
-            
+
             logger.info("Core files updated successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Core files update failed: {e}")
             return False
-    
+
     def _copy_core_files(self):
         """
         Copy only configuration files to installation directory.
-        
+
         Code runs directly from the repository so that updates (git pull) take
         effect automatically without reinstalling or restarting the service.
         Only config templates are copied to the install dir as starting points.
         """
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
-        
+
         # Only copy configuration templates — NOT code
         config_files = [
             ('client/client.cfg', 'client.cfg'),
         ]
-        
+
         for src_path, dst_name in config_files:
             src_file = os.path.join(project_root, src_path)
             dst_file = os.path.join(self.install_dir, dst_name)
-            
+
             # Create directory if needed
             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-            
+
             # Only copy if destination doesn't already exist (don't overwrite user config)
             if not os.path.exists(dst_file) and os.path.exists(src_file):
                 shutil.copy2(src_file, dst_file)
@@ -166,7 +166,7 @@ class ClientInstaller:
                 logger.debug(f"Skipped (already exists): {dst_name}")
             else:
                 logger.warning(f"Source file not found: {src_file}")
-        
+
         # Write the repo root path into the install dir so startup scripts know
         # where to find the code
         repo_root_file = os.path.join(self.install_dir, 'repo_root.txt')
@@ -176,7 +176,7 @@ class ClientInstaller:
                 logger.debug(f"Copied: {src_path} -> {dst_name}")
             else:
                 logger.warning(f"Source file not found: {src_file}")
-    
+
     def _create_startup_scripts(self, config):
         """Create startup scripts that run the client from the repo"""
         python_exe = sys.executable
@@ -184,7 +184,7 @@ class ClientInstaller:
         project_root = os.path.dirname(current_dir)
         runner_script = os.path.join(project_root, 'client', 'client_runner.py')
         cfg_file = os.path.join(self.install_dir, 'client.cfg')
-        
+
         # Windows batch script — runs directly from repo
         batch_content = f"""@echo off
 "{python_exe}" "{runner_script}" --repo-root "{project_root}" --cfg "{cfg_file}"
@@ -192,7 +192,7 @@ class ClientInstaller:
         batch_file = os.path.join(self.install_dir, 'start_client.bat')
         with open(batch_file, 'w', encoding='utf-8') as f:
             f.write(batch_content)
-        
+
         # Windows stop script
         stop_batch_content = """@echo off
 taskkill /F /IM python.exe /FI "WINDOWTITLE eq Task Client*" 2>nul
@@ -201,7 +201,7 @@ echo Task client stopped
         stop_batch_file = os.path.join(self.install_dir, 'stop_client.bat')
         with open(stop_batch_file, 'w', encoding='utf-8') as f:
             f.write(stop_batch_content)
-        
+
         # Unix shell script — runs directly from repo
         shell_content = f"""#!/bin/bash
 "{python_exe}" "{runner_script}" --repo-root "{project_root}" --cfg "{cfg_file}"
@@ -209,11 +209,11 @@ echo Task client stopped
         shell_file = os.path.join(self.install_dir, 'start_client.sh')
         with open(shell_file, 'w', encoding='utf-8') as f:
             f.write(shell_content)
-        
+
         # Make shell script executable
         if os.name != 'nt':
             os.chmod(shell_file, 0o755)
-        
+
         # Unix stop script
         stop_shell_content = f"""#!/bin/bash
 pkill -f "client_runner.py"
@@ -222,22 +222,22 @@ echo "Task client stopped"
         stop_shell_file = os.path.join(self.install_dir, 'stop_client.sh')
         with open(stop_shell_file, 'w', encoding='utf-8') as f:
             f.write(stop_shell_content)
-        
+
         if os.name != 'nt':
             os.chmod(stop_shell_file, 0o755)
-        
+
         logger.info("Startup scripts created")
-    
+
     def _create_client_cfg(self, kwargs):
         """Create customized client.cfg file"""
         try:
             # Read template client.cfg
             current_dir = os.path.dirname(os.path.abspath(__file__))
             template_cfg_path = os.path.join(current_dir, 'client.cfg')
-            
+
             import configparser
             config = configparser.ConfigParser()
-            
+
             if os.path.exists(template_cfg_path):
                 config.read(template_cfg_path, encoding='utf-8')
             else:
@@ -247,11 +247,11 @@ echo "Task client stopped"
                 config['ADVANCED'] = {}
                 config['SECURITY'] = {}
                 config['PERFORMANCE'] = {}
-            
+
             # Customize with installation parameters
             if 'DEFAULT' not in config:
                 config['DEFAULT'] = {}
-            
+
             # Set configuration values from installation parameters
             # Note: heartbeat_interval is now in common.cfg, not client.cfg
             config['DEFAULT']['config_update_interval'] = str(kwargs.get('config_update_interval', 600))
@@ -259,21 +259,21 @@ echo "Task client stopped"
             config['DEFAULT']['install_dir'] = self.install_dir
             config['DEFAULT']['log_dir'] = 'logs'
             config['DEFAULT']['work_dir'] = 'work'
-            
+
             # Save customized client.cfg to installation directory
             cfg_file_path = os.path.join(self.install_dir, 'client.cfg')
             with open(cfg_file_path, 'w', encoding='utf-8') as f:
                 config.write(f)
-            
+
             logger.info(f"Customized client.cfg created: {cfg_file_path}")
-            
+
         except Exception as e:
             logger.error(f"Failed to create client.cfg: {e}")
             # Create a minimal configuration file
             minimal_cfg_content = f"""# Task Client Configuration File
 [DEFAULT]
 server_url = http://localhost:5000
-client_name = 
+client_name =
 # Note: heartbeat_interval is now configured in common.cfg
 config_update_interval = {kwargs.get('config_update_interval', 600)}
 log_level = {kwargs.get('log_level', 'INFO')}
@@ -297,7 +297,7 @@ max_concurrent_tasks = 1
             with open(cfg_file_path, 'w', encoding='utf-8') as f:
                 f.write(minimal_cfg_content)
             logger.info(f"Minimal client.cfg created: {cfg_file_path}")
-    
+
     def _remove_startup_scripts(self):
         """Remove startup scripts"""
         scripts = ['start_client.bat', 'stop_client.bat', 'start_client.sh', 'stop_client.sh']
@@ -306,14 +306,14 @@ max_concurrent_tasks = 1
             if os.path.exists(script_path):
                 os.remove(script_path)
                 logger.debug(f"Removed script: {script_path}")
-    
+
     def _register_service(self, config):
         """Register as system service (platform specific)"""
         if os.name == 'nt':
             self._register_windows_service(config)
         else:
             self._register_unix_service(config)
-    
+
     def _register_windows_service(self, config):
         """Register Windows service"""
         try:
@@ -321,7 +321,7 @@ max_concurrent_tasks = 1
             logger.info("Windows service registration not implemented yet")
         except Exception as e:
             logger.error(f"Windows service registration failed: {e}")
-    
+
     def _register_unix_service(self, config):
         """Register Unix/Linux systemd service"""
         try:
@@ -329,34 +329,34 @@ max_concurrent_tasks = 1
             logger.info("Unix service registration not implemented yet")
         except Exception as e:
             logger.error(f"Unix service registration failed: {e}")
-    
+
     def _unregister_service(self):
         """Unregister system service"""
         try:
             logger.info("Service unregistration not implemented yet")
         except Exception as e:
             logger.error(f"Service unregistration failed: {e}")
-    
+
     def _stop_service(self):
         """Stop running service"""
         try:
             if os.name == 'nt':
                 # Windows
-                subprocess.run(['taskkill', '/F', '/IM', 'python.exe', '/FI', 'WINDOWTITLE eq Task Client*'], 
+                subprocess.run(['taskkill', '/F', '/IM', 'python.exe', '/FI', 'WINDOWTITLE eq Task Client*'],
                              capture_output=True, check=False)
             else:
                 # Unix/Linux
-                subprocess.run(['pkill', '-f', 'client_runner.py'], 
+                subprocess.run(['pkill', '-f', 'client_runner.py'],
                              capture_output=True, check=False)
             logger.info("Service stopped")
         except Exception as e:
             logger.error(f"Failed to stop service: {e}")
-    
+
     def get_installation_info(self):
         """Get current installation information"""
         if not os.path.exists(self.config_file):
             return None
-        
+
         try:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
@@ -364,7 +364,7 @@ max_concurrent_tasks = 1
         except Exception as e:
             logger.error(f"Failed to read installation info: {e}")
             return None
-    
+
     def is_installed(self):
         """Check if client is installed"""
         return os.path.exists(self.config_file)
@@ -377,7 +377,7 @@ def main():
                        help='Action to perform')
     parser.add_argument('--server-url', default='http://localhost:5000',
                        help='Server URL (required for install)')
-    parser.add_argument('--client-name', 
+    parser.add_argument('--client-name',
                        help='Client name (required for install)')
     parser.add_argument('--install-dir',
                        help='Installation directory (default: ~/.task_client)')
@@ -394,21 +394,21 @@ def main():
                        help='Register as system service')
     parser.add_argument('--remove-data', action='store_true',
                        help='Remove all data during uninstall')
-    
+
     args = parser.parse_args()
-    
+
     # Setup logging
     setup_logging(args.log_level)
-    
+
     # Create installer
     installer = ClientInstaller(args.install_dir, args.service_name)
-    
+
     try:
         if args.action == 'install':
             if not args.client_name:
                 print("Error: --client-name is required for installation")
                 sys.exit(1)
-            
+
             success = installer.install(
                 server_url=args.server_url,
                 client_name=args.client_name,
@@ -418,41 +418,41 @@ def main():
                 register_service=args.register_service,
                 installed_at=datetime.now().isoformat()
             )
-            
+
             if success:
                 print(f"✅ Client installed successfully to: {installer.install_dir}")
                 print(f"To start the client, run: {os.path.join(installer.install_dir, 'start_client.bat' if os.name == 'nt' else 'start_client.sh')}")
             else:
                 print("❌ Installation failed")
                 sys.exit(1)
-        
+
         elif args.action == 'uninstall':
             if not installer.is_installed():
                 print("Client is not installed")
                 sys.exit(1)
-            
+
             success = installer.uninstall(remove_data=args.remove_data)
-            
+
             if success:
                 print("✅ Client uninstalled successfully")
             else:
                 print("❌ Uninstallation failed")
                 sys.exit(1)
-        
+
         elif args.action == 'update':
             if not installer.is_installed():
                 print("Client is not installed. Please install first.")
                 sys.exit(1)
-            
+
             success = installer.update_core_files()
-            
+
             if success:
                 print("✅ Core files updated successfully")
                 print("Restart the client to apply changes")
             else:
                 print("❌ Update failed")
                 sys.exit(1)
-        
+
         elif args.action == 'info':
             info = installer.get_installation_info()
             if info:
@@ -461,7 +461,7 @@ def main():
                     print(f"  {key}: {value}")
             else:
                 print("Client is not installed")
-        
+
         elif args.action == 'status':
             if installer.is_installed():
                 print("✅ Client is installed")
@@ -472,7 +472,7 @@ def main():
                     print(f"  Server URL: {info.get('server_url', 'Unknown')}")
             else:
                 print("❌ Client is not installed")
-    
+
     except KeyboardInterrupt:
         print("\nOperation cancelled by user")
         sys.exit(1)

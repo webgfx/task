@@ -277,7 +277,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             success = database.delete_task(task_id)
-            
+
             if success:
                 # Note: WebSocket emission is now handled in the database method
                 return jsonify({
@@ -308,7 +308,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Get copy parameters from request
             data = request.get_json() or {}
-            
+
             # Create copied task data with defaults from original
             copied_task_data = {
                 'name': data.get('name', f"{original_task.name} (Copy)"),
@@ -316,14 +316,14 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'send_email': data.get('send_email', original_task.send_email),
                 'email_recipients': data.get('email_recipients', original_task.email_recipients)
             }
-            
+
             # Handle schedule - default to immediate execution for copies
             schedule_type = data.get('schedule_type', 'immediate')
             if schedule_type == 'scheduled' and data.get('schedule_time'):
                 copied_task_data['schedule_time'] = data.get('schedule_time')
             elif schedule_type == 'cron' and data.get('cron_expression'):
                 copied_task_data['cron_expression'] = data.get('cron_expression')
-            
+
             # Copy subtasks from original task
             if original_task.subtasks:
                 for subtask in original_task.subtasks:
@@ -337,7 +337,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         # Note: subtask_id will be auto-generated for new task
                     }
                     copied_task_data['subtasks'].append(copied_subtask)
-            
+
             # Apply any client modifications if specified
             if data.get('update_clients'):
                 client_updates = data.get('client_updates', {})
@@ -345,14 +345,14 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     old_client = subtask['client']
                     if old_client in client_updates:
                         subtask['client'] = client_updates[old_client]
-            
+
             # Validate the copied task data using the same logic as create_task
             if not copied_task_data['name']:
                 return jsonify({
                     'success': False,
                     'error': 'Task name cannot be empty'
                 }), 400
-            
+
             # Parse and validate subtasks
             subtasks = []
             for i, subtask_data in enumerate(copied_task_data['subtasks']):
@@ -469,7 +469,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         try:
             data = request.get_json() or {}
             client = data.get('client')
-            
+
             if not client:
                 return jsonify({
                     'success': False,
@@ -519,9 +519,9 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         subtask_id = execution.subtask_id
 
             # Remove the subtask from the task
-            task.subtasks = [s for s in task.subtasks 
+            task.subtasks = [s for s in task.subtasks
                            if not (s.name == subtask_name and s.client == client)]
-            
+
             # Update clients list if no more subtasks target this client
             remaining_clients = set(s.client for s in task.subtasks)
             task.clients = [m for m in task.clients if m in remaining_clients]
@@ -592,7 +592,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Update subtask execution status (called by client)"""
         try:
             data = request.get_json()
-            
+
             # Enhanced logging for subtask execution status
             subtask_name = data.get('subtask_name')
             client = data.get('client')
@@ -600,12 +600,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
             execution_time = data.get('execution_time')
             result = data.get('result')
             error_message = data.get('error_message')
-            
+
             # Enhanced logging for subtask result reception
             logger.info(f"📨 RESULT_RECEIVED: Task {task_id} - '{subtask_name}' from client '{client}' - Status: {status}")
             if execution_time:
                 logger.info(f"RESULT_TIMING: Task {task_id} - '{subtask_name}' executed in {execution_time:.2f}s on '{client}'")
-            
+
             # Log result details based on status
             if status == 'completed' and result:
                 result_preview = str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
@@ -613,7 +613,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             elif status == 'failed' and error_message:
                 error_preview = str(error_message)[:100] + "..." if len(str(error_message)) > 100 else str(error_message)
                 logger.info(f"RESULT_ERROR: Task {task_id} - '{subtask_name}' → Error: {error_preview}")
-            
+
             logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' on '{client}' - Status: {status}")
             if execution_time:
                 logger.info(f"SUBTASK_EXECUTION: Task {task_id} - '{subtask_name}' execution time: {execution_time}s")
@@ -643,17 +643,17 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if not execution:
                 # Create new execution record
                 from common.models import SubtaskExecution
-                
+
                 # Find the subtask definition to get the subtask_id
                 task = database.get_task(task_id)
                 subtask_id = None
                 if task and task.subtasks:
                     for subtask_def in task.subtasks:
-                        if (subtask_def.name == data['subtask_name'] and 
+                        if (subtask_def.name == data['subtask_name'] and
                             subtask_def.client == data['client']):
                             subtask_id = subtask_def.subtask_id
                             break
-                
+
                 execution = SubtaskExecution(
                     task_id=task_id,
                     subtask_id=subtask_id or f"{data.get('order', 0)}_{data['subtask_name']}",  # Fallback ID
@@ -685,11 +685,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 task = database.get_task(task_id)
                 if task and task.subtasks:
                     for subtask_def in task.subtasks:
-                        if (subtask_def.name == data['subtask_name'] and 
+                        if (subtask_def.name == data['subtask_name'] and
                             subtask_def.client == data['client']):
                             database.update_client_current_task(
-                                data['client'], 
-                                task_id, 
+                                data['client'],
+                                task_id,
                                 subtask_def.subtask_id
                             )
                             break
@@ -698,16 +698,16 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 task = database.get_task(task_id)
                 if task and task.subtasks:
                     remaining_subtasks = [
-                        s for s in task.subtasks 
-                        if (s.client == data['client'] and 
+                        s for s in task.subtasks
+                        if (s.client == data['client'] and
                             s.order > data.get('order', 0))
                     ]
                     if remaining_subtasks:
                         # Move to next subtask
                         next_subtask = min(remaining_subtasks, key=lambda x: x.order)
                         database.update_client_current_task(
-                            data['client'], 
-                            task_id, 
+                            data['client'],
+                            task_id,
                             next_subtask.subtask_id
                         )
                     else:
@@ -718,7 +718,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Check if all subtasks are completed and update overall task status
             logger.debug(f"SUBTASK_EXECUTION: Checking task completion for task {task_id}")
-            
+
             # Notify result collector about subtask completion
             if result_collector and data['status'] in ['completed', 'failed']:
                 result_collector.on_subtask_completion(
@@ -733,7 +733,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             else:
                 # Fallback to original completion check
                 check_and_update_task_completion(task_id)
-            
+
             logger.info(f"DEBUG: Finished processing subtask completion for task {task_id}")
 
             # Broadcast subtask status update
@@ -764,7 +764,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         try:
             subtasks = list_subtasks()
             subtask_info = []
-            
+
             for subtask_name in subtasks:
                 subtask_instance = get_subtask(subtask_name)
                 if subtask_instance:
@@ -775,7 +775,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         'description': description.strip(),
                         'function': subtask_name  # Use the name instead of function name
                     })
-            
+
             return jsonify({
                 'success': True,
                 'data': subtask_info,
@@ -793,10 +793,10 @@ def create_api_blueprint(database, socketio, result_collector=None):
             data = request.get_json() or {}
             args = data.get('args', [])
             kwargs = data.get('kwargs', {})
-            
+
             # Execute the subtask
             result = execute_subtask(subtask_name, *args, **kwargs)
-            
+
             return jsonify({
                 'success': result['success'],
                 'data': result['result'],
@@ -824,7 +824,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'description': subtask_func.get_description(),
                 'module': subtask_func.__class__.__module__,
             }
-            
+
             # Try to get function signature if available
             try:
                 import inspect
@@ -885,12 +885,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Get all clients with enhanced task information"""
         try:
             clients = database.get_all_clients()
-            
+
             # Enhance clients with task names
             enhanced_clients = []
             for client in clients:
                 client_dict = client.to_dict()
-                
+
                 # Add task name if client has current task
                 if client.current_task_id:
                     task = database.get_task(client.current_task_id)
@@ -900,9 +900,9 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         client_dict['current_task_name'] = 'Unknown Task'
                 else:
                     client_dict['current_task_name'] = None
-                
+
                 enhanced_clients.append(client_dict)
-            
+
             return jsonify({
                 'success': True,
                 'data': enhanced_clients
@@ -981,7 +981,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 logger.info(f"CLIENT_REGISTRATION: Updated existing client '{client.name}' ({client.ip_address})")
             else:
                 logger.info(f"CLIENT_REGISTRATION: New client '{client.name}' registered from {client.ip_address}")
-            
+
             # Log system information
             if client.system_summary:
                 logger.info(f"CLIENT_REGISTRATION: Client '{client.name}' system info:")
@@ -1142,7 +1142,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         # Check if system information has actually changed
                         old_system_summary = client.system_summary or {}
                         new_system_summary = data.get('system_summary', {})
-                        
+
                         # Update system information if provided
                         changes_detected = False
                         if 'cpu_info' in data:
@@ -1171,13 +1171,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
                                 client.system_summary = data['system_summary']
                                 changes_detected = True
                                 logger.debug(f"HEARTBEAT: System summary changed for '{client_name}'")
-                        
+
                         # Only update if changes were detected
                         if changes_detected:
                             # Use update_client_config for system info updates
                             database.update_client_config(client)
                             system_info_updated = True
-                            
+
                             logger.info(f"HEARTBEAT: Updated system information for client '{client_name}' (changes detected)")
                             if client.system_summary:
                                 logger.debug(f"  Updated CPU: {client.system_summary.get('cpu', 'Unknown')}")
@@ -1186,7 +1186,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                             logger.debug(f"HEARTBEAT: No system information changes detected for '{client_name}'")
                     else:
                         logger.warning(f"HEARTBEAT: Client '{client_name}' not found for system info update")
-                        
+
                 except Exception as e:
                     logger.warning(f"HEARTBEAT: Failed to update system information for '{client_name}': {e}")
                     import traceback
@@ -1201,7 +1201,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if system_info_updated:
                 heartbeat_msg += " (with fresh system info)"
             logger.info(heartbeat_msg)
-            
+
             if client:
                 logger.debug(f"HEARTBEAT: Client '{client_name}' last seen at {datetime.now().isoformat()}")
 
@@ -1425,13 +1425,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
         try:
             if not result_collector:
                 return jsonify({
-                    'success': False, 
+                    'success': False,
                     'error': 'Result collector not available'
                 }), 503
-            
+
             force = request.args.get('force', 'false').lower() == 'true'
             report_path = result_collector.generate_report_for_task(task_id, force=force)
-            
+
             if report_path:
                 return jsonify({
                     'success': True,
@@ -1443,7 +1443,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'success': False,
                     'error': 'Failed to generate report'
                 }), 500
-                
+
         except Exception as e:
             logger.error(f"Generate task report failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -1454,12 +1454,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
         try:
             if not result_collector:
                 return jsonify({
-                    'success': False, 
+                    'success': False,
                     'error': 'Result collector not available'
                 }), 503
-            
+
             success = result_collector.send_manual_notification(task_id)
-            
+
             if success:
                 return jsonify({
                     'success': True,
@@ -1470,7 +1470,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'success': False,
                     'error': 'Failed to send email notification'
                 }), 500
-                
+
         except Exception as e:
             logger.error(f"Send task notification failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -1480,7 +1480,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Get subtask definitions with result specifications"""
         try:
             from common.subtasks import list_subtasks, get_subtask
-            
+
             # Build definitions using the new class-based system
             result = {}
             for subtask_name in list_subtasks():
@@ -1498,12 +1498,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
                             'format_hint': 'Any valid JSON object'
                         }
                     }
-            
+
             return jsonify({
                 'success': True,
                 'data': result
             })
-            
+
         except Exception as e:
             logger.error(f"Get subtask definitions failed: {e}")
             return jsonify({
@@ -1516,14 +1516,14 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Reload all subtask modules to pick up changes without restarting the service"""
         try:
             from common.subtasks import reload_subtasks
-            
+
             # Reload subtasks on server
             reloaded_count = reload_subtasks()
-            
+
             # Get client name from request (optional - if not specified, broadcast to all)
             data = request.get_json() or {}
             client_name = data.get('client_name')
-            
+
             # Send reload request to client(s) via SocketIO
             if client_name:
                 # Send to specific client
@@ -1535,16 +1535,16 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 socketio.emit('reload_subtasks', {'client_name': None})
                 logger.info("Sent subtask reload request to all clients")
                 target_info = "all clients"
-            
+
             logger.info(f"Server subtasks reloaded via API: {reloaded_count} modules")
-            
+
             return jsonify({
                 'success': True,
                 'message': f'Successfully reloaded {reloaded_count} subtask modules on server and sent reload request to {target_info}',
                 'reloaded_count': reloaded_count,
                 'target': target_info
             })
-            
+
         except Exception as e:
             logger.error(f"Reload subtasks failed: {e}")
             return jsonify({
@@ -1576,21 +1576,21 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Clear client logs before a specified date"""
         try:
             data = request.get_json()
-            
+
             if 'clear_before_date' in data:
                 # Clear logs before specific date
                 clear_date = data['clear_before_date']
-                
+
                 # Validate date format
                 try:
                     from datetime import datetime
                     datetime.strptime(clear_date, '%Y-%m-%d')
                 except ValueError:
                     return jsonify({
-                        'success': False, 
+                        'success': False,
                         'error': 'Invalid date format. Use YYYY-MM-DD.'
                     }), 400
-                
+
                 # Clear logs directly with SQL
                 with database.get_connection() as conn:
                     cursor = conn.cursor()
@@ -1600,15 +1600,15 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     ''', (clear_date,))
                     deleted_count = cursor.rowcount
                     conn.commit()
-                
+
                 message = f"Cleared {deleted_count} log entries before {clear_date}"
-                
+
             elif 'older_than_days' in data:
                 # Legacy support for older_than_days
                 days = int(data['older_than_days'])
                 deleted_count = database.clear_client_logs(older_than_days=days)
                 message = f"Cleared {deleted_count} log entries older than {days} days"
-                
+
             else:
                 return jsonify({
                     'success': False,
@@ -1630,7 +1630,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Ping a client via WebSocket and get its real-time status"""
         try:
             logger.info(f"PING: Starting ping for client '{client_name}'")
-            
+
             # Get client from database
             client = database.get_client_by_name(client_name)
             if not client:
@@ -1638,19 +1638,19 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'success': False,
                     'error': f'Client "{client_name}" not found'
                 }), 404
-            
+
             # Check if client has recent heartbeat (basic connectivity check)
             current_time = datetime.now()
             is_reachable = False
             response_time = None
-            
+
             if client.last_heartbeat:
                 time_since_heartbeat = current_time - client.last_heartbeat
                 response_time = f"{time_since_heartbeat.total_seconds():.1f}s ago"
                 is_reachable = time_since_heartbeat.total_seconds() <= 30
             else:
                 response_time = "Never"
-            
+
             if not is_reachable:
                 # Client is offline - no point in trying to ping
                 return jsonify({
@@ -1663,10 +1663,10 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         'ping_success': False
                     }
                 })
-            
+
             # Send ping request via WebSocket and wait for response
             ping_response = send_ping_to_client(client_name, socketio)
-            
+
             if ping_response is None:
                 # No WebSocket connection or timeout
                 working_status = 'offline'
@@ -1678,7 +1678,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 message = f"Client '{client_name}' responded - Status: {working_status.upper()}"
                 if response_time:
                     message += f" (last heartbeat {response_time})"
-            
+
             # Broadcast real-time update
             socketio.emit('client_status_updated', {
                 'client_name': client_name,
@@ -1686,7 +1686,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'ping_success': ping_success,
                 'response_time': response_time
             })
-            
+
             return jsonify({
                 'success': True,
                 'message': message,
@@ -1697,7 +1697,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'ping_success': ping_success
                 }
             })
-            
+
         except Exception as e:
             logger.error(f"PING: Failed to ping client '{client_name}': {e}")
             return jsonify({
@@ -1775,12 +1775,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
         try:
             # Check if only online clients are requested
             only_online = request.args.get('online', '').lower() == 'true'
-            
+
             if only_online:
                 client_names = database.get_online_client_names()
             else:
                 client_names = database.get_client_names()
-            
+
             return jsonify({
                 'success': True,
                 'data': client_names
@@ -1795,16 +1795,16 @@ def create_api_blueprint(database, socketio, result_collector=None):
         try:
             data = request.get_json()
             client_name = data.get('name')
-            
+
             if not client_name:
                 return jsonify({
                     'success': False,
                     'error': 'Client name is required'
                 }), 400
-            
+
             # Check if name already exists
             exists = database.client_name_exists(client_name)
-            
+
             return jsonify({
                 'success': True,
                 'data': {
@@ -1813,7 +1813,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'exists': exists
                 }
             })
-            
+
         except Exception as e:
             logger.error(f"Validate client name failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -1827,7 +1827,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def check_and_update_task_completion(task_id):
         """
         Check if all subtasks are completed and update overall task status
-        
+
         Args:
             task_id: ID of the task to check
         """
@@ -1837,41 +1837,41 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if not task or not task.subtasks:
                 logger.warning(f"TASK_COMPLETION: Task {task_id} not found or has no subtasks")
                 return
-            
+
             # Get all subtask executions for this task
             executions = database.get_executions(task_id)
             logger.debug(f"TASK_COMPLETION: Found {len(executions)} subtask executions for task {task_id}")
-            
+
             # Create a map of executed subtasks
             execution_map = {}
             for exec in executions:
                 key = f"{exec.subtask_name}_{exec.client}"
                 execution_map[key] = exec
-            
+
             # Check completion status
             total_subtasks = len(task.subtasks)
             completed_subtasks = 0
             failed_subtasks = 0
-            
+
             for subtask in task.subtasks:
                 key = f"{subtask.name}_{subtask.client}"
                 execution = execution_map.get(key)
-                
+
                 if execution:
                     if execution.status == TaskStatus.COMPLETED:
                         completed_subtasks += 1
                     elif execution.status == TaskStatus.FAILED:
                         failed_subtasks += 1
-            
+
             # Determine if task is complete
             all_subtasks_finished = (completed_subtasks + failed_subtasks) == total_subtasks
-            
+
             logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' - Progress: {completed_subtasks}/{total_subtasks} completed, {failed_subtasks} failed")
-            
+
             if all_subtasks_finished and task.status not in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
                 # Update task status
                 task.completed_at = datetime.now()
-                
+
                 if failed_subtasks > 0:
                     task.status = TaskStatus.FAILED
                     task.error_message = f"{failed_subtasks} out of {total_subtasks} subtasks failed"
@@ -1880,16 +1880,16 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     task.status = TaskStatus.COMPLETED
                     task.result = f"All {total_subtasks} subtasks completed successfully"
                     logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' COMPLETED successfully - All {total_subtasks} subtasks completed")
-                
+
                 update_success = database.update_task(task)
-                
+
                 # Clear current task from all clients that were working on this task
                 clients = task.get_all_clients()
                 for client_name in clients:
                     database.update_client_current_task(client_name, None, None)
                     # Also update client status back to online if it was busy
                     database.update_client_heartbeat_by_name(client_name, ClientStatus.ONLINE)
-                
+
                 # Broadcast task completion
                 logger.info(f"TASK_COMPLETION: Broadcasting completion event for task {task_id}")
                 socketio.emit('task_completed', {
@@ -1903,7 +1903,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'result': task.result,
                     'error_message': task.error_message
                 })
-        
+
         except Exception as e:
             logger.error(f"TASK_COMPLETION: Failed to check task completion for task {task_id}: {e}")
 
@@ -1915,46 +1915,46 @@ def create_api_blueprint(database, socketio, result_collector=None):
             client_name = data.get('client_name')
             task_id = data.get('task_id')
             subtask_id = data.get('subtask_id')
-            
+
             success = database.update_client_current_task(client_name, task_id, subtask_id)
-            
+
             return jsonify({
                 'success': success,
                 'message': f"Updated client '{client_name}' current task to {task_id}, subtask {subtask_id}"
             })
-            
+
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
     def send_ping_to_client(client_name, socketio_instance):
         """
         Send a ping request to a specific client via WebSocket and wait for response
-        
+
         Args:
             client_name: Name of the client to ping
             socketio_instance: SocketIO instance to use for communication
-            
+
         Returns:
             dict: Response from client with status information, or None if no response
         """
         import threading
         import time
-        
+
         # Storage for ping response
         ping_responses = {}
         ping_event = threading.Event()
-        
+
         def ping_response_handler(data):
             """Handle ping response from client"""
             if data.get('client_name') == client_name:
                 ping_responses[client_name] = data
                 ping_event.set()
-                
+
                 # Update system information if provided in ping response
                 try:
                     if any(key in data for key in ['cpu_info', 'memory_info', 'gpu_info', 'os_info', 'disk_info', 'system_summary']):
                         logger.info(f"PING: Updating client system info from ping response for '{client_name}'")
-                        
+
                         # Get existing client
                         client = database.get_client_by_name(client_name)
                         if client:
@@ -1972,11 +1972,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
                                 update_data['disk_info'] = data['disk_info']
                             if 'system_summary' in data:
                                 update_data['system_summary'] = data['system_summary']
-                            
+
                             if update_data:
                                 database.update_client_config(client_name, update_data)
                                 logger.info(f"PING: Updated system info for client '{client_name}' from ping response")
-                                
+
                                 # Emit system info update event
                                 socketio_instance.emit('client_config_updated', {
                                     'client_name': client_name,
@@ -1985,15 +1985,15 @@ def create_api_blueprint(database, socketio, result_collector=None):
                                 })
                         else:
                             logger.warning(f"PING: Client '{client_name}' not found for system info update")
-                            
+
                 except Exception as e:
                     logger.error(f"PING: Failed to update system info from ping response: {e}")
-        
+
         # Register temporary event handler for ping responses
         @socketio_instance.event
         def client_ping_response(data):
             ping_response_handler(data)
-        
+
         try:
             # Send ping request to specific client
             logger.info(f"PING: Sending ping request to client '{client_name}'")
@@ -2001,10 +2001,10 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 'client_name': client_name,
                 'timestamp': datetime.now().isoformat()
             })
-            
+
             # Wait for response with timeout
             response_received = ping_event.wait(timeout=5.0)  # 5 second timeout
-            
+
             if response_received and client_name in ping_responses:
                 response = ping_responses[client_name]
                 logger.info(f"PING: Received response from client '{client_name}': {response.get('status', 'unknown')}")
@@ -2012,7 +2012,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             else:
                 logger.warning(f"PING: No response from client '{client_name}' within timeout")
                 return None
-                
+
         except Exception as e:
             logger.error(f"PING: Error sending ping to client '{client_name}': {e}")
             return None

@@ -473,3 +473,47 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Subtask reload functionality
+async function reloadSubtasks() {
+    const button = document.getElementById('reloadSubtasksBtn');
+    if (!button) return;
+    
+    // Disable button and show loading state
+    const originalContent = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reloading...';
+    
+    try {
+        const response = await fetch('/api/subtasks/reload', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Subtasks Reloaded', 
+                `Successfully reloaded ${result.reloaded_count} subtask modules on ${result.target}`, 
+                'success');
+            console.log('Subtask reload successful:', result);
+        } else {
+            showNotification('Reload Failed', 
+                result.error || 'Failed to reload subtasks', 
+                'error');
+            console.error('Subtask reload failed:', result);
+        }
+        
+    } catch (error) {
+        console.error('Error calling reload API:', error);
+        showNotification('Reload Error', 
+            'Failed to call reload API: ' + error.message, 
+            'error');
+    } finally {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalContent;
+    }
+}

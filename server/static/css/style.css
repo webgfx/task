@@ -817,43 +817,43 @@ body {
         transform: translateX(-100%);
         transition: transform 0.3s ease;
     }
-    
+
     .sidebar.open {
         transform: translateX(0);
     }
-    
+
     .main-content {
         margin-left: 0;
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .charts-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .realtime-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .filters {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .header-content {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .modal-content {
         width: 95%;
         margin: 10% auto;
         max-height: 90vh;
     }
-    
+
     #taskDetailContent,
     #clientDetailContent {
         max-height: 50vh;
@@ -1024,15 +1024,15 @@ body {
     .overview-stats {
         grid-template-columns: repeat(3, 1fr);
     }
-    
+
     .stat-item {
         padding: 10px;
     }
-    
+
     .stat-number {
         font-size: 1.4rem;
     }
-    
+
     .subtask-detail-header {
         flex-direction: column;
         align-items: flex-start;
@@ -1541,7 +1541,7 @@ body {
     .enhanced-task-table {
         font-size: 0.85rem;
     }
-    
+
     .enhanced-task-table .task-name-col { width: 20%; }
     .enhanced-task-table .subtask-col { width: 18%; }
     .enhanced-task-table .client-col { width: 12%; }
@@ -1863,7 +1863,7 @@ body {
         align-items: flex-start;
         gap: 4px;
     }
-    
+
     .system-info-item .info-label {
         min-width: auto;
     }
