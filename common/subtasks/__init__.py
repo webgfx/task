@@ -6,13 +6,13 @@ subtask is defined as a class inheriting from BaseSubtask.
 
 Usage:
     from common.subtasks import get_subtask, list_subtasks, execute_subtask
-    
+
     # Execute a subtask
     result = execute_subtask('get_hostname')
-    
+
     # List available subtasks
     available = list_subtasks()
-    
+
     # Reload subtasks (useful for development)
     reload_subtasks()
 """
@@ -42,16 +42,16 @@ def get_registry() -> SubtaskRegistry:
 def _load_all_subtasks():
     """Automatically load all subtask modules from the subtasks directory"""
     global _registry
-    
+
     # Get the directory containing subtask modules
     subtasks_dir = os.path.dirname(__file__)
-    
+
     # Import all Python files in the subtasks directory (except __init__.py and base.py)
     for filename in os.listdir(subtasks_dir):
-        if (filename.endswith('.py') and 
+        if (filename.endswith('.py') and
             filename not in ['__init__.py', 'base.py'] and
             not filename.startswith('_')):
-            
+
             module_name = filename[:-3]  # Remove .py extension
             try:
                 # Import the module - this will trigger registration
@@ -67,25 +67,25 @@ def reload_subtasks():
     This is useful during development when subtask implementations are updated.
     """
     global _registry
-    
+
     logging.info("Reloading all subtask modules...")
-    
+
     # Clear the current registry
     if _registry is not None:
         _registry._subtasks.clear()
-    
+
     # Get the directory containing subtask modules
     subtasks_dir = os.path.dirname(__file__)
-    
+
     # Find all subtask modules
     subtask_modules = []
     for filename in os.listdir(subtasks_dir):
-        if (filename.endswith('.py') and 
+        if (filename.endswith('.py') and
             filename not in ['__init__.py', 'base.py'] and
             not filename.startswith('_')):
             module_name = f'common.subtasks.{filename[:-3]}'
             subtask_modules.append(module_name)
-    
+
     # Reload each module
     reloaded_count = 0
     for module_name in subtask_modules:
@@ -101,14 +101,14 @@ def reload_subtasks():
             reloaded_count += 1
         except Exception as e:
             logging.error(f"Failed to reload subtask module {module_name}: {e}")
-    
+
     logging.info(f"Successfully reloaded {reloaded_count} subtask modules")
-    
+
     # List loaded subtasks for confirmation
     if _registry:
         loaded_subtasks = _registry.list_subtasks()
         logging.info(f"Available subtasks after reload: {', '.join(loaded_subtasks)}")
-    
+
     return reloaded_count
 
 

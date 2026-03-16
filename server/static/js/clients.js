@@ -23,23 +23,23 @@ async function initializeClientsPage() {
     // Wait for DOM to be fully ready and check multiple times if needed
     let retryCount = 0;
     const maxRetries = 5;
-    
+
     while (retryCount < maxRetries) {
         const clientTableContainer = document.getElementById('clientTableContainer');
-        
+
         if (clientTableContainer) {
             // Table container found, proceed with initialization
             await refreshClients();
             setupEventListeners();
             return;
         }
-        
+
         // Elements not found, wait and retry
         retryCount++;
         console.log(`Client table container not ready, retry ${retryCount}/${maxRetries}`);
         await new Promise(resolve => setTimeout(resolve, 200));
     }
-    
+
     // If we get here, elements weren't found after retries
     console.error('Required client page elements not found after retries');
     showNotification('Page Error', 'Client management page failed to initialize properly', 'error');
@@ -61,18 +61,18 @@ async function refreshClients() {
     try {
         // Show loading on the table container
         const loadingContainer = document.getElementById('clientTableContainer');
-            
+
         if (loadingContainer) {
             showLoading(loadingContainer);
         } else {
             // Fallback: show a general loading notification
             console.log('Loading clients...');
         }
-        
+
         const response = await apiGet('/api/clients');
         clients = response.data || [];
         displayClients();
-        
+
         // Update connection counts
         updateConnectionStats();
     } catch (error) {
@@ -81,7 +81,7 @@ async function refreshClients() {
     } finally {
         // Hide loading from the table container
         const loadingContainer = document.getElementById('clientTableContainer');
-            
+
         if (loadingContainer) {
             hideLoading(loadingContainer);
         }
@@ -102,7 +102,7 @@ function updateConnectionStats() {
         offline: clients.filter(c => c.status === 'offline').length,
         busy: clients.filter(c => c.status === 'busy').length
     };
-    
+
     // Update header if stats element exists
     const headerActions = document.querySelector('.header-actions');
     if (headerActions) {
@@ -110,7 +110,7 @@ function updateConnectionStats() {
         if (existingStats) {
             existingStats.remove();
         }
-        
+
         const statsElement = document.createElement('div');
         statsElement.className = 'connection-stats';
         statsElement.innerHTML = `
@@ -119,35 +119,35 @@ function updateConnectionStats() {
             <span class="stat-badge stat-offline">Offline: ${stats.offline}</span>
             ${stats.busy > 0 ? `<span class="stat-badge stat-busy">Busy: ${stats.busy}</span>` : ''}
         `;
-        
+
         headerActions.insertBefore(statsElement, headerActions.firstChild);
     }
 }
 
-// Filter clients based on search and status  
+// Filter clients based on search and status
 function filterClients() {
     const statusFilter = document.getElementById('statusFilter');
     const searchInput = document.getElementById('searchInput');
-    
+
     // Check if elements exist to avoid null reference errors
     if (!statusFilter || !searchInput) {
         console.error('Filter elements not found');
         return;
     }
-    
+
     const statusValue = statusFilter.value;
     const searchValue = searchInput.value.toLowerCase();
-    
+
     let filteredClients = clients;
-    
+
     // Apply status filter
     if (statusValue) {
         filteredClients = filteredClients.filter(client => client.status === statusValue);
     }
-    
+
     // Apply search filter
     if (searchValue) {
-        filteredClients = filteredClients.filter(client => 
+        filteredClients = filteredClients.filter(client =>
             client.name.toLowerCase().includes(searchValue) ||
             client.ip_address.toLowerCase().includes(searchValue) ||
             (client.system_summary && (
@@ -157,7 +157,7 @@ function filterClients() {
             ))
         );
     }
-    
+
     // Update clients array for display
     const originalClients = clients;
     clients = filteredClients;
@@ -173,12 +173,12 @@ function displayClients() {
 // Display clients in table view
 function displayClientsTable() {
     const tbody = document.getElementById('clientTableBody');
-    
+
     if (!tbody) {
         console.error('Client table body not found');
         return;
     }
-    
+
     if (clients.length === 0) {
         tbody.innerHTML = `
             <tr>
@@ -191,13 +191,13 @@ function displayClientsTable() {
         `;
         return;
     }
-    
+
     const html = clients.map(client => createClientTableRow(client)).join('');
     tbody.innerHTML = html;
-    
+
     // Ensure all toggle icons are in correct initial state
     initializeClientToggleIconStates();
-    
+
     // Load details for all clients immediately since they're shown by default
     // Add a small delay between requests to avoid overwhelming the server
     clients.forEach((client, index) => {
@@ -211,13 +211,13 @@ function displayClientsTable() {
 function createClientTableRow(client) {
     const statusIcon = getStatusIcon(client.status);
     const lastHeartbeat = client.last_heartbeat ? formatRelativeTime(client.last_heartbeat) : 'Never';
-    
+
     // Get current task and subtask information
     const taskId = client.current_task_id || '-';
     const taskName = client.current_task_name || '-';
     const subtaskId = client.current_subtask_id || '-';
     const subtaskName = client.current_subtask_id ? getSubtaskDisplayName(client.current_subtask_id) : '-';
-    
+
     // Main client row
     const mainRow = `
         <tr class="client-main-row" data-client="${client.name}">
@@ -252,7 +252,7 @@ function createClientTableRow(client) {
             </td>
             <td class="actions-col">
                 <div class="row-actions">
-                    <button class="collapse-toggle" onclick="event.stopPropagation(); toggleClientDetails('${client.name}')" 
+                    <button class="collapse-toggle" onclick="event.stopPropagation(); toggleClientDetails('${client.name}')"
                             title="Toggle client details">
                         <i class="fas fa-chevron-up" id="toggle-icon-${client.name}"></i>
                     </button>
@@ -266,7 +266,7 @@ function createClientTableRow(client) {
             </td>
         </tr>
     `;
-    
+
     // Details row (initially expanded to show details by default)
     const detailsRow = `
         <tr class="client-details-row client-${client.name}-details" data-client="${client.name}">
@@ -280,7 +280,7 @@ function createClientTableRow(client) {
             </td>
         </tr>
     `;
-    
+
     return mainRow + detailsRow;
 }
 
@@ -298,11 +298,11 @@ function initializeClientToggleIconStates() {
 async function toggleClientDetails(clientName) {
     const detailsRows = document.querySelectorAll(`.client-${clientName}-details`);
     const toggleIcon = document.getElementById(`toggle-icon-${clientName}`);
-    
+
     if (!toggleIcon || detailsRows.length === 0) return;
-    
+
     const isCollapsed = detailsRows[0].classList.contains('collapsed');
-    
+
     detailsRows.forEach(row => {
         if (isCollapsed) {
             row.classList.remove('collapsed');
@@ -310,12 +310,12 @@ async function toggleClientDetails(clientName) {
             row.classList.add('collapsed');
         }
     });
-    
+
     // Update toggle icon based on NEW state after toggle
     // If was collapsed (now expanding) → show up arrow (visible state)
     // If was visible (now collapsing) → show down arrow (hidden state)
     toggleIcon.className = isCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
-    
+
     // Load detailed content when expanding (or initially if details are shown by default)
     if (isCollapsed) {
         await loadClientDetails(clientName);
@@ -326,21 +326,21 @@ async function toggleClientDetails(clientName) {
 function toggleAllClientDetails() {
     const toggleIcon = document.getElementById('toggleAllClientsIcon');
     const toggleText = document.getElementById('toggleAllClientsText');
-    
+
     // Get all client detail rows and toggle icons
     const allDetailRows = document.querySelectorAll('.client-details-row');
     const allToggleIcons = document.querySelectorAll('.collapse-toggle i[id^="toggle-icon-"]');
-    
+
     if (allClientDetailsVisible) {
         // Hide all details
         allDetailRows.forEach(row => {
             row.classList.add('collapsed');
         });
-        
+
         allToggleIcons.forEach(icon => {
             icon.className = 'fas fa-chevron-down'; // Down arrow when hidden
         });
-        
+
         toggleIcon.className = 'fas fa-eye';
         toggleText.textContent = 'Show All Details';
         allClientDetailsVisible = false;
@@ -349,15 +349,15 @@ function toggleAllClientDetails() {
         allDetailRows.forEach(row => {
             row.classList.remove('collapsed');
         });
-        
+
         allToggleIcons.forEach(icon => {
             icon.className = 'fas fa-chevron-up'; // Up arrow when visible
         });
-        
+
         toggleIcon.className = 'fas fa-eye-slash';
         toggleText.textContent = 'Hide All Details';
         allClientDetailsVisible = true;
-        
+
         // Load details for all clients when showing
         clients.forEach((client, index) => {
             setTimeout(() => {
@@ -375,14 +375,14 @@ async function loadClientDetails(clientName) {
             console.error('Client not found:', clientName);
             return;
         }
-        
+
         // Get client tasks
         const tasksResponse = await apiGet('/api/tasks');
         const allTasks = tasksResponse.data || [];
-        const clientTasks = allTasks.filter(task => 
+        const clientTasks = allTasks.filter(task =>
             task.clients && task.clients.includes(clientName)
         );
-        
+
         const detailsContent = formatClientDetails(client, clientTasks);
         const contentElement = document.getElementById(`client-details-${clientName}`);
         if (contentElement) {
@@ -400,15 +400,15 @@ async function loadClientDetails(clientName) {
 // Format comprehensive client details
 function formatClientDetails(client, tasks) {
     const systemSummary = client.system_summary || {};
-    
+
     // Format compact system information
     function formatCompactSystemDetails() {
         if (!client.cpu_info && !client.memory_info && !client.gpu_info && !client.os_info) {
             return '<p style="color: #6c757d;">No system information available</p>';
         }
-        
+
         let details = '<div class="compact-system-info">';
-        
+
         // CPU Information (compact)
         if (client.cpu_info) {
             const cpu = client.cpu_info;
@@ -423,7 +423,7 @@ function formatClientDetails(client, tasks) {
                 </div>
             `;
         }
-        
+
         // Memory Information (compact)
         if (client.memory_info) {
             const mem = client.memory_info;
@@ -436,7 +436,7 @@ function formatClientDetails(client, tasks) {
                 </div>
             `;
         }
-        
+
         // GPU Information (compact)
         if (client.gpu_info && client.gpu_info.length > 0) {
             client.gpu_info.forEach((gpu, index) => {
@@ -455,7 +455,7 @@ function formatClientDetails(client, tasks) {
                 `;
             });
         }
-        
+
         // Operating System (compact)
         if (client.os_info) {
             const os = client.os_info;
@@ -469,11 +469,11 @@ function formatClientDetails(client, tasks) {
                 </div>
             `;
         }
-        
+
         details += '</div>';
         return details;
     }
-    
+
     return `
         <div class="client-detail">
             <div class="detail-section">
@@ -487,7 +487,7 @@ function formatClientDetails(client, tasks) {
 function getSubtaskDisplayName(subtaskId) {
     // Convert snake_case or camelCase to readable names
     if (!subtaskId || subtaskId === '-' || subtaskId === '') return '—';
-    
+
     // Common subtask name mappings
     const nameMap = {
         'get_hostname': 'Get Hostname',
@@ -500,12 +500,12 @@ function getSubtaskDisplayName(subtaskId) {
         'command_execution': 'Subtask Execution',
         'system_monitoring': 'System Monitoring'
     };
-    
+
     // Check if we have a predefined mapping
     if (nameMap[subtaskId]) {
         return nameMap[subtaskId];
     }
-    
+
     // Convert snake_case to readable format
     return subtaskId
         .replace(/_/g, ' ')
@@ -519,7 +519,7 @@ function getStatusIcon(status) {
         'offline': '<i class="fas fa-circle text-danger"></i>',
         'busy': '<i class="fas fa-circle text-warning"></i>'
     };
-    
+
     return iconMap[status] || '<i class="fas fa-circle text-secondary"></i>';
 }
 
@@ -530,7 +530,7 @@ function getClientStatusBadge(status) {
         'offline': 'badge-danger',
         'busy': 'badge-warning'
     }[status] || 'badge-secondary';
-    
+
     return `<span class="badge ${badgeClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
 }
 
@@ -561,7 +561,7 @@ async function unregisterClient(clientName) {
         // Get client info for better confirmation dialog
         const client = clients.find(c => c.name === clientName);
         const currentTasks = client && client.current_task_id ? `\n- Has active task #${client.current_task_id}` : '';
-        
+
         // Show detailed confirmation dialog
         const confirmMessage = `Are you sure you want to unregister client "${clientName}"?
 
@@ -576,9 +576,9 @@ This action cannot be undone. Continue?`;
         if (!confirm(confirmMessage)) {
             return;
         }
-        
+
         showNotification('Info', `Unregistering ${clientName}...`, 'info');
-        
+
         // Call the DELETE API to permanently remove the client
         const response = await fetch(`/api/clients/${encodeURIComponent(clientName)}`, {
             method: 'DELETE',
@@ -586,9 +586,9 @@ This action cannot be undone. Continue?`;
                 'Content-Type': 'application/json'
             }
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             showNotification('Success', `Client ${clientName} has been unregistered and removed from database`, 'success');
             // Refresh the client list to reflect changes
@@ -596,7 +596,7 @@ This action cannot be undone. Continue?`;
         } else {
             throw new Error(result.error || 'Failed to unregister client');
         }
-        
+
     } catch (error) {
         console.error('Unregister client failed:', error);
         showNotification('Error', `Failed to unregister ${clientName}: ${error.message}`, 'error');
@@ -606,15 +606,15 @@ This action cannot be undone. Continue?`;
 // Format bytes to human readable format
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const units = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     let i = 0;
-    
+
     while (bytes >= k && i < units.length - 1) {
         bytes /= k;
         i++;
     }
-    
+
     return `${bytes.toFixed(1)} ${units[i]}`;
 }

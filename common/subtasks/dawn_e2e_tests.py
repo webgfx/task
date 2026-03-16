@@ -24,23 +24,23 @@ from . import register_subtask_class
 
 class DawnE2ETestsSubtask(BaseSubtask):
     """Dawn E2E tests subtask for downloading and running Dawn end-to-end tests."""
-    
+
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         """
         Download and run Dawn E2E tests.
-        
+
         This function:
         1. Determines system architecture and OS
         2. Copies the latest Dawn E2E test binary from \\\\webgfx-200.guest.corp.microsoft.com\\backup\\<arch>\\<os>\\dawn\\
         3. Extracts the binary to ignore\\client\\backup\\<arch>\\<os>\\dawn\\
         4. Runs dawn_end2end_tests.exe with specified parameters
         5. Parses the JSON output for test failures (to be implemented later)
-        
+
         Returns:
             Dict[str, Any]: Test execution results with comprehensive status information
         """
         start_time = datetime.now()
-        
+
         try:
             # Set up task context for logging paths
             # This can be overridden by the calling task execution framework
@@ -50,7 +50,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'task_timestamp': start_time.strftime('%Y%m%d%H%M%S'),
                     'subtask_name': 'dawn_e2e_tests'
                 }
-            
+
             # Step 1: Determine architecture and OS
             arch_info = self.get_system_architecture()
             if not arch_info['success']:
@@ -62,12 +62,12 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'timestamp': start_time.isoformat(),
                     'execution_time': 0
                 }
-            
+
             arch = arch_info['architecture']
             os_name = arch_info['os']
-            
+
             logging.info(f"Detected system: {arch}/{os_name}")
-            
+
             # Step 2: Copy the latest Dawn binary from network share
             download_result = self.download_latest_dawn_binary(arch, os_name)
             if not download_result['success']:
@@ -80,7 +80,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'download_info': download_result,
                     'execution_time': (datetime.now() - start_time).total_seconds()
                 }
-            
+
             # Step 3: Extract the binary
             extraction_result = self.extract_dawn_binary(download_result['file_path'], arch, os_name)
             if not extraction_result['success']:
@@ -94,7 +94,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'extraction_info': extraction_result,
                     'execution_time': (datetime.now() - start_time).total_seconds()
                 }
-            
+
             # Step 4: Run the Dawn E2E tests
             test_result = self.run_dawn_tests(extraction_result['extraction_path'])
             if not test_result['success']:
@@ -109,7 +109,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'execution_info': test_result,
                     'execution_time': (datetime.now() - start_time).total_seconds()
                 }
-            
+
             # Step 5: Parse the test results (placeholder for now)
             parse_result = self.parse_dawn_test_results(extraction_result['extraction_path'])
             if not parse_result['success']:
@@ -125,7 +125,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'parse_info': parse_result,
                     'execution_time': (datetime.now() - start_time).total_seconds()
                 }
-            
+
             # Success - return comprehensive results
             end_time = datetime.now()
             return {
@@ -140,7 +140,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'parse_info': parse_result,
                 'execution_time': (end_time - start_time).total_seconds()
             }
-            
+
         except Exception as e:
             logging.error(f"Dawn E2E tests failed with unexpected error: {e}")
             return {
@@ -151,26 +151,26 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'timestamp': start_time.isoformat(),
                 'execution_time': (datetime.now() - start_time).total_seconds()
             }
-    
+
     def get_result(self) -> Any:
         """Get the result of the Dawn E2E tests execution."""
         return self.result
-    
+
     def get_description(self) -> str:
         """Get a simple description of this subtask."""
         return "Run Dawn E2E tests"
-    
+
     def get_system_architecture(self) -> Dict[str, Any]:
         """
         Determine the system architecture and OS for Dawn binary selection.
-        
+
         Returns:
             Dict[str, Any]: System information including architecture and OS
         """
         try:
             # Get architecture from platform.machine() and convert to lowercase
             arch = platform.machine().lower()
-            
+
             # Normalize architecture names
             arch_mapping = {
                 'x86_64': 'x64',
@@ -180,12 +180,12 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'arm64': 'arm64',
                 'aarch64': 'arm64'
             }
-            
+
             architecture = arch_mapping.get(arch, arch)
-            
+
             # Get OS from sys.platform and convert to lowercase
             platform_name = sys.platform.lower()
-            
+
             # Normalize OS names
             os_mapping = {
                 'win32': 'windows',
@@ -194,9 +194,9 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'linux': 'linux',
                 'linux2': 'linux'
             }
-            
+
             os_name = os_mapping.get(platform_name, platform_name)
-            
+
             return {
                 'success': True,
                 'architecture': architecture,
@@ -204,32 +204,32 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'raw_architecture': arch,
                 'raw_platform': platform_name
             }
-            
+
         except Exception as e:
             return {
                 'success': False,
                 'error': f"Failed to detect system architecture: {e}"
             }
-    
+
     def download_latest_dawn_binary(self, arch: str, os_name: str) -> Dict[str, Any]:
         """Download the latest Dawn binary from the network backup location."""
         try:
             # Network share path
             network_path = f"\\\\webgfx-200.guest.corp.microsoft.com\\backup\\{arch}\\{os_name}\\dawn\\"
             local_backup_path = f"ignore\\client\\backup\\{arch}\\{os_name}\\dawn\\"
-            
+
             logging.info(f"Checking network share: {network_path}")
-            
+
             # Create local backup directory if it doesn't exist
             os.makedirs(local_backup_path, exist_ok=True)
-            
+
             # Check if network path exists and is accessible using more robust method
             if not self._is_network_path_accessible(network_path):
                 return {
                     'success': False,
                     'error': f"Network path not accessible: {network_path}"
                 }
-            
+
             # Find the latest version on network share
             network_latest = self.find_latest_version(network_path)
             if not network_latest:
@@ -237,31 +237,31 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'success': False,
                     'error': f"No Dawn binaries found in {network_path}"
                 }
-            
+
             # Find the latest local version
             local_latest = self.find_latest_version(local_backup_path)
-            
+
             # Compare versions and determine if we need to download
             need_download = True
             if local_latest:
                 network_version = self.extract_version(network_latest['filename'])
                 local_version = self.extract_version(local_latest['filename'])
-                
+
                 if network_version and local_version:
                     if network_version <= local_version:
                         need_download = False
                         logging.info(f"Local version {local_version} is up to date (network: {network_version})")
                     else:
                         logging.info(f"Network version {network_version} is newer than local {local_version}")
-            
+
             if need_download:
                 # Download the latest version
                 source_path = os.path.join(network_path, network_latest['filename'])
                 dest_path = os.path.join(local_backup_path, network_latest['filename'])
-                
+
                 logging.info(f"Downloading {source_path} to {dest_path}")
                 shutil.copy2(source_path, dest_path)
-                
+
                 return {
                     'success': True,
                     'binary_name': network_latest['filename'],
@@ -287,14 +287,14 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     },
                     'action': 'used_existing'
                 }
-                
+
         except Exception as e:
             logging.error(f"Failed to download Dawn binary: {e}")
             return {
                 'success': False,
                 'error': f"Failed to download Dawn binary: {e}"
             }
-    
+
     def extract_dawn_binary(self, zip_file_path: str, arch: str, os_name: str) -> Dict[str, Any]:
         """Extract the Dawn binary to the appropriate location."""
         try:
@@ -302,7 +302,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
             backup_dir = os.path.dirname(zip_file_path)
             zip_basename = os.path.splitext(os.path.basename(zip_file_path))[0]
             extraction_path = os.path.join(backup_dir, zip_basename)
-            
+
             # Check if already extracted by searching for the executable
             executable_path = self._find_dawn_executable(extraction_path)
             if executable_path and os.path.exists(executable_path):
@@ -313,13 +313,13 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'executable_path': executable_path,
                     'action': 'already_extracted'
                 }
-            
+
             # Extract the zip file
             logging.info(f"Extracting {zip_file_path} to {extraction_path}")
-            
+
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 zip_ref.extractall(extraction_path)
-            
+
             # Find the executable after extraction
             executable_path = self._find_dawn_executable(extraction_path)
             if not executable_path or not os.path.exists(executable_path):
@@ -328,19 +328,19 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 for root, dirs, files in os.walk(extraction_path):
                     for file in files:
                         extracted_files.append(os.path.relpath(os.path.join(root, file), extraction_path))
-                
+
                 return {
                     'success': False,
                     'error': f"dawn_end2end_tests.exe not found in extracted files. Found: {extracted_files[:10]}"  # Show first 10 files
                 }
-            
+
             return {
                 'success': True,
                 'extraction_path': extraction_path,
                 'executable_path': executable_path,
                 'action': 'extracted'
             }
-            
+
         except zipfile.BadZipFile:
             return {
                 'success': False,
@@ -352,18 +352,18 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'success': False,
                 'error': f"Failed to extract binary: {e}"
             }
-    
+
     def run_dawn_tests(self, extraction_path: str) -> Dict[str, Any]:
         """Run the Dawn E2E tests with the specified parameters."""
         try:
             executable_path = self._find_dawn_executable(extraction_path)
-            
+
             if not executable_path or not os.path.exists(executable_path):
                 return {
                     'success': False,
                     'error': f"Dawn executable not found in {extraction_path}"
                 }
-            
+
             # Create output directory for test results
             # Use task context if available, otherwise create a timestamped directory
             if hasattr(self, 'task_context') and self.task_context:
@@ -374,14 +374,14 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 task_name = 'dawn_task'
                 task_timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
                 subtask_name = 'dawn_e2e_tests'
-            
+
             # Use absolute path for log directory - go up to project root
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # Go up to project root
             output_dir = os.path.join(base_dir, "ignore", "client", "logs", f"{task_timestamp}-{task_name}", subtask_name)
             os.makedirs(output_dir, exist_ok=True)
-            
+
             json_output_path = os.path.join(output_dir, "dawn.json")
-            
+
             # Build command with all required parameters
             cmd = [
                 executable_path,
@@ -391,9 +391,9 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 "--gtest_filter=*MaxLimitTests.MaxBufferBindingSize*",
                 f"--gtest_output=json:{json_output_path}"
             ]
-            
+
             logging.info(f"Running Dawn E2E tests: {' '.join(cmd)}")
-            
+
             # Run the tests
             start_time = datetime.now()
             try:
@@ -406,10 +406,10 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 )
                 end_time = datetime.now()
                 execution_time = (end_time - start_time).total_seconds()
-                
+
                 logging.info(f"Dawn tests completed with return code: {result.returncode}")
                 logging.info(f"Execution time: {execution_time:.2f} seconds")
-                
+
                 return {
                     'success': True,
                     'return_code': result.returncode,
@@ -419,20 +419,20 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     'stderr': result.stderr,
                     'command': ' '.join(cmd)
                 }
-                
+
             except subprocess.TimeoutExpired:
                 return {
                     'success': False,
                     'error': "Dawn tests timed out after 5 minutes"
                 }
-                
+
         except Exception as e:
             logging.error(f"Failed to execute Dawn tests: {e}")
             return {
                 'success': False,
                 'error': f"Failed to execute tests: {e}"
             }
-    
+
     def parse_dawn_test_results(self, extraction_path: str = None) -> Dict[str, Any]:
         """Parse the Dawn test results from the JSON output file."""
         try:
@@ -445,12 +445,12 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 task_name = 'dawn_task'
                 task_timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
                 subtask_name = 'dawn_e2e_tests'
-            
+
             # Use absolute path for log directory - go up to project root
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # Go up to project root
             output_dir = os.path.join(base_dir, "ignore", "client", "logs", f"{task_timestamp}-{task_name}", subtask_name)
             json_output_path = os.path.join(output_dir, "dawn.json")
-            
+
             # Check if JSON output file exists
             if not os.path.exists(json_output_path):
                 logging.warning(f"JSON output file not found: {json_output_path}")
@@ -466,37 +466,37 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     },
                     'failures': []
                 }
-            
+
             # Read and parse the JSON file
             with open(json_output_path, 'r', encoding='utf-8') as f:
                 test_data = json.load(f)
-            
+
             logging.info(f"Successfully loaded JSON test results from: {json_output_path}")
-            
+
             # Initialize counters based on your pseudo code
             pass_pass = 0
             pass_fail = []
-            
+
             # Parse test results following the provided pseudo code structure
             if 'testsuites' in test_data:
                 for test_suite in test_data['testsuites']:
                     suite_name = test_suite.get('name', 'UnknownSuite')
-                    
+
                     # Handle both 'testsuite' and 'tests' keys (GTest can use either)
                     tests = test_suite.get('testsuite', test_suite.get('tests', []))
-                    
+
                     for test in tests:
                         test_name = f"{suite_name}.{test.get('name', 'UnknownTest')}"
-                        
+
                         # Check for failures (following your pseudo code logic)
                         if 'failures' in test and test['failures']:
                             pass_fail.append(test_name)
                         else:
                             pass_pass += 1
-            
+
             # Calculate total tests as per your requirement
             total_tests = pass_pass + len(pass_fail)
-            
+
             # Build comprehensive result with detailed failure information
             detailed_failures = []
             if pass_fail:
@@ -505,7 +505,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     for test_suite in test_data['testsuites']:
                         suite_name = test_suite.get('name', 'UnknownSuite')
                         tests = test_suite.get('testsuite', test_suite.get('tests', []))
-                        
+
                         for test in tests:
                             test_name = f"{suite_name}.{test.get('name', 'UnknownTest')}"
                             if test_name in pass_fail and 'failures' in test and test['failures']:
@@ -513,7 +513,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                                     'test_name': test_name,
                                     'failure_message': test['failures'][0].get('failure', 'Unknown failure') if test['failures'] else 'Unknown failure'
                                 })
-            
+
             # Build result structure matching your requirements
             test_summary = {
                 'total_tests': total_tests,    # pass_pass + len(pass_fail)
@@ -522,9 +522,9 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'skipped': 0,                  # Can be enhanced later if needed
                 'disabled': 0                  # Can be enhanced later if needed
             }
-            
+
             logging.info(f"Test parsing complete - Total: {total_tests}, Passed: {pass_pass}, Failed: {len(pass_fail)}")
-            
+
             return {
                 'success': True,
                 'test_summary': test_summary,
@@ -533,7 +533,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 'json_file_path': json_output_path,
                 'raw_data_available': True
             }
-            
+
         except FileNotFoundError:
             logging.error(f"JSON output file not found: {json_output_path}")
             return {
@@ -576,7 +576,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 },
                 'failures': []
             }
-    
+
     def find_latest_version(self, directory_path: str) -> Optional[Dict[str, str]]:
         """
         Find the latest version file in the given directory.
@@ -585,21 +585,21 @@ class DawnE2ETestsSubtask(BaseSubtask):
         try:
             if not os.path.exists(directory_path):
                 return None
-            
+
             # Pattern to match Dawn binary files
             pattern = re.compile(r'^(\d{8})-([^-]+)-([^.]+)\.zip$')
-            
+
             latest_file = None
             latest_version = None
-            
+
             for filename in os.listdir(directory_path):
                 match = pattern.match(filename)
                 if match:
                     date_str, version_str, hash_str = match.groups()
-                    
+
                     # Try to convert version to a comparable format
                     version = self.parse_version_string(version_str)
-                    
+
                     if latest_version is None or version > latest_version:
                         latest_version = version
                         latest_file = {
@@ -608,13 +608,13 @@ class DawnE2ETestsSubtask(BaseSubtask):
                             'version': version_str,
                             'hash': hash_str
                         }
-            
+
             return latest_file
-            
+
         except Exception as e:
             logging.error(f"Error finding latest version in {directory_path}: {e}")
             return None
-    
+
     def extract_version(self, filename: str) -> Optional[tuple]:
         """Extract version tuple from filename for comparison."""
         try:
@@ -626,7 +626,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
             return None
         except Exception:
             return None
-    
+
     def parse_version_string(self, version_str: str) -> tuple:
         """
         Parse version string into a tuple for comparison.
@@ -635,7 +635,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
         try:
             # Remove any non-numeric suffixes for comparison
             version_clean = re.sub(r'[^0-9.].*$', '', version_str)
-            
+
             # Split by dots and convert to integers
             parts = []
             for part in version_clean.split('.'):
@@ -643,30 +643,30 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     parts.append(int(part))
                 else:
                     break
-            
+
             # Pad with zeros to ensure consistent comparison
             while len(parts) < 4:
                 parts.append(0)
-            
+
             return tuple(parts)
-            
+
         except Exception:
             # Fallback: use the string as-is for comparison
             return (version_str,)
-    
+
     def _find_dawn_executable(self, extraction_path: str) -> str:
         """
         Find the dawn_end2end_tests.exe file in the extraction directory or its subdirectories.
-        
+
         Args:
             extraction_path: Base path to search for the executable
-            
+
         Returns:
             str: Full path to the executable if found, None otherwise
         """
         if not os.path.exists(extraction_path):
             return None
-            
+
         # Search for dawn_end2end_tests.exe in the extraction path and all subdirectories
         for root, dirs, files in os.walk(extraction_path):
             for file in files:
@@ -674,17 +674,17 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     executable_path = os.path.join(root, file)
                     logging.debug(f"Found Dawn executable at: {executable_path}")
                     return executable_path
-        
+
         logging.warning(f"dawn_end2end_tests.exe not found in {extraction_path}")
         return None
-    
+
     def _is_network_path_accessible(self, network_path: str) -> bool:
         """
         Check if a network path is accessible using multiple methods.
-        
+
         Args:
             network_path: UNC path to check
-            
+
         Returns:
             bool: True if accessible, False otherwise
         """
@@ -696,7 +696,7 @@ class DawnE2ETestsSubtask(BaseSubtask):
                 return True
             except (OSError, PermissionError):
                 pass
-            
+
             # Method 2: Try using pathlib (better UNC support)
             try:
                 from pathlib import Path
@@ -708,14 +708,14 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     return True
             except (OSError, PermissionError):
                 pass
-            
+
             # Method 3: Try using subprocess to call dir command
             try:
                 result = subprocess.run(
-                    ['dir', network_path], 
-                    shell=True, 
-                    capture_output=True, 
-                    text=True, 
+                    ['dir', network_path],
+                    shell=True,
+                    capture_output=True,
+                    text=True,
                     timeout=10
                 )
                 if result.returncode == 0:
@@ -723,10 +723,10 @@ class DawnE2ETestsSubtask(BaseSubtask):
                     return True
             except (subprocess.TimeoutExpired, subprocess.SubprocessError):
                 pass
-            
+
             logging.warning(f"Network path not accessible via any method: {network_path}")
             return False
-            
+
         except Exception as e:
             logging.error(f"Error checking network path accessibility: {e}")
             return False
@@ -747,7 +747,7 @@ def get_dawn_test_summary() -> Dict[str, Any]:
     """Get a quick summary of the last Dawn test execution."""
     try:
         result = dawn_e2e_tests()
-        
+
         if result['status'] == 'success':
             summary = result['test_summary']
             return {
@@ -765,7 +765,7 @@ def get_dawn_test_summary() -> Dict[str, Any]:
                 'error': result.get('error', 'Unknown error'),
                 'timestamp': result['timestamp']
             }
-            
+
     except Exception as e:
         return {
             'status': 'error',
