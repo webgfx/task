@@ -252,6 +252,14 @@ function createClientTableRow(client) {
             </td>
             <td class="actions-col">
                 <div class="row-actions">
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); reloadClientTasks('${client.name}')"
+                            title="Reload Tasks">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); unregisterClient('${client.name}')"
+                            title="Delete Client">
+                        <i class="fas fa-trash"></i>
+                    </button>
                     <button class="collapse-toggle" onclick="event.stopPropagation(); toggleClientDetails('${client.name}')"
                             title="Toggle client details">
                         <i class="fas fa-chevron-up" id="toggle-icon-${client.name}"></i>
@@ -529,6 +537,21 @@ function getClientStatusBadge(status) {
 }
 
 
+// Reload task modules on a client
+async function reloadClientTasks(clientName) {
+    try {
+        showNotification('Info', `Reloading tasks on ${clientName}...`, 'info');
+        const response = await apiPost(`/api/clients/${encodeURIComponent(clientName)}/reload-tasks`, {});
+        if (response.success) {
+            showNotification('Success', response.message || 'Reload command sent', 'success');
+        } else {
+            showNotification('Error', response.error || 'Failed to reload tasks', 'error');
+        }
+    } catch (error) {
+        console.error('Task reload failed:', error);
+        showNotification('Error', 'Failed to send reload command', 'error');
+    }
+}
 
 // Unregister client
 async function updateClientRepo(clientName) {
