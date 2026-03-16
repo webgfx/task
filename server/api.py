@@ -1962,6 +1962,23 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
     # Cached Results API
 
+    @api.route('/clients/<client_name>/reload-tasks', methods=['POST'])
+    def reload_client_tasks(client_name):
+        """Send reload-tasks command to a specific client via SocketIO"""
+        try:
+            client = database.get_client_by_name(client_name)
+            if not client:
+                return jsonify({'success': False, 'error': f'Client {client_name} not found'}), 404
+
+            room_name = f"client_{client.ip_address.replace('.', '_')}"
+            socketio.emit('reload_tasks', {'client_name': client_name}, room=room_name)
+            logger.info(f"Sent reload_tasks to client '{client_name}' (room: {room_name})")
+
+            return jsonify({'success': True, 'message': f'Reload command sent to {client_name}'})
+        except Exception as e:
+            logger.error(f"Failed to send reload to {client_name}: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @api.route('/results', methods=['GET'])
     def get_cached_results():
         """Get cached task results with optional filtering"""
