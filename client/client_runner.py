@@ -137,6 +137,9 @@ class TaskClientRunner:
         )
         self._setup_socketio_handlers()
 
+        # Track jobs currently being executed to prevent duplicate dispatches
+        self._executing_jobs = set()
+
         # Configuration update thread
         self.config_update_thread = None
 
@@ -228,6 +231,11 @@ class TaskClientRunner:
             try:
                 task_id = data.get('task_id')
                 task_name = data.get('name', f'Task-{task_id}')
+
+                # Deduplicate: skip if this job is already being executed
+                if task_id in self._executing_jobs:
+                    logger.debug(f"Ignoring duplicate dispatch for job {task_id} '{task_name}'")
+                    return
 
                 # Check if this is a task-based job
                 if 'tasks' in data and data['tasks']:
@@ -781,6 +789,9 @@ class TaskClientRunner:
     def _execute_job(self, task_id, task_name, task_data):
         """Execute task-based job"""
         try:
+            # Mark job as executing (dedup guard)
+            self._executing_jobs.add(task_id)
+
             # Set current executing task ID
             self.current_task_id = task_id
 
@@ -811,8 +822,9 @@ class TaskClientRunner:
             logger.error(f"Failed to execute task-based job {task_name}: {e}")
             self._notify_task_completion(task_id, False, str(e))
         finally:
-            # Clear current task ID
+            # Clear current task ID and dedup guard
             self.current_task_id = None
+            self._executing_jobs.discard(task_id)
 
     def _notify_task_start(self, task_id):
         """Notify server task execution started"""
