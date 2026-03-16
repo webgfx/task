@@ -1200,10 +1200,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if not client_ip:
                 client_ip = client.ip_address
 
-            # Update task status to running
-            task.status = JobStatus.RUNNING
-            task.started_at = datetime.now()
-            database.update_job(task)
+            # Update task status to running (only if still pending)
+            if task.status == JobStatus.PENDING:
+                task.status = JobStatus.RUNNING
+                task.started_at = datetime.now()
+                database.update_job(task)
 
             # Enhanced logging for task scheduling to client
             logger.info(f"TASK_SCHEDULING: Task {task_id} '{task.name}' scheduled to client '{client_name}' ({client_ip})")
@@ -1244,23 +1245,23 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 result_data = data
                 success = result_data.get('success', False)
                 task_results_list = result_data.get('task_results_list', [])
-                total_TASKs = result_data.get('total_TASKs', 0)
-                successful_TASKs = result_data.get('successful_TASKs', 0)
-                failed_TASKs = result_data.get('failed_TASKs', 0)
+                total_tasks = result_data.get('total_tasks', 0)
+                successful_tasks = result_data.get('successful_tasks', 0)
+                failed_tasks = result_data.get('failed_tasks', 0)
                 error = result_data.get('error', '')
                 exit_code = result_data.get('exit_code', 0)
 
                 # Generate summary output from Task results
                 output_parts = []
                 if task_results_list:
-                    output_parts.append(f"Task completed with {total_TASKs} tasks: {successful_TASKs} successful, {failed_TASKs} failed\n")
+                    output_parts.append(f"Task completed with {total_tasks} tasks: {successful_tasks} successful, {failed_tasks} failed\n")
                     for td in task_results_list:
-                        output_parts.append(f"[Task {Task.get('task_id')}: {Task.get('task_name')}]")
-                        output_parts.append(f"Success: {Task.get('success')}")
-                        if Task.get('output'):
-                            output_parts.append(f"Output: {Task.get('output')}")
-                        if Task.get('error'):
-                            output_parts.append(f"Error: {Task.get('error')}")
+                        output_parts.append(f"[Task {td.get('task_id')}: {td.get('task_name')}]")
+                        output_parts.append(f"Success: {td.get('success')}")
+                        if td.get('output'):
+                            output_parts.append(f"Output: {td.get('output')}")
+                        if td.get('error'):
+                            output_parts.append(f"Error: {td.get('error')}")
                         output_parts.append("")
 
                 output = '\n'.join(output_parts)
