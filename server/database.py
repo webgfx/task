@@ -1499,7 +1499,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO task_results
-                (task_id, task_name, client_name, task_name, status,
+                (task_id, task_name, client_name, subtask_name, status,
                  result, execution_time, completed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
