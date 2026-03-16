@@ -229,12 +229,12 @@ class TaskExecutor:
                 'total_execution_time_seconds': (end_time - start_time).total_seconds()
             },
             'results_summary': {
-                'total_TASKs': total_count,
+                'total_tasks': total_count,
                 'executed_successfully': executed_count,
                 'failed': failed_count,
                 'success_rate': (executed_count / total_count * 100) if total_count > 0 else 0
             },
-            'TASK_results': results
+            'task_results': results
         }
 
         summary_file = os.path.join(self.task_log_folder, 'task_summary.json')

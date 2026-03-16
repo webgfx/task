@@ -333,7 +333,6 @@ class TaskClientRunner:
                     # Prepare ping response with fresh system information
                     additional_data = {
                         'client_ip': self.local_ip,
-                        'current_task_id': getattr(self, 'current_task_id', None),
                         'current_task_id': getattr(self, 'current_task_id', None)
                     }
 
@@ -358,7 +357,6 @@ class TaskClientRunner:
                             'client_ip': self.local_ip,
                             'status': current_status,
                             'timestamp': datetime.now().isoformat(),
-                            'current_task_id': getattr(self, 'current_task_id', None),
                             'current_task_id': getattr(self, 'current_task_id', None),
                             'collection_source': 'ping_response_fallback'
                         })
@@ -869,7 +867,7 @@ class TaskClientRunner:
             with open(result_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
 
-            logger.debug(f"Saved intermediate result for task {task_id}, Task {TASK_id}")
+            logger.debug(f"Saved intermediate result for task {task_id}, task {run_task_id}")
 
         except Exception as e:
             logger.error(f"Failed to save intermediate result: {e}")
@@ -891,7 +889,7 @@ class TaskClientRunner:
             )
 
             if response.status_code == 200:
-                logger.debug(f"Uploaded Task result for task {task_id}, Task {task_result['TASK_id']}")
+                logger.debug(f"Uploaded task result for task {task_id}, task {task_result.get('task_id', 'N/A')}")
             else:
                 logger.warning(f"Failed to upload Task result: {response.status_code}")
 
