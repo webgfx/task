@@ -652,35 +652,13 @@ class Database:
             return None
 
     def get_all_clients(self) -> List[Client]:
-        """Get all clients with computed status"""
+        """Get all clients using cached status from the database.
+        Status is maintained by the scheduler's periodic cleanup job."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM clients')
             rows = cursor.fetchall()
-            clients = [self._row_to_client(row) for row in rows]
-
-            # Update status based on heartbeat timing and current task
-            current_time = datetime.now()
-            from common.config import Config
-            offline_threshold = timedelta(seconds=Config.CLIENT_TIMEOUT)  # Use configured timeout for offline detection
-
-            for client in clients:
-                if client.last_heartbeat is None:
-                    # Never sent heartbeat, mark as offline
-                    client.status = ClientStatus.OFFLINE
-                else:
-                    time_since_heartbeat = current_time - client.last_heartbeat
-                    if time_since_heartbeat > offline_threshold:
-                        # No recent heartbeat, mark as offline
-                        client.status = ClientStatus.OFFLINE
-                    elif client.current_task_id is not None:
-                        # Has recent heartbeat and is executing a task, mark as busy
-                        client.status = ClientStatus.BUSY
-                    else:
-                        # Has recent heartbeat but no current task, mark as free (online)
-                        client.status = ClientStatus.ONLINE
-
-            return clients
+            return [self._row_to_client(row) for row in rows]
 
     def get_online_clients(self) -> List[Client]:
         """Get clients that are free (not busy)"""
@@ -713,11 +691,12 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO executions
-                (task_id, subtask_name, subtask_order, client, started_at, status)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (task_id, subtask_name, subtask_order, client, started_at, status, subtask_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 execution.task_id, execution.subtask_name, execution.subtask_order,
-                execution.client, datetime.now().isoformat(), execution.status.value
+                execution.client, datetime.now().isoformat(), execution.status.value,
+                execution.subtask_id
             ))
             execution_id = cursor.lastrowid
             conn.commit()
@@ -749,6 +728,19 @@ class Database:
             ''', (task_id,))
             rows = cursor.fetchall()
             return [self._row_to_subtask_execution(row) for row in rows]
+
+    def get_all_executions_grouped(self) -> Dict[int, List[SubtaskExecution]]:
+        """Get all executions grouped by task_id in a single query."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM executions ORDER BY task_id, subtask_order ASC, started_at ASC')
+            grouped: Dict[int, List[SubtaskExecution]] = {}
+            for row in cursor.fetchall():
+                tid = row['task_id']
+                if tid not in grouped:
+                    grouped[tid] = []
+                grouped[tid].append(self._row_to_subtask_execution(row))
+            return grouped
 
     def get_executions_by_client(self, task_id: int, client_name: str) -> List[SubtaskExecution]:
         """Get subtask execution records for a specific task and client"""

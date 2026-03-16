@@ -5,13 +5,13 @@ This module provides backward compatibility with the new modular subtask system.
 All subtasks are now organized in individual files under the subtasks/ package.
 
 For new development, use the modular subtasks system:
-    from common.subtasks import execute_subtask, list_subtasks
+    from common.tasks import execute_subtask, list_subtasks
 
 This file maintains backward compatibility for existing code.
 """
 
 # Import everything from the new modular subtasks system
-from .subtasks import (
+from .tasks import (
     SubtaskResultDefinition,
     register_subtask,
     get_subtask,

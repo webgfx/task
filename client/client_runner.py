@@ -4,7 +4,7 @@ Handles client execution, server communication, and task processing.
 
 The runner is designed to execute from the repo directory so that updates to the
 repo (e.g. git pull) automatically take effect without reinstalling or restarting
-the service.  Subtask modules in common/subtasks/ are periodically reloaded to
+the service.  Subtask modules in common/tasks/ are periodically reloaded to
 pick up newly added or modified definitions.
 """
 import os
@@ -47,7 +47,6 @@ try:
     from common.client_info_collector import prepare_registration_data, prepare_ping_response_data
     from common.config import ClientConfig
     from common.utils import setup_logging, get_local_ip
-    from executor import TaskExecutor
     from heartbeat import HeartbeatManager
     from config_manager import get_config_manager, get_heartbeat_interval, get_config_update_interval
 except ImportError as e:
@@ -110,9 +109,6 @@ class TaskClientRunner:
         # Ensure working directories exist
         os.makedirs(self.work_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
-
-        # Initialize executors
-        self.task_executor = TaskExecutor()
 
         # Initialize subtask executor
         try:
@@ -249,29 +245,7 @@ class TaskClientRunner:
                         daemon=True
                     ).start()
                 else:
-                    # Legacy command-based task
-                    subtasks_legacy = data.get('subtasks', [])
-                    execution_order = data.get('execution_order', [])
-
-                    # Backward compatibility for old single command format
-                    if not subtasks_legacy and data.get('command'):
-                        subtasks_legacy = [{
-                            'id': 1,
-                            'name': 'Default Command',
-                            'command': data.get('command'),
-                            'timeout': 300,
-                            'retry_count': 0
-                        }]
-                        execution_order = [1]
-
-                    logger.info(f"Received legacy task: {task_name} (ID: {task_id}) with {len(subtasks_legacy)} subtasks")
-
-                    # Execute task in new thread
-                    threading.Thread(
-                        target=self._execute_task,
-                        args=(task_id, task_name, subtasks_legacy, execution_order),
-                        daemon=True
-                    ).start()
+                    logger.warning(f"Received task without subtasks field: {task_name} (ID: {task_id}) - ignoring legacy format")
 
             except Exception as e:
                 logger.error(f"Failed to handle task distribution: {e}")
@@ -455,7 +429,7 @@ class TaskClientRunner:
 
                     # Reload subtasks
                     try:
-                        from common.subtasks import reload_subtasks
+                        from common.tasks import reload_subtasks
                         reloaded_count = reload_subtasks()
 
                         logger.info(f"✅ SUBTASK_RELOAD: Successfully reloaded {reloaded_count} subtask modules")
@@ -543,10 +517,6 @@ class TaskClientRunner:
         if self.sio.connected:
             self.sio.disconnect()
 
-        # Stop task executor
-        if self.task_executor:
-            self.task_executor.stop()
-
         logger.info("Client runtime stopped")
 
     def get_current_status(self):
@@ -560,11 +530,6 @@ class TaskClientRunner:
             # Check if currently executing a task
             if hasattr(self, 'current_task_id') and self.current_task_id is not None:
                 return 'busy'
-
-            # Check if task executor is busy (fallback)
-            if self.task_executor and hasattr(self.task_executor, 'is_executing'):
-                if self.task_executor.is_executing():
-                    return 'busy'
 
             # Check subtask adapter status if available
             if self.subtask_adapter and hasattr(self.subtask_adapter, 'is_executing'):
@@ -765,7 +730,7 @@ class TaskClientRunner:
         """
         snapshot = {}
         try:
-            import common.subtasks as subtasks_pkg
+            import common.tasks as subtasks_pkg
             subtasks_dir = os.path.dirname(subtasks_pkg.__file__)
             for filename in os.listdir(subtasks_dir):
                 if (filename.endswith('.py') and
@@ -800,7 +765,7 @@ class TaskClientRunner:
 
                 logger.info(f"Subtask changes detected ({'; '.join(changes)}), reloading...")
 
-                from common.subtasks import reload_subtasks
+                from common.tasks import reload_subtasks
                 reloaded = reload_subtasks()
                 self._last_subtask_snapshot = current
                 logger.info(f"Subtask reload complete: {reloaded} modules loaded")
@@ -841,136 +806,6 @@ class TaskClientRunner:
         except Exception as e:
             logger.error(f"Failed to execute subtask-based task {task_name}: {e}")
             self._notify_task_completion(task_id, False, str(e))
-        finally:
-            # Clear current task ID
-            self.current_task_id = None
-
-    def _execute_task(self, task_id, task_name, subtasks_legacy, execution_order):
-        """Execute task with multiple subtasks in specified order"""
-        try:
-            # Set current executing task ID
-            self.current_task_id = task_id
-
-            logger.info(f"Start executing task: {task_name} with {len(subtasks_legacy)} subtasks")
-
-            # Notify server task execution started
-            self._notify_task_start(task_id)
-
-            # Execute subtasks in specified order
-            overall_success = True
-            subtask_results = []
-            overall_errors = []
-
-            # Create command ID to command mapping
-            subtask_map = {cmd['id']: cmd for cmd in subtasks_legacy}
-
-            for cmd_id in execution_order:
-                if cmd_id not in subtask_map:
-                    error_msg = f"Subtask ID {cmd_id} not found in subtasks list"
-                    logger.error(error_msg)
-                    overall_errors.append(error_msg)
-                    overall_success = False
-                    continue
-
-                cmd = subtask_map[cmd_id]
-                cmd_name = cmd.get('name', f'Subtask-{cmd_id}')
-                cmd_command = cmd.get('command', '')
-                cmd_timeout = cmd.get('timeout', 300)
-
-                logger.info(f"Executing subtask {cmd_id}: {cmd_name}")
-
-                try:
-                    # Execute individual subtask
-                    result = self.task_executor.execute(cmd_command, timeout=cmd_timeout)
-
-                    # Record subtask result
-                    subtask_result = {
-                        'subtask_id': cmd_id,
-                        'subtask_name': cmd_name,
-                        'command': cmd_command,
-                        'success': result.get('success', False),
-                        'output': result.get('output', ''),
-                        'error': result.get('error', ''),
-                        'exit_code': result.get('exit_code', 0),
-                        'duration': result.get('duration', 0),
-                        'completed_at': datetime.now().isoformat()
-                    }
-
-                    subtask_results.append(subtask_result)
-
-                    # Save intermediate result to local
-                    self._save_intermediate_result(task_id, cmd_id, subtask_result)
-
-                    # Immediately upload subtask result to server
-                    self._upload_subtask_result(task_id, subtask_result)
-
-                    if not result.get('success', False):
-                        overall_success = False
-                        error_msg = f"Subtask {cmd_id} failed: {result.get('error', 'Unknown error')}"
-                        overall_errors.append(error_msg)
-                        logger.warning(error_msg)
-
-                        # Check if subsequent instructions should continue to execute
-                        if cmd.get('stop_on_failure', False):
-                            logger.info(f"Stopping execution due to subtask {cmd_id} failure")
-                            break
-                    else:
-                        logger.info(f"Subtask {cmd_id} completed successfully")
-
-                except Exception as e:
-                    error_msg = f"Exception executing subtask {cmd_id}: {str(e)}"
-                    logger.error(error_msg)
-                    overall_errors.append(error_msg)
-                    overall_success = False
-
-                    # Record failed subtask result
-                    subtask_result = {
-                        'subtask_id': cmd_id,
-                        'subtask_name': cmd_name,
-                        'command': cmd_command,
-                        'success': False,
-                        'output': '',
-                        'error': str(e),
-                        'exit_code': -1,
-                        'duration': 0,
-                        'completed_at': datetime.now().isoformat()
-                    }
-                    subtask_results.append(subtask_result)
-                    self._save_intermediate_result(task_id, cmd_id, subtask_result)
-                    self._upload_subtask_result(task_id, subtask_result)
-
-                    if cmd.get('stop_on_failure', False):
-                        logger.info(f"Stopping execution due to subtask {cmd_id} exception")
-                        break
-
-            # Prepare final result with all subtask results
-            final_result = {
-                'success': overall_success,
-                'subtask_results': subtask_results,
-                'total_subtasks': len(subtask_results),
-                'successful_subtasks': len([r for r in subtask_results if r['success']]),
-                'failed_subtasks': len([r for r in subtask_results if not r['success']]),
-                'error': '\n'.join(overall_errors) if overall_errors else '',
-                'exit_code': 0 if overall_success else 1
-            }
-
-            # Send final task result
-            self._send_task_result(task_id, final_result)
-
-            logger.info(f"Task execution completed: {task_name} (Success: {overall_success}, {len(subtask_results)} subtasks)")
-
-        except Exception as e:
-            logger.error(f"Failed to execute task: {e}")
-            # Send failure result
-            self._send_task_result(task_id, {
-                'success': False,
-                'subtask_results': [],
-                'total_subtasks': 0,
-                'successful_subtasks': 0,
-                'failed_subtasks': 0,
-                'error': str(e),
-                'exit_code': -1
-            })
         finally:
             # Clear current task ID
             self.current_task_id = None

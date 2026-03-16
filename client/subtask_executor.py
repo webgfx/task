@@ -9,7 +9,7 @@ import requests
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from common.subtasks import execute_subtask, list_subtasks
+from common.tasks import execute_subtask, list_subtasks
 from common.models import TaskStatus, SubtaskDefinition
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from flask_socketio import emit
 from common.config import Config
 from common.models import Task, Client, TaskStatus, ClientStatus, SubtaskDefinition
 from common.utils import parse_datetime, validate_cron_expression
-from common.subtasks import list_subtasks, get_subtask, execute_subtask
+from common.tasks import list_subtasks, get_subtask, execute_subtask
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +21,20 @@ def create_api_blueprint(database, socketio, result_collector=None):
     # Task ManagementAPI
     @api.route('/tasks', methods=['GET'])
     def get_tasks():
-        """Get all tasks"""
+        """Get all tasks with their execution data included"""
         try:
             tasks = database.get_all_tasks()
+            # Bulk-load all executions in one query instead of N+1
+            all_execs = database.get_all_executions_grouped()
+            task_dicts = []
+            for task in tasks:
+                d = task.to_dict()
+                execs = all_execs.get(task.id, [])
+                d['executions'] = [e.to_dict() for e in execs]
+                task_dicts.append(d)
             return jsonify({
                 'success': True,
-                'data': [task.to_dict() for task in tasks]
+                'data': task_dicts
             })
         except Exception as e:
             logger.error(f"Get task listFailed: {e}")
@@ -863,7 +871,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def test_subtask(subtask_name):
         """Test a subtask execution (for debugging)"""
         try:
-            from common.subtasks import execute_subtask
+            from common.tasks import execute_subtask
 
             # Get args and kwargs from request
             data = request.get_json() or {}
@@ -884,25 +892,21 @@ def create_api_blueprint(database, socketio, result_collector=None):
     # Client Management API
     @api.route('/clients', methods=['GET'])
     def get_clients():
-        """Get all clients with enhanced task information"""
+        """Get all clients with cached status (no live connectivity checks)"""
         try:
             clients = database.get_all_clients()
 
-            # Enhance clients with task names
+            # Build a task name lookup in one query instead of N separate queries
+            task_ids = set(c.current_task_id for c in clients if c.current_task_id)
+            task_names = {}
+            if task_ids:
+                all_tasks = database.get_all_tasks()
+                task_names = {t.id: t.name for t in all_tasks}
+
             enhanced_clients = []
             for client in clients:
                 client_dict = client.to_dict()
-
-                # Add task name if client has current task
-                if client.current_task_id:
-                    task = database.get_task(client.current_task_id)
-                    if task:
-                        client_dict['current_task_name'] = task.name
-                    else:
-                        client_dict['current_task_name'] = 'Unknown Task'
-                else:
-                    client_dict['current_task_name'] = None
-
+                client_dict['current_task_name'] = task_names.get(client.current_task_id) if client.current_task_id else None
                 enhanced_clients.append(client_dict)
 
             return jsonify({
@@ -1481,7 +1485,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def get_subtask_definitions():
         """Get subtask definitions with result specifications"""
         try:
-            from common.subtasks import list_subtasks, get_subtask
+            from common.tasks import list_subtasks, get_subtask
 
             # Build definitions using the new class-based system
             result = {}
@@ -1517,7 +1521,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def reload_subtasks_endpoint():
         """Reload all subtask modules to pick up changes without restarting the service"""
         try:
-            from common.subtasks import reload_subtasks
+            from common.tasks import reload_subtasks
 
             # Reload subtasks on server
             reloaded_count = reload_subtasks()

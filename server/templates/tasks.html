@@ -54,6 +54,10 @@
                 <div class="header-content">
                     <h1>Task Management</h1>
                     <div class="header-actions">
+                        <button class="btn btn-danger" id="batchDeleteBtn" onclick="batchDeleteTasks()" style="display:none;">
+                            <i class="fas fa-trash"></i>
+                            Delete Selected (<span id="selectedTaskCount">0</span>)
+                        </button>
                         <button class="btn btn-primary" onclick="openTaskModal()">
                             <i class="fas fa-plus"></i>
                             Create Task

@@ -5,7 +5,7 @@ This package provides a modular approach to subtask definitions where each
 subtask is defined as a class inheriting from BaseSubtask.
 
 Usage:
-    from common.subtasks import get_subtask, list_subtasks, execute_subtask
+    from common.tasks import get_subtask, list_subtasks, execute_subtask
 
     # Execute a subtask
     result = execute_subtask('get_hostname')
@@ -55,7 +55,7 @@ def _load_all_subtasks():
             module_name = filename[:-3]  # Remove .py extension
             try:
                 # Import the module - this will trigger registration
-                importlib.import_module(f'common.subtasks.{module_name}')
+                importlib.import_module(f'common.tasks.{module_name}')
                 logging.debug(f"Loaded subtask module: {module_name}")
             except Exception as e:
                 logging.error(f"Failed to load subtask module {module_name}: {e}")
@@ -83,7 +83,7 @@ def reload_subtasks():
         if (filename.endswith('.py') and
             filename not in ['__init__.py', 'base.py'] and
             not filename.startswith('_')):
-            module_name = f'common.subtasks.{filename[:-3]}'
+            module_name = f'common.tasks.{filename[:-3]}'
             subtask_modules.append(module_name)
 
     # Reload each module

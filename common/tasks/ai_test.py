@@ -1,32 +1,39 @@
 """
-AI Test driver — runs external ai-test project benchmarks on the client device.
+AI Test driver — runs the unified perf-test.js from the external ai-test project.
 
-This driver locates the ai-test project (expected to be a sibling directory of the
-task repo), executes the requested benchmark script, reads the generated result
-files, and returns the structured data for the server to store and compare.
-
-Directory layout expected:
+The ai-test project is expected as a sibling directory of the task repo:
     project/
-    ├── task/          ← this repo
-    └── ai-test/       ← the ai-test project (sibling)
+    ├── task/          (this repo)
+    └── ai-test/       (the ai-test project)
 
-Supported scripts (passed via kwargs['script']):
-    perf-test-llamacpp   (default)
-    perf-test-ort
-    perf-test-ort-web
+The entry point is always:
+    node scripts/perf-test.js [options]
 
-The driver:
-1. Resolves the ai-test project path
-2. Snapshots existing result directories
-3. Runs the requested Node.js script with any extra arguments
-4. Finds newly created result files
-5. Returns the parsed JSON results to the server
+Options are passed via subtask kwargs when scheduling the task:
+    runtime:          Comma-separated runtimes, e.g. "ort,llamacpp" (default: "llamacpp")
+    ort_backend:      ORT backend, e.g. "webgpu" or "cuda"
+    llamacpp_backend: llama.cpp backend, e.g. "vulkan" or "cuda"
+    model:            Model short name, e.g. "qwen-3-1.7B"
+    prompt_lengths:   Comma-separated prompt lengths, e.g. "128,256"
+    extra_args:       Additional CLI arguments as a list
+
+Example task definition:
+    {
+        "name": "ai_test",
+        "client": "webgfx-103",
+        "kwargs": {
+            "runtime": "ort,llamacpp",
+            "ort_backend": "webgpu",
+            "llamacpp_backend": "vulkan",
+            "model": "qwen-3-1.7B",
+            "prompt_lengths": "128,256"
+        }
+    }
 """
 
 import os
 import json
 import logging
-import platform
 import shutil
 import subprocess
 import configparser
@@ -38,14 +45,6 @@ from . import register_subtask_class
 
 logger = logging.getLogger(__name__)
 
-# Map of short names to script filenames
-SCRIPT_MAP = {
-    'perf-test-llamacpp': 'perf-test-llamacpp.js',
-    'perf-test-ort': 'perf-test-ort.js',
-    'perf-test-ort-web': 'perf-test-ort-web.js',
-    'perf-test-ort-py': 'perf-test-ort.py',
-}
-
 
 def _get_project_root() -> str:
     """Return the task project root (three levels up from this file)."""
@@ -53,17 +52,10 @@ def _get_project_root() -> str:
 
 
 def _resolve_ai_test_path() -> str:
-    """
-    Resolve the ai-test project directory.
-
-    Search order:
-    1. common.cfg [PATHS] ai_test_path
-    2. Sibling: <project_root>/../ai-test
-    3. Sibling under test/: <project_root>/../test/ai-test
-    """
+    """Resolve the ai-test project directory."""
     root = _get_project_root()
 
-    # 1. Config file override
+    # Config file override
     cfg_path = os.path.join(root, 'common', 'common.cfg')
     if os.path.exists(cfg_path):
         try:
@@ -77,7 +69,7 @@ def _resolve_ai_test_path() -> str:
         except Exception:
             pass
 
-    # 2. Sibling directory
+    # Sibling directory
     for candidate in [
         os.path.normpath(os.path.join(root, '..', 'ai-test')),
         os.path.normpath(os.path.join(root, '..', 'test', 'ai-test')),
@@ -93,7 +85,7 @@ def _find_node() -> Optional[str]:
     node = shutil.which('node')
     if node:
         return node
-    if platform.system() == 'Windows':
+    if os.name == 'nt':
         for p in [
             os.path.expandvars(r'%ProgramFiles%\nodejs\node.exe'),
             os.path.expandvars(r'%ProgramFiles(x86)%\nodejs\node.exe'),
@@ -119,22 +111,19 @@ def _get_results_dir(ai_test_path: str) -> str:
     return os.path.join(ai_test_path, 'gitignore', 'results')
 
 
-def _snapshot_dirs(results_dir: str) -> set:
-    """Return the set of subdirectory names currently in results_dir."""
-    if not os.path.isdir(results_dir):
+def _snapshot_dirs(path: str) -> set:
+    if not os.path.isdir(path):
         return set()
-    return set(os.listdir(results_dir))
+    return set(os.listdir(path))
 
 
 def _find_new_results(results_dir: str, before: set) -> Optional[Dict[str, Any]]:
-    """Find result JSON files in directories created after `before` snapshot."""
+    """Find result JSON files in directories created after the snapshot."""
     if not os.path.isdir(results_dir):
         return None
 
     after = set(os.listdir(results_dir))
     new_dirs = sorted(after - before, reverse=True)
-
-    # Fallback: pick the most recent directory
     if not new_dirs:
         all_dirs = sorted(
             [d for d in after if os.path.isdir(os.path.join(results_dir, d))],
@@ -146,7 +135,6 @@ def _find_new_results(results_dir: str, before: set) -> Optional[Dict[str, Any]]
         dir_path = os.path.join(results_dir, dir_name)
         if not os.path.isdir(dir_path):
             continue
-        # Read all *-results.json files in the directory
         result_files = [f for f in os.listdir(dir_path) if f.endswith('-results.json')]
         if result_files:
             combined = {'run_id': dir_name, 'files': {}}
@@ -165,22 +153,24 @@ class AiTestSubtask(BaseSubtask):
     """
     Driver for the external ai-test benchmark project.
 
-    Kwargs accepted at scheduling time:
-        script:   Which benchmark to run (default: 'perf-test-llamacpp')
-        args:     Extra CLI arguments as a list of strings
+    Runs:  node scripts/perf-test.js [options]
+
+    Kwargs:
+        runtime:          "ort", "llamacpp", or "ort,llamacpp"
+        ort_backend:      "webgpu", "cuda", etc.
+        llamacpp_backend: "vulkan", "cuda", etc.
+        model:            Model short name, e.g. "qwen-3-1.7B"
+        prompt_lengths:   Comma-separated, e.g. "128,256"
+        extra_args:       List of additional CLI arguments
     """
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Execute the ai-test benchmark and return collected results."""
-        script_name = kwargs.get('script', 'perf-test-llamacpp')
-        extra_args: List[str] = kwargs.get('args', [])
-
+    def run(self, *args, **kwargs) -> Dict[str, Any]:
         output: Dict[str, Any] = {
-            'script': script_name,
             'ai_test_path': None,
             'test_status': 'skip',
             'results': None,
             'run_id': None,
+            'command': '',
             'stdout': '',
             'stderr': '',
             'errors': [],
@@ -195,41 +185,59 @@ class AiTestSubtask(BaseSubtask):
             output['errors'].append(f'ai-test project not found at: {ai_test_path}')
             return output
 
-        # 2. Resolve script file
-        script_file = SCRIPT_MAP.get(script_name, f'{script_name}.js')
-        script_path = os.path.join(ai_test_path, 'scripts', script_file)
-
+        script_path = os.path.join(ai_test_path, 'scripts', 'perf-test.js')
         if not os.path.isfile(script_path):
-            output['errors'].append(f'Script not found: {script_path}')
+            output['errors'].append(f'perf-test.js not found at: {script_path}')
             return output
 
-        # 3. Determine runner (node for .js, python for .py)
-        if script_file.endswith('.py'):
-            runner = shutil.which('python') or shutil.which('python3')
-            if not runner:
-                output['errors'].append('Python not found')
-                return output
-        else:
-            runner = _find_node()
-            if not runner:
-                output['errors'].append('Node.js not found')
-                return output
+        # 2. Find Node.js
+        node = _find_node()
+        if not node:
+            output['errors'].append('Node.js not found')
+            return output
 
-        # 4. Snapshot existing result directories
+        # 3. Build command line
+        cmd = [node, script_path]
+
+        runtime = kwargs.get('runtime', 'llamacpp')
+        if runtime:
+            cmd.extend(['--runtime', runtime])
+
+        ort_backend = kwargs.get('ort_backend', '')
+        if ort_backend:
+            cmd.extend(['--ort-backend', ort_backend])
+
+        llamacpp_backend = kwargs.get('llamacpp_backend', '')
+        if llamacpp_backend:
+            cmd.extend(['--llamacpp-backend', llamacpp_backend])
+
+        model = kwargs.get('model', '')
+        if model:
+            cmd.extend(['-m', model])
+
+        prompt_lengths = kwargs.get('prompt_lengths', '')
+        if prompt_lengths:
+            cmd.extend(['-pl', prompt_lengths])
+
+        extra = kwargs.get('extra_args', [])
+        if extra:
+            cmd.extend(extra)
+
+        output['command'] = ' '.join(cmd)
+        logger.info(f"AI_TEST: {output['command']}")
+
+        # 4. Snapshot results dir
         results_dir = _get_results_dir(ai_test_path)
         before = _snapshot_dirs(results_dir)
 
-        # 5. Run the script
-        cmd = [runner, script_path] + extra_args
-        logger.info(f"AI_TEST: Running {' '.join(cmd)} in {ai_test_path}")
-
+        # 5. Run
         try:
             proc = subprocess.run(
                 cmd,
                 cwd=ai_test_path,
                 capture_output=True,
                 text=True,
-                timeout=3600,  # 1 hour max
+                timeout=3600,
                 env={**os.environ},
             )
             output['stdout'] = proc.stdout
@@ -237,11 +245,10 @@ class AiTestSubtask(BaseSubtask):
 
             if proc.returncode != 0:
                 output['errors'].append(f'Script exited with code {proc.returncode}')
-                # Check for common skip reasons
                 combined_out = proc.stdout + proc.stderr
                 if 'No llama.cpp versions found' in combined_out:
                     output['test_status'] = 'skip'
-                    output['errors'] = ['llama.cpp binaries not available on this device']
+                    output['errors'] = ['llama.cpp binaries not available']
                     return output
 
         except subprocess.TimeoutExpired:
@@ -253,17 +260,16 @@ class AiTestSubtask(BaseSubtask):
             output['test_status'] = 'fail'
             return output
 
-        # 6. Collect newly generated results
+        # 6. Collect results
         new_results = _find_new_results(results_dir, before)
         if new_results:
             output['results'] = new_results
             output['run_id'] = new_results.get('run_id')
             output['test_status'] = 'pass'
         else:
-            # Script ran but no result files — check if it was a pass or fail
             output['test_status'] = 'pass' if proc.returncode == 0 else 'fail'
-            if proc.returncode == 0 and not new_results:
-                output['errors'].append('Script completed but no result files were generated')
+            if proc.returncode == 0:
+                output['errors'].append('No result files generated')
 
         return output
 
@@ -271,10 +277,8 @@ class AiTestSubtask(BaseSubtask):
         return self._last_result
 
     def get_description(self) -> str:
-        return ("Driver for the external ai-test benchmark project. "
-                "Runs llama.cpp, ORT, or ORT-Web perf tests and collects results.")
+        return "Run ai-test benchmarks (ORT/llama.cpp) via node scripts/perf-test.js"
 
 
-# Register the subtask
 register_subtask_class('ai_test', AiTestSubtask())
 

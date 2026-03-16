@@ -631,7 +631,7 @@ def debug_service():
         runner_file = os.path.join(project_root, 'client', 'client_runner.py')
         print(f"✓ Client runner file exists: {os.path.exists(runner_file)} ({runner_file})")
 
-        installer_file = os.path.join(project_root, 'client', 'client_installer.py')
+        installer_file = os.path.join(project_root, 'client', 'service', 'client_installer.py')
         print(f"✓ Client installer file exists: {os.path.exists(installer_file)} ({installer_file})")
 
         print("\nTesting service class initialization...")

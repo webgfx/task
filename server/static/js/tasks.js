@@ -658,16 +658,8 @@ async function refreshTasks() {
             throw new Error(response.error || 'Unknown error');
         }
 
-        // Load subtask execution data for each task
-        for (const task of allTasks) {
-            try {
-                const executionsResponse = await apiGet(`/api/tasks/${task.id}/subtask-executions`);
-                task.executions = executionsResponse.success ? executionsResponse.data : [];
-            } catch (error) {
-                console.warn(`Failed to load executions for task ${task.id}:`, error);
-                task.executions = [];
-            }
-        }
+        // Executions are now included inline in the tasks response
+        // No need for separate per-task API calls
 
         filterTasks();
         renderEnhancedTasks();
@@ -732,7 +724,7 @@ function renderTaskGroup(task, container) {
     const groupRow = document.createElement('tr');
     groupRow.className = 'task-group-row';
     groupRow.innerHTML = `
-        <td>${task.id}</td>
+        <td><input type="checkbox" class="task-checkbox" value="${task.id}" onchange="updateBatchDeleteButton()" ${task.status === 'running' ? 'disabled' : ''}></td>
         <td colspan="9">
             <div class="task-group-header">
                 <div class="task-group-title">${task.name}</div>
@@ -911,9 +903,6 @@ function createSubtaskExecutionRow(task, execution) {
             <div class="client-info-inline">
                 <span class="client-name">${execution.client}</span>
                 <span class="client-status ${clientStatus}">${clientStatus}</span>
-                <button class="btn btn-micro btn-outline" onclick="event.stopPropagation(); pingClient('${execution.client}')" title="Ping Client">
-                    <i class="fas fa-wifi"></i> Ping Client
-                </button>
             </div>
         </td>
         <td class="status-col">
@@ -987,11 +976,6 @@ function formatResultInfo(execution) {
     return `
         <div class="result-info">
             <div class="${resultClass}" title="${escapeHtml(result.substring(0, 200))}">${preview}</div>
-            <button class="btn btn-small btn-info result-details-btn"
-                    onclick="showExecutionResult('${execution.subtask_name}', '${execution.client}', \`${result.replace(/`/g, '\\`')}\`, '${execution.subtask_id !== null && execution.subtask_id !== undefined ? execution.subtask_id : ''}')"
-                    title="View Full Result">
-                <i class="fas fa-eye"></i>
-            </button>
         </div>
     `;
 }
@@ -1363,6 +1347,42 @@ async function deleteTask(taskId) {
         console.error('Failed to delete task:', error);
         showNotification('Delete Error', 'Failed to delete task', 'error');
     }
+}
+
+// Batch delete support
+function updateBatchDeleteButton() {
+    const checked = document.querySelectorAll('.task-checkbox:checked');
+    const btn = document.getElementById('batchDeleteBtn');
+    const count = document.getElementById('selectedTaskCount');
+    if (btn) btn.style.display = checked.length > 0 ? 'inline-flex' : 'none';
+    if (count) count.textContent = checked.length;
+}
+
+async function batchDeleteTasks() {
+    const checked = Array.from(document.querySelectorAll('.task-checkbox:checked'));
+    const ids = checked.map(cb => parseInt(cb.value));
+
+    if (ids.length === 0) return;
+
+    if (!confirm(`Delete ${ids.length} task(s)?\n\nThis will permanently remove all selected tasks and their execution history.\n\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+        try {
+            const response = await apiDelete(`/api/tasks/${id}`);
+            if (response.success) deleted++;
+            else failed++;
+        } catch (e) {
+            failed++;
+        }
+    }
+
+    showNotification('Batch Delete', `${deleted} deleted, ${failed} failed`, deleted > 0 ? 'success' : 'error');
+    await refreshTasks();
+    updateBatchDeleteButton();
 }
 
 // Delete subtask execution that hasn't started yet

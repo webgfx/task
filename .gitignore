@@ -204,7 +204,7 @@ Thumbs.db
 # Development and test files
 test_*.py
 *_test.py
-!common/subtasks/ai_test.py
+!common/tasks/ai_test.py
 demo*.py
 diagnose*.py
 validate*.py
