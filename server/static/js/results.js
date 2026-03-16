@@ -139,8 +139,8 @@ function renderResults(results) {
                 <td>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" class="result-checkbox" value="${result.id}" onclick="updateCompareButton()" style="width:18px; height:18px; cursor:pointer; accent-color:#6366f1;">
-                        <span class="task-id-badge">#${result.task_id}</span>
-                        <strong>${escapeHtml(result.task_name)}</strong>
+                        <span class="task-id-badge">#${result.job_id}</span>
+                        <strong>${escapeHtml(result.job_name)}</strong>
                     </div>
                 </td>
                 <td>${escapeHtml(result.client_name)}</td>
@@ -175,7 +175,7 @@ async function viewResultDetail(resultId) {
 
         if (!modal || !title || !body) return;
 
-        title.textContent = `Result: ${result.task_name} - ${result.task_name}`;
+        title.textContent = `Result: ${result.job_name} - ${result.task_name}`;
 
         // Parse result data if it's a JSON string
         let resultData = result.result;
@@ -200,7 +200,7 @@ async function viewResultDetail(resultId) {
             <div class="result-detail-grid">
                 <div class="detail-row">
                     <strong>Task:</strong>
-                    <span>${escapeHtml(result.task_name)} (ID: ${result.task_id})</span>
+                    <span>${escapeHtml(result.job_name)} (ID: ${result.job_id})</span>
                 </div>
                 <div class="detail-row">
                     <strong>Client:</strong>

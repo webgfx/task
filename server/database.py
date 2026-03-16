@@ -110,8 +110,8 @@ class Database:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS task_results (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    task_id INTEGER NOT NULL,
-                    task_name TEXT NOT NULL,
+                    job_id INTEGER NOT NULL,
+                    job_name TEXT NOT NULL,
                     client_name TEXT NOT NULL,
                     task_name TEXT NOT NULL,
                     status TEXT DEFAULT 'completed',
@@ -119,9 +119,12 @@ class Database:
                     execution_time REAL,
                     completed_at TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (task_id) REFERENCES tasks (id)
+                    FOREIGN KEY (job_id) REFERENCES tasks (id)
                 )
             ''')
+
+            # Migrate task_results columns to job/task naming
+            self._migrate_task_results_columns(cursor)
 
             # Create client communication logs table
             cursor.execute('''
@@ -1427,6 +1430,45 @@ class Database:
             logger.error(f"Migration to job/task/run naming failed: {e}")
             raise
 
+    def _migrate_task_results_columns(self, cursor):
+        """Rename task_results columns: task_id→job_id, task_name→job_name, subtask_name→task_name"""
+        try:
+            cursor.execute("PRAGMA table_info(task_results)")
+            columns = [c[1] for c in cursor.fetchall()]
+
+            if 'subtask_name' in columns or ('task_id' in columns and 'job_id' not in columns):
+                logger.info("Migrating task_results columns to job/task naming...")
+                cursor.execute('''
+                    CREATE TABLE task_results_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        job_id INTEGER NOT NULL,
+                        job_name TEXT NOT NULL,
+                        client_name TEXT NOT NULL,
+                        task_name TEXT NOT NULL,
+                        status TEXT DEFAULT 'completed',
+                        result TEXT,
+                        execution_time REAL,
+                        completed_at TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (job_id) REFERENCES tasks (id)
+                    )
+                ''')
+                # Map old columns to new: task_id→job_id, task_name→job_name, subtask_name→task_name
+                old_task_col = 'subtask_name' if 'subtask_name' in columns else 'task_name'
+                cursor.execute(f'''
+                    INSERT INTO task_results_new
+                    (id, job_id, job_name, client_name, task_name, status,
+                     result, execution_time, completed_at, created_at)
+                    SELECT id, task_id, task_name, client_name, {old_task_col}, status,
+                           result, execution_time, completed_at, created_at
+                    FROM task_results
+                ''')
+                cursor.execute('DROP TABLE task_results')
+                cursor.execute('ALTER TABLE task_results_new RENAME TO task_results')
+                logger.info("Migrated task_results columns successfully")
+        except Exception as e:
+            logger.error(f"task_results column migration failed: {e}")
+
     # Task result caching methods
 
     # Directory for result files
@@ -1499,7 +1541,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO task_results
-                (task_id, task_name, client_name, subtask_name, status,
+                (job_id, job_name, client_name, task_name, status,
                  result, execution_time, completed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
@@ -1529,8 +1571,8 @@ class Database:
 
         d = {
             'id': row['id'],
-            'task_id': row['task_id'],
-            'task_name': row['task_name'],
+            'job_id': row['job_id'],
+            'job_name': row['job_name'],
             'client_name': row['client_name'],
             'task_name': row['task_name'],
             'status': row['status'],
@@ -1542,7 +1584,7 @@ class Database:
         }
         return d
 
-    def get_cached_results(self, task_id: int = None, client_name: str = None,
+    def get_cached_results(self, job_id: int = None, client_name: str = None,
                           task_name: str = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get cached task results with optional filtering.
@@ -1554,9 +1596,9 @@ class Database:
             query = 'SELECT * FROM task_results WHERE 1=1'
             params = []
 
-            if task_id is not None:
-                query += ' AND task_id = ?'
-                params.append(task_id)
+            if job_id is not None:
+                query += ' AND job_id = ?'
+                params.append(job_id)
             if client_name:
                 query += ' AND client_name = ?'
                 params.append(client_name)

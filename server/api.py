@@ -1966,13 +1966,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def get_cached_results():
         """Get cached task results with optional filtering"""
         try:
-            task_id = request.args.get('task_id', type=int)
+            job_id = request.args.get('job_id', type=int)
             client_name = request.args.get('client_name')
             task_name = request.args.get('task_name')
             limit = request.args.get('limit', 100, type=int)
 
             results = database.get_cached_results(
-                task_id=task_id,
+                job_id=job_id,
                 client_name=client_name,
                 task_name=task_name,
                 limit=limit
