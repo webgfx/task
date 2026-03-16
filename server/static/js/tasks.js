@@ -238,24 +238,24 @@ async function loadAvailableTasks() {
 }
 
 // Add a new task row
-function addTASK() {
-    const TASKsList = document.getElementById('TASKsList');
-    if (!TASKsList) {
-        console.error('Could not find TASKsList element');
+function addTask() {
+    const tasksList = document.getElementById('tasksList');
+    if (!tasksList) {
+        console.error('Could not find tasksList element');
         return;
     }
 
-    const TASKIndex = TASKsList.children.length;
+    const taskIndex = tasksList.children.length;
 
-    const TASKRow = document.createElement('div');
-    TASKRow.className = 'Task-row';
-    TASKRow.innerHTML = `
+    const taskRow = document.createElement('div');
+    taskRow.className = 'Task-row';
+    taskRow.innerHTML = `
         <div class="Task-header">
-            <h5>Task ${TASKIndex + 1}</h5>
+            <h5>Task ${taskIndex + 1}</h5>
             <div class="Task-id-display" style="display: none;">
                 <small class="text-muted">ID: <span class="Task-id-value">Not assigned</span></small>
             </div>
-            <button type="button" class="btn btn-small btn-danger" onclick="removeTASK(this)">
+            <button type="button" class="btn btn-small btn-danger" onclick="removeTask(this)">
                 <i class="fas fa-trash"></i> Remove
             </button>
         </div>
@@ -300,7 +300,7 @@ function addTASK() {
         </div>
     `;
 
-    TASKsList.appendChild(TASKRow);
+    tasksList.appendChild(taskRow);
     updateTASKNumbers();
 }
 
@@ -308,10 +308,10 @@ function addTASK() {
 function toggleAllClients(checkbox) {
     if (!checkbox) return;
 
-    const TASKRow = checkbox.closest('.Task-row');
-    if (!TASKRow) return;
+    const taskRow = checkbox.closest('.Task-row');
+    if (!taskRow) return;
 
-    const clientCheckboxes = TASKRow.querySelectorAll('.client-checkbox');
+    const clientCheckboxes = taskRow.querySelectorAll('.client-checkbox');
 
     clientCheckboxes.forEach(cb => {
         cb.checked = checkbox.checked;
@@ -322,12 +322,12 @@ function toggleAllClients(checkbox) {
 function updateClientSelection(checkbox) {
     if (!checkbox) return;
 
-    const TASKRow = checkbox.closest('.Task-row');
-    if (!TASKRow) return;
+    const taskRow = checkbox.closest('.Task-row');
+    if (!taskRow) return;
 
-    const allClientsCheckbox = TASKRow.querySelector('.all-clients-checkbox');
-    const clientCheckboxes = TASKRow.querySelectorAll('.client-checkbox');
-    const checkedBoxes = TASKRow.querySelectorAll('.client-checkbox:checked');
+    const allClientsCheckbox = taskRow.querySelector('.all-clients-checkbox');
+    const clientCheckboxes = taskRow.querySelectorAll('.client-checkbox');
+    const checkedBoxes = taskRow.querySelectorAll('.client-checkbox:checked');
 
     if (!allClientsCheckbox) return;
 
@@ -345,12 +345,12 @@ function updateClientSelection(checkbox) {
 }
 
 // Remove a Task row
-function removeTASK(button) {
+function removeTask(button) {
     if (!button) return;
 
-    const TASKRow = button.closest('.Task-row');
-    if (TASKRow) {
-        TASKRow.remove();
+    const taskRow = button.closest('.Task-row');
+    if (taskRow) {
+        taskRow.remove();
         updateTASKNumbers();
     }
 }
@@ -379,11 +379,11 @@ function updateTASKDescription(selectElement) {
     if (!selectElement) return;
 
     const TASKName = selectElement.value;
-    const TASKRow = selectElement.closest('.Task-row');
+    const taskRow = selectElement.closest('.Task-row');
 
-    if (!TASKRow) return;
+    if (!taskRow) return;
 
-    const descriptionDiv = TASKRow.querySelector('.Task-description');
+    const descriptionDiv = taskRow.querySelector('.Task-description');
 
     if (!descriptionDiv) return;
 
@@ -415,8 +415,8 @@ function openTaskModal(taskId = null) {
     document.getElementById('taskId').value = '';
 
     // Clear tasks
-    const TASKsList = document.getElementById('TASKsList');
-    TASKsList.innerHTML = '';
+    const tasksList = document.getElementById('tasksList');
+    tasksList.innerHTML = '';
 
     if (taskId) {
         modalTitle.textContent = 'Edit Job';
@@ -424,7 +424,7 @@ function openTaskModal(taskId = null) {
     } else {
         modalTitle.textContent = 'Create Job';
         // Add initial Task for new tasks
-        addTASK();
+        addTask();
     }
 
     modal.style.display = 'block';
@@ -555,7 +555,7 @@ async function displayGeneratedTaskIds(taskId) {
 
             // Create a simple mapping based on order
             let idsUpdated = 0;
-            TASKRows.forEach((TASKRow, rowIndex) => {
+            TASKRows.forEach((taskRow, rowIndex) => {
                 // Find tasks for this row (by order)
                 const matchingTasks = task.tasks.filter(st => st.order === rowIndex);
 
@@ -563,11 +563,11 @@ async function displayGeneratedTaskIds(taskId) {
                     const firstTask = matchingTasks[0];
                     console.log(`Updating row ${rowIndex} with Task ID:`, firstTask.task_id);
 
-                    TASKRow.setAttribute('data-Task-id', firstTask.task_id);
+                    taskRow.setAttribute('data-Task-id', firstTask.task_id);
 
                     // Display the Task ID in the UI
-                    const idDisplay = TASKRow.querySelector('.Task-id-display');
-                    const idValue = TASKRow.querySelector('.Task-id-value');
+                    const idDisplay = taskRow.querySelector('.Task-id-display');
+                    const idValue = taskRow.querySelector('.Task-id-value');
                     if (idDisplay && idValue) {
                         if (matchingTasks.length === 1) {
                             idValue.textContent = firstTask.task_id;
@@ -626,7 +626,7 @@ function collectTASKs() {
             // preserve the ID. For new tasks or when multiple clients are selected,
             // each will get a new/separate ID on the server side.
             checkedClients.forEach((clientName, clientIndex) => {
-                const TASKData = {
+                const taskData = {
                     name: name,
                     client: clientName,
                     order: index,
@@ -637,10 +637,10 @@ function collectTASKs() {
 
                 // Preserve Task ID only for the first client if editing
                 if (existingTASKId && clientIndex === 0) {
-                    TASKData.task_id = existingTASKId;
+                    taskData.task_id = existingTASKId;
                 }
 
-                tasks.push(TASKData);
+                tasks.push(taskData);
             });
         }
     });
@@ -1918,20 +1918,20 @@ async function loadTaskForEdit(taskId) {
             if (task.tasks && task.tasks.length > 0) {
                 // Create a Task row for each individual Task (preserving unique IDs)
                 task.tasks.forEach(Task => {
-                    addTASK();
+                    addTask();
                     const TASKRows = document.querySelectorAll('.Task-row');
-                    const TASKRow = TASKRows[TASKRows.length - 1];
+                    const taskRow = TASKRows[TASKRows.length - 1];
 
                     // Set Task name
-                    TASKRow.querySelector('.Task-name').value = Task.name;
+                    taskRow.querySelector('.Task-name').value = Task.name;
 
                     // Store the Task ID for preservation during save
                     if (Task.task_id) {
-                        TASKRow.setAttribute('data-Task-id', Task.task_id);
+                        taskRow.setAttribute('data-Task-id', Task.task_id);
 
                         // Display the Task ID in the UI
-                        const idDisplay = TASKRow.querySelector('.Task-id-display');
-                        const idValue = TASKRow.querySelector('.Task-id-value');
+                        const idDisplay = taskRow.querySelector('.Task-id-display');
+                        const idValue = taskRow.querySelector('.Task-id-value');
                         if (idDisplay && idValue) {
                             idValue.textContent = Task.task_id;
                             idDisplay.style.display = 'block';
@@ -1939,7 +1939,7 @@ async function loadTaskForEdit(taskId) {
                     }
 
                     // Select the target client for this specific Task
-                    const clientCheckbox = TASKRow.querySelector(`.client-checkbox[value="${Task.client}"]`);
+                    const clientCheckbox = taskRow.querySelector(`.client-checkbox[value="${Task.client}"]`);
                     if (clientCheckbox) {
                         clientCheckbox.checked = true;
                         // Update client selection state
@@ -1947,7 +1947,7 @@ async function loadTaskForEdit(taskId) {
                     }
 
                     // Update description
-                    updateTASKDescription(TASKRow.querySelector('.Task-name'));
+                    updateTASKDescription(taskRow.querySelector('.Task-name'));
                 });
             }
 

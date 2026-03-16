@@ -233,8 +233,8 @@ class TaskClientRunner:
                     my_tasks = [s for s in data['tasks'] if s.get('client') == self.client_name]
                     logger.info(f"TASK_ASSIGNMENT: {len(my_tasks)}/{len(data['tasks'])} tasks assigned to this client")
 
-                    for i, Task in enumerate(my_tasks, 1):
-                        logger.info(f"ASSIGNED_TASK[{i}]: '{Task.get('name')}' (order: {Task.get('order', 0)})")
+                    for i, t in enumerate(my_tasks, 1):
+                        logger.info(f"ASSIGNED_TASK[{i}]: '{t.get('name')}' (order: {t.get('order', 0)})")
 
                     logger.info(f"Received task-based job: {task_name} (ID: {task_id}) with {len(data['tasks'])} tasks")
 

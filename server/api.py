@@ -262,7 +262,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Create copied task data with defaults from original
             copied_task_data = {
-                'name': data.get('name', f"{original_task.name} (Copy)"),
+                'name': data.get('name', f"{original_td.name} (Copy)"),
                 'tasks': [],
                 'send_email': data.get('send_email', original_task.send_email),
                 'email_recipients': data.get('email_recipients', original_task.email_recipients)
@@ -293,7 +293,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if data.get('update_clients'):
                 client_updates = data.get('client_updates', {})
                 for td in copied_task_data['tasks']:
-                    old_client = Task['client']
+                    old_client = td['client']
                     if old_client in client_updates:
                         Task['client'] = client_updates[old_client]
 
@@ -344,7 +344,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             tasks.sort(key=lambda x: x.order)
 
             # Create the copied task
-            task = Task(
+            task = Job(
                 name=copied_task_data['name'],
                 tasks=tasks,
                 schedule_time=parse_datetime(copied_task_data.get('schedule_time')),
@@ -366,12 +366,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
             task_id = database.create_task(task)
             task.id = task_id
 
-            logger.info(f"Task copied successfully: {original_task.name} -> {td.name} (ID: {task_id})")
+            logger.info(f"Task copied successfully: {original_td.name} -> {td.name} (ID: {task_id})")
 
             return jsonify({
                 'success': True,
                 'data': task.to_dict(),
-                'message': f'Task copied successfully from "{original_task.name}"'
+                'message': f'Task copied successfully from "{original_td.name}"'
             })
 
         except Exception as e:
@@ -1209,7 +1209,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.info(f"TASK_SCHEDULING: Task {task_id} '{td.name}' scheduled to client '{client_name}' ({client_ip})")
             logger.info(f"TASK_SCHEDULING: Task details - tasks: {len(task.tasks) if task.tasks else 0}, Status: {task.status.value}")
             if task.tasks:
-                for i, Task in enumerate(task.tasks):
+                for i, td in enumerate(task.tasks):
                     logger.debug(f"TASK_SCHEDULING: Task {task_id} Task {i+1}: '{td.name}' -> '{td.client}'")
 
             # Broadcast task start run event
@@ -1807,7 +1807,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             # Determine if task is complete
             all_finished = (completed_count + failed_count) == total_tasks_count
 
-            logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' - Progress: {completed_count}/{total_tasks_count} completed, {failed_count} failed")
+            logger.info(f"TASK_COMPLETION: Task {task_id} '{td.name}' - Progress: {completed_count}/{total_tasks_count} completed, {failed_count} failed")
 
             if all_finished and task.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
                 # Update task status
@@ -1816,11 +1816,11 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 if failed_count > 0:
                     task.status = JobStatus.FAILED
                     task.error_message = f"{failed_count} out of {total_tasks_count} tasks failed"
-                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{task.name}' FAILED - {failed_count}/{total_tasks_count} tasks failed")
+                    logger.warning(f"TASK_COMPLETION: Task {task_id} '{td.name}' FAILED - {failed_count}/{total_tasks_count} tasks failed")
                 else:
                     task.status = JobStatus.COMPLETED
                     task.result = f"All {total_tasks_count} tasks completed successfully"
-                    logger.info(f"TASK_COMPLETION: Task {task_id} '{task.name}' COMPLETED successfully")
+                    logger.info(f"TASK_COMPLETION: Task {task_id} '{td.name}' COMPLETED successfully")
 
                 database.update_task(task)
 
