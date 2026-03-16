@@ -127,8 +127,14 @@ class TaskClientRunner:
         # Initialize components with configuration from cfg file
         self.heartbeat = HeartbeatManager(self.server_url, self.client_name, get_heartbeat_interval)
 
-        # Initialize SocketIO client
-        self.sio = socketio.Client()
+        # Initialize SocketIO client with auto-reconnection
+        self.sio = socketio.Client(
+            reconnection=True,
+            reconnection_attempts=0,  # unlimited
+            reconnection_delay=2,
+            reconnection_delay_max=30,
+            logger=False
+        )
         self._setup_socketio_handlers()
 
         # Configuration update thread
