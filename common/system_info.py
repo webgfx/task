@@ -64,10 +64,50 @@ def get_memory_info() -> Dict[str, Any]:
         }
 
 
+def _get_vram_from_registry() -> dict:
+    """Read 64-bit VRAM sizes from the Windows display driver registry key.
+
+    Win32_VideoController.AdapterRAM is a 32-bit field and overflows for GPUs
+    with more than 4 GB VRAM.  The display driver class registry entry stores
+    the value as a 64-bit integer (HardwareInformation.qwMemorySize) and is
+    always accurate.
+
+    Returns:
+        dict mapping lower-cased GPU name -> memory size in bytes (int)
+    """
+    result = {}
+    try:
+        import subprocess, csv, io
+        r = subprocess.run(
+            ['powershell', '-Command',
+             "Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control"
+             "\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' "
+             "-Name 'HardwareInformation.qwMemorySize','DriverDesc' "
+             "-ErrorAction SilentlyContinue "
+             "| Select-Object DriverDesc,'HardwareInformation.qwMemorySize' "
+             "| ConvertTo-Csv -NoTypeInformation"],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.stdout.strip():
+            reader = csv.DictReader(io.StringIO(r.stdout))
+            for row in reader:
+                name = row.get('DriverDesc', '').strip().strip('"')
+                mem_str = row.get('HardwareInformation.qwMemorySize', '').strip().strip('"')
+                if name and mem_str and mem_str.lstrip('-').isdigit():
+                    mem = int(mem_str)
+                    if mem > 0:
+                        result[name.lower()] = mem
+    except Exception:
+        pass
+    return result
+
+
 def get_gpu_info() -> List[Dict[str, Any]]:
     """Get GPU information with model and driver version using PowerShell, marking active GPU"""
     gpus = []
     active_gpu_pnp_id = None
+    # Build a name -> 64-bit VRAM map to fix Win32_VideoController 32-bit overflow
+    registry_vram = _get_vram_from_registry() if platform.system() == 'Windows' else {}
         
     # Try to get active GPU information first
     try:
@@ -183,9 +223,15 @@ def get_gpu_info() -> List[Dict[str, Any]]:
                                         continue
                                     
                                     # Convert memory if available
+                                    # AdapterRAM is a 32-bit WMI field and overflows for GPUs
+                                    # with more than 4 GB VRAM. Use the 64-bit registry value
+                                    # when available; fall back to AdapterRAM otherwise.
                                     memory = 0
                                     if adapter_ram and adapter_ram.isdigit():
                                         memory = int(adapter_ram)
+                                    registry_key = name.lower()
+                                    if registry_key in registry_vram:
+                                        memory = registry_vram[registry_key]
                                     
                                     # Parse driver date from PowerShell CIM format
                                     if driver_date and driver_date not in ['NULL', '']:
