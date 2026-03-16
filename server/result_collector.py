@@ -181,7 +181,7 @@ class TaskResultCollector:
                 return
 
             # Collect all results
-            client_results = self._collect_task_results(Job)
+            client_results = self._collect_task_results(job)
 
             # Determine overall Job status
             overall_success = self._determine_overall_success(client_results)
@@ -193,8 +193,8 @@ class TaskResultCollector:
             # Generate HTML report
             report_file_path = None
             try:
-                html_content = self.report_generator.generate_task_report(Job, client_results)
-                report_file_path = self.report_generator.save_report_to_file(html_content, Job)
+                html_content = self.report_generator.generate_task_report(job, client_results)
+                report_file_path = self.report_generator.save_report_to_file(html_content, job)
                 logger.info(f"Report generated for Job {task_id}: {report_file_path}")
             except Exception as e:
                 logger.error(f"Failed to generate report for Job {task_id}: {e}")
@@ -213,7 +213,7 @@ class TaskResultCollector:
                                 result = self.email_notifier.send_notification(
                                     task_name=job.name,
                                     client_name=job.get_all_clients()[0] if job.get_all_clients() else 'unknown',
-                                    report_html=self.report_generator.generate_html_report(Job, client_results),
+                                    report_html=self.report_generator.generate_html_report(job, client_results),
                                     to_email=recipient.strip()
                                 )
                                 if result.get('success'):
@@ -224,8 +224,7 @@ class TaskResultCollector:
                                 logger.error(f"Error sending email to {recipient} for Job {task_id}: {e}")
                     else:
                         # Fallback to default notification method
-                        success = self.email_notifier.send_task_completion_notification(
-                            Job, client_results, report_file_path
+                        success = self.email_notifier.send_task_completion_notification(job, client_results, report_file_path
                         )
                         if success:
                             logger.info(f"Email notification sent (default) for Job {task_id}")
@@ -240,10 +239,10 @@ class TaskResultCollector:
                 logger.warning(f"Job {task_id} requested email notification but no recipients specified")
 
             # Cache Job results for future reference
-            self._cache_task_results(Job, client_results)
+            self._cache_task_results(job, client_results)
 
             # Emit real-time notification
-            self._emit_task_completion_event(Job, client_results, overall_success)
+            self._emit_task_completion_event(job, client_results, overall_success)
 
             logger.info(f"Job {task_id} completion processing finished")
 
@@ -413,11 +412,11 @@ class TaskResultCollector:
                 return None
 
             # Collect results
-            client_results = self._collect_task_results(Job)
+            client_results = self._collect_task_results(job)
 
             # Generate report
-            html_content = self.report_generator.generate_task_report(Job, client_results)
-            report_file_path = self.report_generator.save_report_to_file(html_content, Job)
+            html_content = self.report_generator.generate_task_report(job, client_results)
+            report_file_path = self.report_generator.save_report_to_file(html_content, job)
 
             logger.info(f"Manual report generated for Job {task_id}: {report_file_path}")
             return report_file_path
@@ -447,14 +446,13 @@ class TaskResultCollector:
                 return False
 
             # Collect results
-            client_results = self._collect_task_results(Job)
+            client_results = self._collect_task_results(job)
 
             # Generate report file
             report_file_path = self.generate_report_for_task(task_id, force=True)
 
             # Send notification
-            success = self.email_notifier.send_task_completion_notification(
-                Job, client_results, report_file_path
+            success = self.email_notifier.send_task_completion_notification(job, client_results, report_file_path
             )
 
             if success:
