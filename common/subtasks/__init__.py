@@ -133,9 +133,9 @@ def list_subtasks_with_descriptions() -> Dict[str, str]:
     return get_registry().list_subtasks_with_descriptions()
 
 
-def execute_subtask(name: str) -> Dict[str, Any]:
+def execute_subtask(name: str, *args, **kwargs) -> Dict[str, Any]:
     """Execute a subtask and return the result"""
-    return get_registry().execute(name)
+    return get_registry().execute(name, *args, **kwargs)
 
 
 # Convenience functions for backward compatibility

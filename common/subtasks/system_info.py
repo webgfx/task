@@ -19,7 +19,7 @@ from . import register_subtask_class
 class GetSystemInfoSubtask(BaseSubtask):
     """Subtask to get comprehensive system information"""
     
-    def run(self) -> Dict[str, Any]:
+    def run(self, *args, **kwargs) -> Dict[str, Any]:
         """
         Get comprehensive system information.
         

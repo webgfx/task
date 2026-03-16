@@ -14,7 +14,7 @@ class BaseSubtask(ABC):
     """Base class for all subtasks"""
     
     @abstractmethod
-    def run(self) -> Any:
+    def run(self, *args, **kwargs) -> Any:
         """Execute the subtask and return the result"""
         pass
     
@@ -34,11 +34,11 @@ class BaseSubtask(ABC):
         self._last_execution_time = None
         self._last_timestamp = None
     
-    def execute(self) -> Dict[str, Any]:
+    def execute(self, *args, **kwargs) -> Dict[str, Any]:
         """Execute the subtask and return a standardized result"""
         try:
             start_time = datetime.now()
-            result = self.run()
+            result = self.run(*args, **kwargs)
             end_time = datetime.now()
             
             self._last_result = result
@@ -94,7 +94,7 @@ class SubtaskRegistry:
             result[name] = subtask.get_description()
         return result
         
-    def execute(self, name: str) -> Dict[str, Any]:
+    def execute(self, name: str, *args, **kwargs) -> Dict[str, Any]:
         """Execute a subtask and return the result"""
         if name not in self._subtasks:
             return {
@@ -104,7 +104,7 @@ class SubtaskRegistry:
                 'timestamp': datetime.now().isoformat()
             }
             
-        return self._subtasks[name].execute()
+        return self._subtasks[name].execute(*args, **kwargs)
 
 
 # Legacy support - keeping for backward compatibility

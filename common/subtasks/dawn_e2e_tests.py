@@ -25,7 +25,7 @@ from . import register_subtask_class
 class DawnE2ETestsSubtask(BaseSubtask):
     """Dawn E2E tests subtask for downloading and running Dawn end-to-end tests."""
     
-    def run(self) -> Dict[str, Any]:
+    def run(self, *args, **kwargs) -> Dict[str, Any]:
         """
         Download and run Dawn E2E tests.
         

@@ -18,7 +18,7 @@ from . import register_subtask_class
 class GetHostnameSubtask(BaseSubtask):
     """Subtask to get the hostname of the current client"""
     
-    def run(self) -> str:
+    def run(self, *args, **kwargs) -> str:
         """
         Get the hostname of the current client.
         
