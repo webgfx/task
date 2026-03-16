@@ -54,7 +54,11 @@
                 <div class="header-content">
                     <h1>Task Management</h1>
                     <div class="header-actions">
-                        <button class="btn btn-danger" id="batchDeleteBtn" onclick="batchDeleteTasks()" style="display:none;">
+                        <button class="btn btn-secondary" onclick="selectAllTasks()">
+                            <i class="fas fa-check-square"></i>
+                            Select All
+                        </button>
+                        <button class="btn btn-danger" id="batchDeleteBtn" onclick="batchDeleteTasks()" disabled>
                             <i class="fas fa-trash"></i>
                             Delete Selected (<span id="selectedTaskCount">0</span>)
                         </button>
@@ -102,7 +106,6 @@
                 <table class="task-table enhanced-task-table">
                     <thead>
                         <tr>
-                            <th class="task-id-col">Task ID</th>
                             <th class="task-name-col">Task Name</th>
                             <th class="subtask-id-col">Subtask ID</th>
                             <th class="subtask-name-col">Subtask Name</th>
@@ -333,8 +336,8 @@
 
     <!-- JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260317"></script>
+    <script src="{{ url_for('static', filename='js/tasks.js') }}?v=20260317b"></script>
 </body>
 </html>
 

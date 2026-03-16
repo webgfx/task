@@ -371,7 +371,7 @@ body {
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-sm);
     margin: 24px 32px;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--c-border);
 }
 
@@ -416,14 +416,14 @@ body {
 .enhanced-task-table tbody tr:hover { background: #f8fafc; }
 
 .enhanced-task-table .task-id-col { width: 7%; }
-.enhanced-task-table .task-name-col { width: 16%; }
+.enhanced-task-table .task-name-col { width: 14%; }
 .enhanced-task-table .subtask-id-col { width: 8%; }
 .enhanced-task-table .subtask-name-col { width: 15%; }
 .enhanced-task-table .client-col { width: 15%; }
 .enhanced-task-table .status-col { width: 10%; }
 .enhanced-task-table .result-col { width: 15%; }
 .enhanced-task-table .timing-col { width: 12%; }
-.enhanced-task-table .actions-col { width: 6%; }
+.enhanced-task-table .actions-col { width: 10%; }
 
 /* Task group rows */
 .task-group-row {
@@ -432,10 +432,10 @@ body {
 }
 .task-group-row td { padding: 13px 10px; border-bottom: 2px solid var(--c-border); }
 
-.task-group-header { display: flex; justify-content: space-between; align-items: center; }
-.task-group-title { font-size: .95rem; font-weight: 700; color: var(--c-primary); }
-.task-group-summary { font-size: .8rem; color: var(--c-text-secondary); font-weight: 400; }
-.task-group-actions { display: flex; gap: 5px; align-items: center; }
+.task-group-header { display: flex; justify-content: space-between; align-items: center; overflow: visible; }
+.task-group-title { font-size: .95rem; font-weight: 700; color: var(--c-primary); flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-group-summary { font-size: .8rem; color: var(--c-text-secondary); font-weight: 400; flex-shrink: 1; }
+.task-group-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 
 .collapse-toggle {
     background: none; border: none; color: var(--c-primary); cursor: pointer;
@@ -705,6 +705,7 @@ body {
 .pagination button {
     padding: 7px 12px; border: 1px solid var(--c-border); background: var(--c-surface);
     border-radius: var(--r-sm); cursor: pointer; font-size: .8rem; font-weight: 500;
+    color: var(--c-text);
     transition: all var(--dur-fast);
 }
 .pagination button:hover:not(:disabled) { background: #f1f5f9; border-color: var(--c-primary); color: var(--c-primary); }

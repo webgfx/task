@@ -279,13 +279,6 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     'error': 'Task does not exist'
                 }), 404
 
-            # Check if task is currently running
-            if task.status in [TaskStatus.RUNNING]:
-                return jsonify({
-                    'success': False,
-                    'error': f'Cannot delete task while it is {task.status.value}. Please cancel the task first.'
-                }), 400
-
             success = database.delete_task(task_id)
 
             if success:

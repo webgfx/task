@@ -26,7 +26,7 @@ from .tasks import (
 # Re-export for backward compatibility
 __all__ = [
     'SubtaskResultDefinition',
-    'register_subtask', 
+    'register_subtask',
     'get_subtask',
     'get_subtask_result_definition',
     'list_subtasks',

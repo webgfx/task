@@ -724,13 +724,16 @@ function renderTaskGroup(task, container) {
     const groupRow = document.createElement('tr');
     groupRow.className = 'task-group-row';
     groupRow.innerHTML = `
-        <td><input type="checkbox" class="task-checkbox" value="${task.id}" onchange="updateBatchDeleteButton()" ${task.status === 'running' ? 'disabled' : ''}></td>
-        <td colspan="9">
+        <td colspan="8">
             <div class="task-group-header">
-                <div class="task-group-title">${task.name}</div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" class="task-checkbox" value="${task.id}" onclick="updateBatchDeleteButton();" style="width:20px; height:20px; cursor:pointer; accent-color:#6366f1;">
+                    <span class="task-id-badge">#${task.id}</span>
+                    <span class="task-group-title">${task.name}</span>
+                </div>
                 <div class="task-group-summary">
-                    ${taskStats.totalExecutions} executions •
-                    ${taskStats.completed} completed •
+                    ${taskStats.totalExecutions} subtasks •
+                    ${taskStats.completed} passed •
                     ${taskStats.running} running •
                     ${taskStats.failed} failed •
                     ${taskStats.pending} pending
@@ -749,9 +752,9 @@ function renderTaskGroup(task, container) {
                         <i class="fas fa-copy"></i>
                     </button>
                     ${task.status !== 'running' ?
-                        `<button class="btn btn-small btn-danger" onclick="deleteTask(${task.id})"
-                                title="Delete Task">
-                            <i class="fas fa-trash"></i>
+                        `<button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteTask(${task.id})"
+                                title="Delete Task" style="flex-shrink:0;">
+                            <i class="fas fa-trash-alt"></i> Del
                         </button>` : ''
                     }
                 </div>
@@ -889,7 +892,6 @@ function createSubtaskExecutionRow(task, execution) {
     const resultInfo = formatResultInfo(execution);
 
     row.innerHTML = `
-        <td class="task-id-col"></td>
         <td class="task-name-col"></td>
         <td class="subtask-id-col">
             ${execution.subtask_id !== null && execution.subtask_id !== undefined ? `<span class="subtask-id-badge">${execution.subtask_id}</span>` : '<span class="no-id">—</span>'}
@@ -900,13 +902,10 @@ function createSubtaskExecutionRow(task, execution) {
             </div>
         </td>
         <td class="client-col">
-            <div class="client-info-inline">
-                <span class="client-name">${execution.client}</span>
-                <span class="client-status ${clientStatus}">${clientStatus}</span>
-            </div>
+            <span class="client-name">${execution.client}</span>
         </td>
         <td class="status-col">
-            <span class="status-badge ${execution.status}">${execution.status}</span>
+            <span class="status-badge ${execution.status}">${execution.status === 'completed' ? 'PASSED' : execution.status.toUpperCase()}</span>
         </td>
         <td class="result-col">
             ${resultInfo}
@@ -1350,11 +1349,26 @@ async function deleteTask(taskId) {
 }
 
 // Batch delete support
+function selectAllTasks() {
+    const checkboxes = document.querySelectorAll('.task-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => { cb.checked = !allChecked; });
+    updateBatchDeleteButton();
+}
+
+function toggleSelectAllTasks(masterCheckbox) {
+    document.querySelectorAll('.task-checkbox').forEach(cb => {
+        if (!cb.disabled) cb.checked = masterCheckbox.checked;
+    });
+    updateBatchDeleteButton();
+}
+
 function updateBatchDeleteButton() {
     const checked = document.querySelectorAll('.task-checkbox:checked');
     const btn = document.getElementById('batchDeleteBtn');
     const count = document.getElementById('selectedTaskCount');
-    if (btn) btn.style.display = checked.length > 0 ? 'inline-flex' : 'none';
+    console.log('Checkboxes checked:', checked.length);
+    if (btn) btn.disabled = checked.length === 0;
     if (count) count.textContent = checked.length;
 }
 
