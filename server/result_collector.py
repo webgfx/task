@@ -137,7 +137,7 @@ class TaskResultCollector:
                     # Check if all tasks for this client are completed
                     for td in client_tasks:
                         executions = self.database.get_runs_filtered(
-                            task_id, td.name, client_name
+                            job_id, td.name, client_name
                         )
 
                         if not executions:

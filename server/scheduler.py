@@ -204,9 +204,9 @@ class TaskScheduler:
             # Dispatch to each client
             for client_name, client in available_clients.items():
                 # Get tasks for this client
-                client_TASKs = task.get_tasks_for_client(client_name)
+                client_tasks = task.get_tasks_for_client(client_name)
 
-                if client_TASKs:
+                if client_tasks:
                     # Update client status
                     self.database.update_client_heartbeat_by_name(client.name, ClientStatus.BUSY)
 
@@ -216,23 +216,23 @@ class TaskScheduler:
                         'id': task.id,
                         'name': task.name,
                         'client_name': client.name,
-                        'tasks': [t.to_dict() for t in client_TASKs]
+                        'tasks': [t.to_dict() for t in client_tasks]
                     }
 
                     # Send task via WebSocket using IP-based room name
                     room_name = f"client_{client.ip_address.replace('.', '_')}"
 
                     # Enhanced logging for Task dispatch
-                    logger.info(f"🚀 DISPATCH_START: Sending {len(client_TASKs)} tasks to client '{client.name}' ({client.ip_address})")
+                    logger.info(f"🚀 DISPATCH_START: Sending {len(client_tasks)} tasks to client '{client.name}' ({client.ip_address})")
                     logger.info(f"DISPATCH_DETAILS: Task '{task.name}' (ID: {task.id}) → Room: {room_name}")
 
                     # Log each Task being dispatched
-                    for i, Task in enumerate(client_TASKs, 1):
-                        logger.info(f"DISPATCH_TASK[{i}/{len(client_TASKs)}]: '{Task.name}' (order: {Task.order}) → '{client.name}'")
+                    for i, td in enumerate(client_tasks, 1):
+                        logger.info(f"DISPATCH_TASK[{i}/{len(client_tasks)}]: '{td.name}' (order: {td.order}) → '{client.name}'")
 
                     self.socketio.emit('task_dispatch', task_data, room=room_name)
 
-                    logger.info(f"✅ DISPATCH_COMPLETE: Successfully dispatched {len(client_TASKs)} tasks to client '{client.name}'")
+                    logger.info(f"✅ DISPATCH_COMPLETE: Successfully dispatched {len(client_tasks)} tasks to client '{client.name}'")
 
         except Exception as e:
             logger.error(f"Failed to execute Task task {task.name}: {e}")
