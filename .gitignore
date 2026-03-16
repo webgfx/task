@@ -171,7 +171,13 @@ temp/
 tmp/
 
 # Ignore temporary and intermediate files
-ignore/
+gitignore/
+
+# SSL certificates
+server/certs/
+
+# Result data files
+server/results/
 
 # VS Code
 .vscode/settings.json

@@ -282,6 +282,68 @@ class TaskClientRunner:
             self.sio.emit('pong', {'client_ip': self.local_ip, 'client_name': self.client_name})
 
         @self.sio.event
+        def repo_update(data):
+            """Handle repo update command from server — runs git pull in the specified directory."""
+            try:
+                repo_path = data.get('repo_path', '')
+                target_client = data.get('client_name', '')
+
+                # Only act if targeted at this client
+                if target_client and target_client != self.client_name:
+                    return
+
+                if not repo_path:
+                    # Default: update the ai-test project sibling directory
+                    import configparser
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    cfg_path = os.path.join(project_root, 'common', 'common.cfg')
+                    if os.path.exists(cfg_path):
+                        cfg = configparser.ConfigParser()
+                        cfg.read(cfg_path, encoding='utf-8')
+                        repo_path = cfg.get('PATHS', 'ai_test_path', fallback='')
+                    if not repo_path:
+                        repo_path = os.path.normpath(os.path.join(project_root, '..', 'ai-test'))
+
+                logger.info(f"REPO_UPDATE: Running git pull in {repo_path}")
+
+                if not os.path.isdir(repo_path):
+                    logger.error(f"REPO_UPDATE: Directory not found: {repo_path}")
+                    self.sio.emit('repo_update_result', {
+                        'client_name': self.client_name,
+                        'success': False,
+                        'error': f'Directory not found: {repo_path}',
+                    })
+                    return
+
+                import subprocess
+                result = subprocess.run(
+                    ['git', 'pull'],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+
+                success = result.returncode == 0
+                msg = result.stdout.strip() if success else result.stderr.strip()
+                logger.info(f"REPO_UPDATE: {'Success' if success else 'Failed'} - {msg}")
+
+                self.sio.emit('repo_update_result', {
+                    'client_name': self.client_name,
+                    'success': success,
+                    'output': msg,
+                    'repo_path': repo_path,
+                })
+
+            except Exception as e:
+                logger.error(f"REPO_UPDATE: Failed: {e}")
+                self.sio.emit('repo_update_result', {
+                    'client_name': self.client_name,
+                    'success': False,
+                    'error': str(e),
+                })
+
+        @self.sio.event
         def ping_request(data):
             """Handle ping request from server and respond with real status"""
             try:

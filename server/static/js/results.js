@@ -119,7 +119,7 @@ function renderResults(results) {
     }
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No results found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center">No results found</td></tr>';
         return;
     }
 
@@ -137,6 +137,7 @@ function renderResults(results) {
 
         return `
             <tr>
+                <td><input type="checkbox" class="result-checkbox" value="${result.id}" onchange="updateCompareButton()"></td>
                 <td>${result.id}</td>
                 <td>${escapeHtml(result.task_name)}</td>
                 <td>${escapeHtml(result.client_name)}</td>
@@ -255,6 +256,10 @@ window.addEventListener('click', function(e) {
     if (e.target === modal) {
         closeResultDetailModal();
     }
+    const compModal = document.getElementById('comparisonModal');
+    if (e.target === compModal) {
+        closeComparisonModal();
+    }
 });
 
 // Escape HTML to prevent XSS
@@ -263,4 +268,174 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+// ============================================================
+// Results Comparison
+// ============================================================
+
+let comparisonCharts = [];
+
+function getSelectedResultIds() {
+    return Array.from(document.querySelectorAll('.result-checkbox:checked'))
+        .map(cb => parseInt(cb.value));
+}
+
+function updateCompareButton() {
+    const ids = getSelectedResultIds();
+    const btn = document.getElementById('compareBtn');
+    const count = document.getElementById('selectedCount');
+    if (btn) btn.disabled = ids.length < 1;
+    if (count) count.textContent = ids.length;
+}
+
+function toggleSelectAll(masterCheckbox) {
+    document.querySelectorAll('.result-checkbox').forEach(cb => {
+        cb.checked = masterCheckbox.checked;
+    });
+    updateCompareButton();
+}
+
+async function compareSelected() {
+    const ids = getSelectedResultIds();
+    if (ids.length < 1) {
+        showNotification('Warning', 'Select at least 1 result to view comparison charts', 'warning');
+        return;
+    }
+
+    try {
+        const response = await apiPost('/api/results/compare', { result_ids: ids });
+        if (!response.success) {
+            showNotification('Error', response.error || 'Comparison failed', 'error');
+            return;
+        }
+
+        renderComparison(response.data);
+
+    } catch (error) {
+        console.error('Comparison failed:', error);
+    }
+}
+
+function renderComparison(data) {
+    // Destroy previous charts
+    comparisonCharts.forEach(c => c.destroy());
+    comparisonCharts = [];
+
+    const modal = document.getElementById('comparisonModal');
+    if (!modal) return;
+
+    // Info section
+    const info = document.getElementById('comparisonInfo');
+    if (info) {
+        info.innerHTML = `<p style="color:var(--c-text-secondary); font-size:.85rem;">Comparing <strong>${data.resultCount}</strong> result(s) &mdash; ${data.series.length} series</p>`;
+    }
+
+    const colors = [
+        '#6366f1', '#ef4444', '#22c55e', '#f59e0b',
+        '#8b5cf6', '#06b6d4', '#f97316', '#3b82f6',
+        '#14b8a6', '#e11d48', '#0ea5e9', '#eab308',
+    ];
+
+    const plLabels = data.promptLengths.map(String);
+
+    function buildDatasets(metric) {
+        return data.series.map((s, i) => {
+            const color = colors[i % colors.length];
+            const d = plLabels.map(pl => {
+                const pt = s.points.find(p => String(p.pl) === pl);
+                return pt ? pt[metric] : null;
+            });
+            return {
+                label: s.label,
+                data: d,
+                borderColor: color,
+                backgroundColor: color + '22',
+                pointBackgroundColor: color,
+                pointRadius: 5,
+                borderWidth: 2.5,
+                tension: 0.3,
+                fill: false,
+            };
+        });
+    }
+
+    const chartOpts = {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+        },
+        scales: {
+            x: { grid: { color: '#e2e8f0' }, title: { display: true, text: 'Prompt Length' } },
+            y: { grid: { color: '#e2e8f0' }, beginAtZero: true },
+        },
+    };
+
+    // TTFT chart
+    const ttftCtx = document.getElementById('ttftChart');
+    if (ttftCtx) {
+        comparisonCharts.push(new Chart(ttftCtx, {
+            type: 'line',
+            data: { labels: plLabels, datasets: buildDatasets('ttftMs') },
+            options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, title: { display: true, text: 'TTFT (ms)' } } } },
+        }));
+    }
+
+    // Prefill TPS chart
+    const plCtx = document.getElementById('prefillChart');
+    if (plCtx) {
+        comparisonCharts.push(new Chart(plCtx, {
+            type: 'line',
+            data: { labels: plLabels, datasets: buildDatasets('plTs') },
+            options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, title: { display: true, text: 'Prefill TPS (t/s)' } } } },
+        }));
+    }
+
+    // Gen TPS chart
+    const genCtx = document.getElementById('genTpsChart');
+    if (genCtx) {
+        comparisonCharts.push(new Chart(genCtx, {
+            type: 'line',
+            data: { labels: plLabels, datasets: buildDatasets('tgTs') },
+            options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, title: { display: true, text: 'Generation TPS (t/s)' } } } },
+        }));
+    }
+
+    // Summary table
+    const tableDiv = document.getElementById('comparisonTable');
+    if (tableDiv) {
+        let rows = '';
+        for (const s of data.series) {
+            for (const p of s.points) {
+                rows += `<tr>
+                    <td>${escapeHtml(s.shortLabel)}</td>
+                    <td>${escapeHtml(s.clientName)}</td>
+                    <td>${p.pl != null ? p.pl : '-'}</td>
+                    <td>${p.ttftMs != null ? p.ttftMs.toFixed(2) : '-'}</td>
+                    <td>${p.tgTs != null ? p.tgTs.toFixed(2) : '-'}</td>
+                    <td>${p.plTs != null ? p.plTs.toFixed(2) : '-'}</td>
+                    <td>${p.e2eMs != null ? Math.round(p.e2eMs) : '-'}</td>
+                </tr>`;
+            }
+        }
+        tableDiv.innerHTML = `
+            <h4 style="margin-bottom:12px; font-size:.9rem;">Detailed Results</h4>
+            <div style="overflow-x:auto;">
+            <table class="task-table" style="font-size:.82rem;">
+                <thead><tr>
+                    <th>Configuration</th><th>Client</th><th>Prompt Len</th>
+                    <th>TTFT (ms)</th><th>TPS (t/s)</th><th>PL (t/s)</th><th>E2E (ms)</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            </div>`;
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeComparisonModal() {
+    const modal = document.getElementById('comparisonModal');
+    if (modal) modal.style.display = 'none';
 }

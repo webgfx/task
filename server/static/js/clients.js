@@ -256,6 +256,9 @@ function createClientTableRow(client) {
                             title="Toggle client details">
                         <i class="fas fa-chevron-up" id="toggle-icon-${client.name}"></i>
                     </button>
+                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); updateClientRepo('${client.name}')" title="Git Pull Repo">
+                        <i class="fas fa-code-branch"></i>
+                    </button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); unregisterClient('${client.name}')" title="Remove Client">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -534,6 +537,25 @@ function getClientStatusBadge(status) {
 
 
 // Unregister client
+async function updateClientRepo(clientName) {
+    const repoPath = prompt(`Git pull repo on "${clientName}".\n\nEnter repo path (leave empty for default ai-test path):`, '');
+    if (repoPath === null) return; // Cancelled
+
+    try {
+        showNotification('Info', `Sending repo update to ${clientName}...`, 'info');
+        const response = await apiPost(`/api/clients/${encodeURIComponent(clientName)}/update-repo`, {
+            repo_path: repoPath,
+        });
+        if (response.success) {
+            showNotification('Success', response.message || 'Repo update command sent', 'success');
+        } else {
+            showNotification('Error', response.error || 'Failed to send repo update', 'error');
+        }
+    } catch (error) {
+        console.error('Repo update failed:', error);
+    }
+}
+
 async function unregisterClient(clientName) {
     try {
         // Get client info for better confirmation dialog

@@ -1,11 +1,13 @@
 """
 REST API interfaces
 """
+import json
 import logging
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_socketio import emit
 
+from common.config import Config
 from common.models import Task, Client, TaskStatus, ClientStatus, SubtaskDefinition
 from common.utils import parse_datetime, validate_cron_expression
 from common.subtasks import list_subtasks, get_subtask, execute_subtask
@@ -2111,6 +2113,153 @@ def create_api_blueprint(database, socketio, result_collector=None):
             })
         except Exception as e:
             logger.error(f"Failed to get latest result for client {client_name}: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # --- Results Comparison API ---
+
+    @api.route('/results/compare', methods=['POST'])
+    def compare_results():
+        """Compare multiple cached results and return chart-ready data.
+
+        Expects JSON body: { "result_ids": [1, 2, 3] }
+        Returns normalized series for TTFT, prefill TPS, generation TPS charts.
+        """
+        try:
+            data = request.get_json()
+            result_ids = data.get('result_ids', [])
+
+            if len(result_ids) < 1:
+                return jsonify({'success': False, 'error': 'At least 1 result required'}), 400
+
+            loaded = []
+            for rid in result_ids:
+                r = database.get_cached_result_by_id(rid)
+                if not r:
+                    continue
+                # Parse the JSON result string
+                result_data = r.get('result')
+                if isinstance(result_data, str):
+                    try:
+                        result_data = json.loads(result_data)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                if not isinstance(result_data, dict):
+                    continue
+                loaded.append({
+                    'id': rid,
+                    'task_name': r.get('task_name', ''),
+                    'client_name': r.get('client_name', ''),
+                    'subtask_name': r.get('subtask_name', ''),
+                    'completed_at': r.get('completed_at', ''),
+                    'result': result_data,
+                })
+
+            if not loaded:
+                return jsonify({'success': False, 'error': 'No valid results with benchmark data'}), 400
+
+            # Normalize into chart series (same logic as compare-results.js)
+            series = []
+            for item in loaded:
+                result = item['result']
+                bench_results = result.get('results', [])
+                if not bench_results:
+                    continue
+
+                # Detect source type
+                source = 'unknown'
+                if result.get('llamacpp_available') or item['subtask_name'] == 'ai_test':
+                    source = 'llamacpp'
+                inner_results = result.get('results', bench_results)
+                if isinstance(inner_results, dict) and 'results' in inner_results:
+                    inner_results = inner_results['results']
+
+                for r in inner_results:
+                    if not isinstance(r, dict) or r.get('error'):
+                        continue
+
+                    if source == 'llamacpp':
+                        config_label = f"{r.get('model', '?')} / {r.get('backend', '?')} (llama.cpp)"
+                    else:
+                        config_label = f"{r.get('model', '?')} / {source}"
+
+                    series_key = f"{item['id']}|{config_label}"
+                    s = next((x for x in series if x['key'] == series_key), None)
+                    if not s:
+                        run_label = item['client_name']
+                        if item['completed_at']:
+                            run_label += f" @ {item['completed_at'][:19]}"
+                        s = {
+                            'key': series_key,
+                            'label': f"{config_label} [{run_label}]",
+                            'shortLabel': config_label,
+                            'resultId': item['id'],
+                            'clientName': item['client_name'],
+                            'points': [],
+                        }
+                        series.append(s)
+
+                    s['points'].append({
+                        'pl': r.get('pl') or r.get('pp'),
+                        'ttftMs': r.get('ttftMs'),
+                        'tgTs': r.get('tgTs'),
+                        'plTs': r.get('plTs') or r.get('ppTs'),
+                        'e2eMs': r.get('e2eMs'),
+                    })
+
+            # Sort points within each series
+            for s in series:
+                s['points'].sort(key=lambda p: p.get('pl') or 0)
+
+            # Collect all unique prompt lengths
+            all_pls = sorted(set(
+                p.get('pl') for s in series for p in s['points'] if p.get('pl') is not None
+            ))
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'series': series,
+                    'promptLengths': all_pls,
+                    'resultCount': len(loaded),
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"Results comparison failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # --- Repo Update Command API ---
+
+    @api.route('/clients/<client_name>/update-repo', methods=['POST'])
+    def update_client_repo(client_name):
+        """Send a command to a client to update (git pull) a repository via WebSocket."""
+        try:
+            client = database.get_client_by_name(client_name)
+            if not client:
+                return jsonify({'success': False, 'error': f'Client {client_name} not found'}), 404
+
+            if client.status.value == 'offline':
+                return jsonify({'success': False, 'error': f'Client {client_name} is offline'}), 400
+
+            data = request.get_json() or {}
+            repo_path = data.get('repo_path', '')  # Path on the client machine
+
+            # Send command via WebSocket to the client's room
+            room_name = f"client_{client.ip_address.replace('.', '_')}"
+            socketio.emit('repo_update', {
+                'client_name': client_name,
+                'repo_path': repo_path,
+            }, room=room_name)
+
+            logger.info(f"Repo update command sent to {client_name} (room: {room_name})")
+
+            return jsonify({
+                'success': True,
+                'message': f'Repo update command sent to {client_name}',
+            })
+
+        except Exception as e:
+            logger.error(f"Repo update failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
     return api

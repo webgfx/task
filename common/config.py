@@ -7,25 +7,34 @@ from typing import Dict, Any
 class Config:
     # Database configuration
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'server/server.db')
-    
+
     # Web server configuration
     SERVER_HOST = os.getenv('SERVER_HOST', '0.0.0.0')
     SERVER_PORT = int(os.getenv('SERVER_PORT', 5000))
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-    
+
+    # Microsoft Entra ID (Azure AD) authentication configuration
+    AUTH_ENABLED = os.getenv('AUTH_ENABLED', 'False').lower() == 'true'
+    AUTH_CLIENT_ID = os.getenv('AUTH_CLIENT_ID', '')  # Application (client) ID from Azure AD app registration
+    AUTH_CLIENT_SECRET = os.getenv('AUTH_CLIENT_SECRET', '')  # Client secret from Azure AD app registration
+    AUTH_TENANT_ID = os.getenv('AUTH_TENANT_ID', 'microsoft.onmicrosoft.com')  # Microsoft corp tenant
+    AUTH_REDIRECT_PATH = os.getenv('AUTH_REDIRECT_PATH', '/auth/callback')  # Must match Azure AD app redirect URI
+    AUTH_AUTHORITY = os.getenv('AUTH_AUTHORITY', f'https://login.microsoftonline.com/{AUTH_TENANT_ID}')
+    AUTH_SCOPES = ['User.Read']  # Minimal scope to read user profile
+
     # Heartbeat configuration
     HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 60))  # seconds
     CLIENT_TIMEOUT = int(os.getenv('CLIENT_TIMEOUT', 180))  # seconds
-    
+
     # Task execution configuration
     TASK_TIMEOUT = int(os.getenv('TASK_TIMEOUT', 3600))  # seconds
     MAX_CONCURRENT_TASKS = int(os.getenv('MAX_CONCURRENT_TASKS', 5))
-    
+
     # Log configuration
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FILE = os.getenv('LOG_FILE', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'server', 'logs', 'server.log'))
-    
+
     @classmethod
     def to_dict(cls) -> Dict[str, Any]:
         """Return configuration dictionary"""
@@ -39,15 +48,15 @@ class ClientConfig:
     # Server connection configuration
     SERVER_URL = os.getenv('SERVER_URL', 'http://localhost:5000')
     CLIENT_NAME = os.getenv('CLIENT_NAME', 'default-client')
-    
+
     # Client process configuration
     HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', 60))
     TASK_CHECK_INTERVAL = int(os.getenv('TASK_CHECK_INTERVAL', 10))
-    
+
     # Task execution configuration
     WORK_DIR = os.getenv('WORK_DIR', './work')
     LOG_DIR = os.getenv('LOG_DIR', './logs')
-    
+
     @classmethod
     def from_args(cls, args):
         """Update configuration from command line arguments"""

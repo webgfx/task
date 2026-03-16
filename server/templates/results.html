@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Results - Distributed Task Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -50,6 +53,10 @@
                 <div class="header-content">
                     <h1>Cached Results</h1>
                     <div class="header-actions">
+                        <button class="btn btn-primary" onclick="compareSelected()" id="compareBtn" disabled>
+                            <i class="fas fa-chart-line"></i>
+                            Compare Selected (<span id="selectedCount">0</span>)
+                        </button>
                         <button class="btn btn-secondary" onclick="refreshResults()">
                             <i class="fas fa-sync-alt"></i>
                             Refresh
@@ -92,6 +99,7 @@
                     <table class="data-table" id="resultsTable">
                         <thead>
                             <tr>
+                                <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all"></th>
                                 <th>ID</th>
                                 <th>Task</th>
                                 <th>Client</th>
@@ -104,7 +112,7 @@
                         </thead>
                         <tbody id="resultsBody">
                             <tr>
-                                <td colspan="8" class="text-center">Loading results...</td>
+                                <td colspan="9" class="text-center">Loading results...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -123,12 +131,41 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Comparison Modal -->
+            <div id="comparisonModal" class="modal" style="display:none;">
+                <div class="modal-content" style="max-width:1100px; max-height:92vh;">
+                    <div class="modal-header">
+                        <h3>Benchmark Comparison</h3>
+                        <button class="close-btn" onclick="closeComparisonModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="overflow-y:auto;">
+                        <div id="comparisonInfo" style="margin-bottom:18px;"></div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+                            <div style="background:#f8fafc; border-radius:var(--r-md); padding:16px; border:1px solid var(--c-border);">
+                                <h4 style="margin-bottom:12px; font-size:.9rem;">TTFT (ms) — Lower is Better</h4>
+                                <canvas id="ttftChart"></canvas>
+                            </div>
+                            <div style="background:#f8fafc; border-radius:var(--r-md); padding:16px; border:1px solid var(--c-border);">
+                                <h4 style="margin-bottom:12px; font-size:.9rem;">Prefill TPS (t/s) — Higher is Better</h4>
+                                <canvas id="prefillChart"></canvas>
+                            </div>
+                        </div>
+                        <div style="background:#f8fafc; border-radius:var(--r-md); padding:16px; border:1px solid var(--c-border); margin-bottom:24px;">
+                            <h4 style="margin-bottom:12px; font-size:.9rem;">Generation TPS (t/s) — Higher is Better</h4>
+                            <canvas id="genTpsChart"></canvas>
+                        </div>
+                        <div id="comparisonTable"></div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
     <!-- Notification container -->
     <div id="notifications" class="notifications"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script src="{{ url_for('static', filename='js/results.js') }}"></script>

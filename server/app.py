@@ -167,13 +167,31 @@ def main():
     """Main function"""
     try:
         app, socketio = create_app()
-        logger.info(f"Starting web server: http://{Config.SERVER_HOST}:{Config.SERVER_PORT}")
+
+        # SSL certificate paths
+        cert_dir = os.path.join(os.path.dirname(__file__), 'certs')
+        certfile = os.path.join(cert_dir, 'cert.pem')
+        keyfile = os.path.join(cert_dir, 'key.pem')
+
+        ssl_context = None
+        scheme = 'http'
+        if os.path.exists(certfile) and os.path.exists(keyfile):
+            import ssl
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(certfile, keyfile)
+            scheme = 'https'
+            logger.info("SSL enabled with certificates from server/certs/")
+        else:
+            logger.warning("No SSL certificates found in server/certs/ — running plain HTTP")
+
+        logger.info(f"Starting web server: {scheme}://{Config.SERVER_HOST}:{Config.SERVER_PORT}")
 
         socketio.run(
             app,
             host=Config.SERVER_HOST,
             port=Config.SERVER_PORT,
-            debug=Config.DEBUG
+            debug=Config.DEBUG,
+            ssl_context=ssl_context,
         )
     except Exception as e:
         logger.error(f"Server startup failed: {e}")

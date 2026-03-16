@@ -1,6 +1,7 @@
 """
 Database operations module
 """
+import os
 import sqlite3
 import json
 import logging
@@ -133,6 +134,24 @@ class Database:
                     level TEXT DEFAULT 'INFO'
                 )
             ''')
+
+            # Create administrators table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS administrators (
+                    email TEXT PRIMARY KEY,
+                    added_by TEXT NOT NULL,
+                    added_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # Seed default admin if table is empty
+            cursor.execute('SELECT COUNT(*) FROM administrators')
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    'INSERT INTO administrators (email, added_by) VALUES (?, ?)',
+                    ('ygu@microsoft.com', 'system')
+                )
+                logger.info("Seeded default administrator: ygu@microsoft.com")
 
             conn.commit()
             logger.info("Database initialization completed")
@@ -1461,11 +1480,49 @@ class Database:
 
     # Task result caching methods
 
+    # Directory for result files
+    RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+
+    def _save_result_file(self, task_id: int, client_name: str,
+                          subtask_name: str, result_data: str) -> str:
+        """Save result data to a JSON file and return the relative path."""
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        # Sanitize names for safe filesystem paths
+        safe_client = "".join(c if c.isalnum() or c in '-_.' else '_' for c in client_name)
+        safe_subtask = "".join(c if c.isalnum() or c in '-_.' else '_' for c in subtask_name)
+
+        rel_dir = os.path.join(str(task_id), safe_client)
+        abs_dir = os.path.join(self.RESULTS_DIR, rel_dir)
+        os.makedirs(abs_dir, exist_ok=True)
+
+        filename = f"{safe_subtask}_{timestamp}.txt"
+        rel_path = os.path.join(rel_dir, filename)
+        abs_path = os.path.join(self.RESULTS_DIR, rel_path)
+
+        with open(abs_path, 'w', encoding='utf-8') as f:
+            if isinstance(result_data, str):
+                f.write(result_data)
+            else:
+                f.write(json.dumps(result_data, indent=2))
+
+        return rel_path
+
+    def _read_result_file(self, rel_path: str) -> Optional[str]:
+        """Read result data from a file given its relative path."""
+        if not rel_path:
+            return None
+        abs_path = os.path.join(self.RESULTS_DIR, rel_path)
+        if os.path.isfile(abs_path):
+            with open(abs_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        return None
+
     def cache_task_result(self, task_id: int, task_name: str, client_name: str,
                          subtask_name: str, status: str, result: str = None,
                          execution_time: float = None, completed_at: str = None) -> int:
         """
-        Cache a task result for future reference.
+        Cache a task result. The result data is saved as a file; only the
+        file path is stored in the database.
 
         Args:
             task_id: ID of the task
@@ -1473,13 +1530,22 @@ class Database:
             client_name: Name of the client that executed the subtask
             subtask_name: Name of the subtask
             status: Execution status
-            result: JSON-encoded result data
+            result: JSON-encoded result data (will be saved as a file)
             execution_time: Time taken to execute
             completed_at: When execution completed
 
         Returns:
             ID of the cached result record
         """
+        # Save result data to file, store path in DB
+        result_path = None
+        if result:
+            try:
+                result_path = self._save_result_file(task_id, client_name, subtask_name, result)
+            except Exception as e:
+                logger.error(f"Failed to save result file: {e}. Storing inline.")
+                result_path = result  # Fallback: store inline
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1489,28 +1555,49 @@ class Database:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 task_id, task_name, client_name, subtask_name, status,
-                result, execution_time,
+                result_path, execution_time,
                 completed_at or datetime.now().isoformat()
             ))
             result_id = cursor.lastrowid
             conn.commit()
             logger.info(f"Cached result for task {task_id} ({task_name}), "
-                       f"subtask '{subtask_name}' on client '{client_name}'")
+                       f"subtask '{subtask_name}' on client '{client_name}' -> {result_path}")
             return result_id
+
+    def _resolve_result_row(self, row, load_content: bool = True) -> Dict[str, Any]:
+        """Convert a task_results DB row into a dict, resolving file-based results."""
+        stored = row['result']
+        result_file = None
+        result_data = stored
+
+        # Detect if stored value is a relative file path (not raw JSON)
+        if stored and not stored.startswith('{') and not stored.startswith('['):
+            result_file = stored
+            if load_content:
+                result_data = self._read_result_file(stored)
+            else:
+                result_data = None  # Don't load full content for listings
+
+        d = {
+            'id': row['id'],
+            'task_id': row['task_id'],
+            'task_name': row['task_name'],
+            'client_name': row['client_name'],
+            'subtask_name': row['subtask_name'],
+            'status': row['status'],
+            'result': result_data,
+            'result_file': result_file,
+            'execution_time': row['execution_time'],
+            'completed_at': row['completed_at'],
+            'created_at': row['created_at'],
+        }
+        return d
 
     def get_cached_results(self, task_id: int = None, client_name: str = None,
                           subtask_name: str = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get cached task results with optional filtering.
-
-        Args:
-            task_id: Optional task ID filter
-            client_name: Optional client name filter
-            subtask_name: Optional subtask name filter
-            limit: Maximum number of results to return
-
-        Returns:
-            List of result dictionaries
+        File content is NOT loaded for listings — use get_cached_result_by_id for full data.
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1532,43 +1619,16 @@ class Database:
             params.append(limit)
 
             cursor.execute(query, params)
-            rows = cursor.fetchall()
-
-            results = []
-            for row in rows:
-                results.append({
-                    'id': row['id'],
-                    'task_id': row['task_id'],
-                    'task_name': row['task_name'],
-                    'client_name': row['client_name'],
-                    'subtask_name': row['subtask_name'],
-                    'status': row['status'],
-                    'result': row['result'],
-                    'execution_time': row['execution_time'],
-                    'completed_at': row['completed_at'],
-                    'created_at': row['created_at'],
-                })
-            return results
+            return [self._resolve_result_row(row, load_content=False) for row in cursor.fetchall()]
 
     def get_cached_result_by_id(self, result_id: int) -> Optional[Dict[str, Any]]:
-        """Get a single cached result by ID"""
+        """Get a single cached result by ID, with full file content loaded."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM task_results WHERE id = ?', (result_id,))
             row = cursor.fetchone()
             if row:
-                return {
-                    'id': row['id'],
-                    'task_id': row['task_id'],
-                    'task_name': row['task_name'],
-                    'client_name': row['client_name'],
-                    'subtask_name': row['subtask_name'],
-                    'status': row['status'],
-                    'result': row['result'],
-                    'execution_time': row['execution_time'],
-                    'completed_at': row['completed_at'],
-                    'created_at': row['created_at'],
-                }
+                return self._resolve_result_row(row, load_content=True)
             return None
 
     def get_latest_result_for_client(self, client_name: str,
@@ -1589,18 +1649,7 @@ class Database:
             cursor.execute(query, params)
             row = cursor.fetchone()
             if row:
-                return {
-                    'id': row['id'],
-                    'task_id': row['task_id'],
-                    'task_name': row['task_name'],
-                    'client_name': row['client_name'],
-                    'subtask_name': row['subtask_name'],
-                    'status': row['status'],
-                    'result': row['result'],
-                    'execution_time': row['execution_time'],
-                    'completed_at': row['completed_at'],
-                    'created_at': row['created_at'],
-                }
+                return self._resolve_result_row(row, load_content=True)
             return None
 
     def delete_cached_results(self, older_than_days: int = 90) -> int:
@@ -1615,3 +1664,46 @@ class Database:
             conn.commit()
             logger.info(f"Deleted {deleted_count} cached results older than {older_than_days} days")
             return deleted_count
+
+    # Administrator operations
+
+    def is_admin(self, email: str) -> bool:
+        """Check if an email is an administrator"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT 1 FROM administrators WHERE email = ?', (email.lower(),))
+            return cursor.fetchone() is not None
+
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        """Get all administrators"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT email, added_by, added_at FROM administrators ORDER BY added_at')
+            return [dict(row) for row in cursor.fetchall()]
+
+    def add_admin(self, email: str, added_by: str) -> bool:
+        """Add an administrator"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    'INSERT INTO administrators (email, added_by, added_at) VALUES (?, ?, ?)',
+                    (email.lower(), added_by.lower(), datetime.now().isoformat())
+                )
+                conn.commit()
+                logger.info(f"Administrator added: {email} by {added_by}")
+                return True
+            except sqlite3.IntegrityError:
+                logger.warning(f"Administrator already exists: {email}")
+                return False
+
+    def remove_admin(self, email: str) -> bool:
+        """Remove an administrator"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM administrators WHERE email = ?', (email.lower(),))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            if deleted:
+                logger.info(f"Administrator removed: {email}")
+            return deleted
