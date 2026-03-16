@@ -285,7 +285,7 @@ body {
 
 .task-info { flex: 1; }
 .task-name { font-weight: 600; color: var(--c-text); margin-bottom: 3px; }
-.task-subtask {
+.task-task {
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
     font-size: .8rem;
     color: var(--c-text-secondary);
@@ -358,10 +358,10 @@ body {
     background: #eff6ff; border-left: 3px solid var(--c-info); padding: 8px 12px; border-radius: var(--r-sm); margin: 8px 0;
 }
 .client-info .current-task i { color: var(--c-info); }
-.client-info .current-subtask {
+.client-info .current-task {
     background: #faf5ff; border-left: 3px solid #a855f7; padding: 6px 12px; border-radius: var(--r-sm); margin: 4px 0; font-size: .83rem;
 }
-.client-info .current-subtask i { color: #a855f7; }
+.client-info .current-task i { color: #a855f7; }
 
 /* ======================================================
    TABLES
@@ -390,7 +390,7 @@ body {
     letter-spacing: .05em;
 }
 .task-table tr:hover { background: #f8fafc; }
-.task-table .subtask-cell {
+.task-table .task-cell {
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: .8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -417,8 +417,8 @@ body {
 
 .enhanced-task-table .task-id-col { width: 7%; }
 .enhanced-task-table .task-name-col { width: 14%; }
-.enhanced-task-table .subtask-id-col { width: 8%; }
-.enhanced-task-table .subtask-name-col { width: 15%; }
+.enhanced-task-table .task-id-col { width: 8%; }
+.enhanced-task-table .task-name-col { width: 15%; }
 .enhanced-task-table .client-col { width: 15%; }
 .enhanced-task-table .status-col { width: 10%; }
 .enhanced-task-table .result-col { width: 15%; }
@@ -443,11 +443,11 @@ body {
 }
 .collapse-toggle:hover { background: rgba(99,102,241,.1); }
 
-/* Subtask execution rows */
-.subtask-execution-row { background: white; border-left: 2px solid var(--c-border); transition: background var(--dur-fast); }
-.subtask-execution-row:hover { background: #f8fafc; }
-.subtask-execution-row td { padding: 10px; border-bottom: 1px solid #f1f5f9; font-size: .875rem; }
-.subtask-execution-row.collapsed { display: none; }
+/* Task execution rows */
+.task-execution-row { background: white; border-left: 2px solid var(--c-border); transition: background var(--dur-fast); }
+.task-execution-row:hover { background: #f8fafc; }
+.task-execution-row td { padding: 10px; border-bottom: 1px solid #f1f5f9; font-size: .875rem; }
+.task-execution-row.collapsed { display: none; }
 
 /* Client details row */
 .client-details-row { background: #f8fafc; border-left: 3px solid var(--c-primary); }
@@ -489,28 +489,28 @@ body {
 .enhanced-client-table .ip-col { width: 12%; }
 .enhanced-client-table .task-id-col { width: 8%; }
 .enhanced-client-table .task-name-col { width: 15%; }
-.enhanced-client-table .subtask-id-col { width: 10%; }
-.enhanced-client-table .subtask-name-col { width: 15%; }
+.enhanced-client-table .task-id-col { width: 10%; }
+.enhanced-client-table .task-name-col { width: 15%; }
 .enhanced-client-table .heartbeat-col { width: 10%; }
 .enhanced-client-table .actions-col { width: 4%; }
 
-/* Badge helpers for subtask/task IDs */
+/* Badge helpers for task/task IDs */
 .task-id-badge {
     font-family: 'JetBrains Mono', monospace; background: #eff6ff; color: #2563eb;
     padding: 2px 8px; border-radius: 4px; font-size: .78rem; font-weight: 700;
 }
-.subtask-id-badge, .subtask-id {
+.task-id-badge, .task-id {
     font-family: 'JetBrains Mono', monospace; background: #f1f5f9; color: var(--c-text-secondary);
     padding: 2px 8px; border-radius: 4px; font-size: .78rem; font-weight: 700;
 }
-.subtask-name {
+.task-name {
     font-family: 'JetBrains Mono', monospace; background: #f1f5f9; padding: 2px 8px;
     border-radius: 4px; font-size: .82rem; color: var(--c-text);
 }
-.task-name-info, .enhanced-client-table .subtask-name-info {
+.task-name-info, .enhanced-client-table .task-name-info {
     display: flex; flex-direction: column; gap: 3px;
 }
-.enhanced-client-table .subtask-name-info .subtask-name { font-weight: 600; }
+.enhanced-client-table .task-name-info .task-name { font-weight: 600; }
 .enhanced-client-table .no-id { color: var(--c-text-secondary); font-style: italic; font-size: .83rem; }
 
 /* ======================================================
@@ -713,9 +713,9 @@ body {
 .pagination button:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ======================================================
-   SUBTASK OVERVIEW / PROGRESS
+   TASK OVERVIEW / PROGRESS
    ====================================================== */
-.subtask-overview { background: #f8fafc; border-radius: var(--r-md); padding: 20px; margin-bottom: 20px; }
+.task-overview { background: #f8fafc; border-radius: var(--r-md); padding: 20px; margin-bottom: 20px; }
 
 .overview-stats {
     display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin-bottom: 18px;
@@ -764,7 +764,7 @@ body {
     font-size: .85rem; white-space: pre-wrap; word-break: break-word;
 }
 
-.subtask-result-info {
+.task-result-info {
     background: #f8fafc; padding: 10px; margin: 10px 0; border-radius: 4px; border-left: 3px solid var(--c-info);
 }
 .result-type { font-weight: 700; color: var(--c-info); }
@@ -818,15 +818,15 @@ body {
 .task-type-badge {
     padding: 3px 8px; border-radius: var(--r-full); font-size: .7rem; font-weight: 700; text-transform: uppercase;
 }
-.task-type-badge.subtask-based { background: #dcfce7; color: #166534; }
+.task-type-badge.task-based { background: #dcfce7; color: #166534; }
 .task-type-badge.legacy { background: #fee2e2; color: #991b1b; }
 
-/* Subtask detail header */
-.subtask-detail-header {
+/* Task detail header */
+.task-detail-header {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--c-border);
 }
-.subtask-status-info { display: flex; align-items: center; gap: 10px; }
+.task-status-info { display: flex; align-items: center; gap: 10px; }
 
 /* ======================================================
    RESPONSIVE
@@ -850,22 +850,22 @@ body {
 
 @media (max-width: 1200px) {
     .enhanced-task-table .task-name-col { width: 15%; }
-    .enhanced-task-table .subtask-id-col { width: 8%; }
-    .enhanced-task-table .subtask-name-col { width: 13%; }
+    .enhanced-task-table .task-id-col { width: 8%; }
+    .enhanced-task-table .task-name-col { width: 13%; }
     .enhanced-task-table .result-col { width: 14%; }
     .enhanced-task-table .timing-col { width: 11%; }
     .enhanced-client-table .client-name-col { width: 16%; }
     .enhanced-client-table .task-id-col { width: 8%; }
     .enhanced-client-table .task-name-col { width: 14%; }
-    .enhanced-client-table .subtask-id-col { width: 10%; }
-    .enhanced-client-table .subtask-name-col { width: 14%; }
+    .enhanced-client-table .task-id-col { width: 10%; }
+    .enhanced-client-table .task-name-col { width: 14%; }
     .enhanced-client-table .heartbeat-col { width: 12%; }
 }
 
 @media (max-width: 992px) {
     .enhanced-task-table { font-size: .82rem; }
     .enhanced-task-table .task-name-col { width: 20%; }
-    .enhanced-task-table .subtask-col { width: 18%; }
+    .enhanced-task-table .task-col { width: 18%; }
     .enhanced-task-table .client-col { width: 12%; }
     .enhanced-task-table .result-col { width: 15%; }
     .enhanced-task-table .timing-col { display: none; }
@@ -875,8 +875,8 @@ body {
     .enhanced-task-table .task-id-col { display: none; }
     .enhanced-task-table .task-name-col { width: 25%; }
     .enhanced-task-table .result-col { display: none; }
-    .enhanced-task-table .subtask-id-col { width: 8%; }
-    .enhanced-task-table .subtask-name-col { width: 17%; }
+    .enhanced-task-table .task-id-col { width: 8%; }
+    .enhanced-task-table .task-name-col { width: 17%; }
     .enhanced-task-table .client-col { width: 20%; }
     .enhanced-task-table .status-col { width: 15%; }
     .enhanced-task-table .actions-col { width: 10%; }
@@ -885,8 +885,8 @@ body {
     .enhanced-client-table .task-id-col { display: none; }
     .enhanced-client-table .client-name-col { width: 20%; }
     .enhanced-client-table .task-name-col { width: 18%; }
-    .enhanced-client-table .subtask-id-col { width: 12%; }
-    .enhanced-client-table .subtask-name-col { width: 20%; }
+    .enhanced-client-table .task-id-col { width: 12%; }
+    .enhanced-client-table .task-name-col { width: 20%; }
     .enhanced-client-table .actions-col { width: 10%; }
 }
 
