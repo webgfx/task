@@ -140,7 +140,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>', methods=['GET'])
-    def get_task(task_id):
+    def get_job(task_id):
         """Get specified task"""
         try:
             task = database.get_task(task_id)
@@ -159,7 +159,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>', methods=['PUT'])
-    def update_task(task_id):
+    def update_job(task_id):
         """Update task"""
         try:
             task = database.get_task(task_id)
@@ -217,7 +217,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>', methods=['DELETE'])
-    def delete_task(task_id):
+    def delete_job(task_id):
         """Delete task and all related run records"""
         try:
             task = database.get_task(task_id)
@@ -246,7 +246,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>/copy', methods=['POST'])
-    def copy_task(task_id):
+    def copy_job(task_id):
         """Copy an existing task with optional modifications"""
         try:
             # Get the original task
@@ -379,7 +379,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @api.route('/jobs/<int:task_id>/cancel', methods=['POST'])
-    def cancel_task(task_id):
+    def cancel_job(task_id):
         """Cancel task run"""
         try:
             task = database.get_task(task_id)
