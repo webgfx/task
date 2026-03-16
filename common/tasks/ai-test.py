@@ -199,23 +199,23 @@ class AiTestTask(BaseTask):
         # 3. Build command line
         cmd = [node, script_path]
 
-        runtime = kwargs.get('runtime', 'llamacpp')
+        runtime = kwargs.get('runtime', 'ort,llamacpp')
         if runtime:
             cmd.extend(['--runtime', runtime])
 
-        ort_backend = kwargs.get('ort_backend', '')
+        ort_backend = kwargs.get('ort_backend', 'webgpu')
         if ort_backend:
             cmd.extend(['--ort-backend', ort_backend])
 
-        llamacpp_backend = kwargs.get('llamacpp_backend', '')
+        llamacpp_backend = kwargs.get('llamacpp_backend', 'vulkan')
         if llamacpp_backend:
             cmd.extend(['--llamacpp-backend', llamacpp_backend])
 
-        model = kwargs.get('model', '')
+        model = kwargs.get('model', 'qwen-3-1.7B')
         if model:
             cmd.extend(['-m', model])
 
-        prompt_lengths = kwargs.get('prompt_lengths', '')
+        prompt_lengths = kwargs.get('prompt_lengths', '128,256')
         if prompt_lengths:
             cmd.extend(['-pl', prompt_lengths])
 
