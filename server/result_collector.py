@@ -113,16 +113,16 @@ class TaskResultCollector:
 
                 # Get Job information
                 job = self.database.get_task(task_id)
-                if not Job:
+                if not job:
                     logger.error(f"Job {task_id} not found")
                     return False
 
                 # Check if Job already completed
-                if Job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+                if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
                     return False
 
                 # Get all clients involved in this Job
-                clients = Job.get_all_clients()
+                clients = job.get_all_clients()
                 if not clients:
                     logger.warning(f"Job {task_id} has no clients")
                     return False
@@ -130,14 +130,14 @@ class TaskResultCollector:
                 # Check completion status for each client
                 all_completed = True
                 for client_name in clients:
-                    client_TASKs = Job.get_tasks_for_client(client_name)
-                    if not client_TASKs:
+                    client_tasks = job.get_tasks_for_client(client_name)
+                    if not client_tasks:
                         continue  # No tasks for this client
 
                     # Check if all tasks for this client are completed
-                    for Task in client_TASKs:
+                    for td in client_tasks:
                         executions = self.database.get_runs_filtered(
-                            task_id, Task.name, client_name
+                            task_id, td.name, client_name
                         )
 
                         if not executions:
@@ -176,7 +176,7 @@ class TaskResultCollector:
 
             # Get Job and update status
             job = self.database.get_task(task_id)
-            if not Job:
+            if not job:
                 logger.error(f"Job {task_id} not found during completion processing")
                 return
 
@@ -200,10 +200,10 @@ class TaskResultCollector:
                 logger.error(f"Failed to generate report for Job {task_id}: {e}")
 
             # Send email notification if configured and Job requests it
-            if self.email_notifier and Job.should_send_email():
+            if self.email_notifier and job.should_send_email():
                 try:
                     # Get custom recipients from Job, or use default
-                    custom_recipients = Job.get_email_recipients_list()
+                    custom_recipients = job.get_email_recipients_list()
 
                     if custom_recipients:
                         # Send to custom recipients specified in Job
@@ -211,8 +211,8 @@ class TaskResultCollector:
                             try:
                                 # Use the send_notification method with custom recipient
                                 result = self.email_notifier.send_notification(
-                                    task_name=Job.name,
-                                    client_name=Job.get_all_clients()[0] if Job.get_all_clients() else 'unknown',
+                                    task_name=job.name,
+                                    client_name=job.get_all_clients()[0] if job.get_all_clients() else 'unknown',
                                     report_html=self.report_generator.generate_html_report(Job, client_results),
                                     to_email=recipient.strip()
                                 )
@@ -234,9 +234,9 @@ class TaskResultCollector:
 
                 except Exception as e:
                     logger.error(f"Error sending email notification for Job {task_id}: {e}")
-            elif Job.send_email and not self.email_notifier:
+            elif job.send_email and not self.email_notifier:
                 logger.warning(f"Job {task_id} requested email notification but email notifier is not configured")
-            elif Job.send_email and not Job.get_email_recipients_list():
+            elif job.send_email and not job.get_email_recipients_list():
                 logger.warning(f"Job {task_id} requested email notification but no recipients specified")
 
             # Cache Job results for future reference
@@ -268,27 +268,27 @@ class TaskResultCollector:
         client_results = {}
 
         try:
-            clients = Job.get_all_clients()
+            clients = job.get_all_clients()
 
             for client_name in clients:
-                client_TASKs = Job.get_tasks_for_client(client_name)
+                client_tasks = job.get_tasks_for_client(client_name)
 
-                if not client_TASKs:
+                if not client_tasks:
                     continue
 
                 client_data = {
                     'client_name': client_name,
                     'tasks': [],
-                    'total_count': len(client_TASKs),
+                    'total_count': len(client_tasks),
                     'successful_count': 0,
                     'failed_count': 0,
                     'overall_success': False
                 }
 
-                for Task in client_TASKs:
+                for td in client_tasks:
                     # Get Task execution results
                     executions = self.database.get_runs_filtered(
-                        Job.id, Task.name, client_name
+                        job.id, td.name, client_name
                     )
 
                     if executions:
@@ -304,9 +304,9 @@ class TaskResultCollector:
                     else:
                         # Create a placeholder for missing Task execution
                         placeholder = Run(
-                            task_id=Job.id,
-                            task_name=Task.name,
-                            TASK_order=Task.order,
+                            task_id=job.id,
+                            task_name=td.name,
+                            task_order=td.order,
                             client=client_name,
                             status=JobStatus.FAILED,
                             error_message="Task was not executed"
@@ -359,20 +359,20 @@ class TaskResultCollector:
             total_clients = len(client_results)
             successful_clients = sum(1 for data in client_results.values() if data.get('overall_success', False))
 
-            total_TASKs = sum(data.get('total_count', 0) for data in client_results.values())
-            successful_TASKs = sum(data.get('successful_count', 0) for data in client_results.values())
+            total_tasks = sum(data.get('total_count', 0) for data in client_results.values())
+            successful_tasks = sum(data.get('successful_count', 0) for data in client_results.values())
 
             event_data = {
-                'task_id': Job.id,
-                'task_name': Job.name,
+                'task_id': job.id,
+                'task_name': job.name,
                 'overall_success': overall_success,
                 'status': JobStatus.COMPLETED.value if overall_success else JobStatus.FAILED.value,
                 'completed_at': datetime.now().isoformat(),
                 'summary': {
                     'total_clients': total_clients,
                     'successful_clients': successful_clients,
-                    'total_TASKs': total_TASKs,
-                    'successful_TASKs': successful_TASKs
+                    'total_tasks': total_tasks,
+                    'successful_tasks': successful_tasks
                 },
                 'client_results': {
                     name: {
@@ -386,7 +386,7 @@ class TaskResultCollector:
 
             # Emit to all connected clients
             self.socketio.emit('task_completed', event_data)
-            logger.debug(f"Emitted Job completion event for Job {Job.id}")
+            logger.debug(f"Emitted Job completion event for Job {job.id}")
 
         except Exception as e:
             logger.error(f"Error emitting Job completion event: {e}")
@@ -404,12 +404,12 @@ class TaskResultCollector:
         """
         try:
             job = self.database.get_task(task_id)
-            if not Job:
+            if not job:
                 logger.error(f"Job {task_id} not found")
                 return None
 
-            if not force and Job.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
-                logger.error(f"Job {task_id} is not completed (status: {Job.status.value})")
+            if not force and job.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
+                logger.error(f"Job {task_id} is not completed (status: {job.status.value})")
                 return None
 
             # Collect results
@@ -442,7 +442,7 @@ class TaskResultCollector:
                 return False
 
             job = self.database.get_task(task_id)
-            if not Job:
+            if not job:
                 logger.error(f"Job {task_id} not found")
                 return False
 
@@ -484,8 +484,8 @@ class TaskResultCollector:
                 for execution in client_data.get('tasks', []):
                     try:
                         self.database.cache_task_result(
-                            task_id=Job.id,
-                            task_name=Job.name,
+                            job_id=job.id,
+                            job_name=job.name,
                             client_name=client_name,
                             task_name=execution.task_name,
                             status=execution.status.value,
@@ -498,10 +498,10 @@ class TaskResultCollector:
                         logger.error(f"Failed to cache result for Task "
                                    f"'{execution.task_name}' on '{client_name}': {e}")
 
-            logger.info(f"Cached results for Job {Job.id} ({Job.name})")
+            logger.info(f"Cached results for Job {job.id} ({job.name})")
 
         except Exception as e:
-            logger.error(f"Error caching Job results for Job {Job.id}: {e}")
+            logger.error(f"Error caching Job results for Job {job.id}: {e}")
 
 
 def create_default_config() -> Dict[str, Any]:
