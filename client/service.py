@@ -243,15 +243,38 @@ class TaskClientService(win32serviceutil.ServiceFramework):
             raise
 
     def _delayed_client_start(self):
-        """Start the client with delay to allow service to fully initialize"""
+        """Start the client with delay to allow service to fully initialize.
+        Retries indefinitely with backoff until the client runtime is running.
+        """
         try:
             import time
             time.sleep(5)  # Wait 5 seconds before starting client
 
-            if self.client:
-                self.logger.info("Starting TaskClient...")
-                self.client.start()
-                self.logger.info("TaskClient started successfully")
+            if not self.client:
+                return
+
+            retry_delays = [30, 60, 120, 300]  # seconds between retries
+            attempt = 0
+
+            while True:
+                self.logger.info(f"Starting TaskClient (attempt {attempt + 1})...")
+                try:
+                    self.client.start()
+                except Exception as e:
+                    self.logger.error(f"TaskClient start() raised unexpectedly: {e}")
+
+                if getattr(self.client, 'running', False):
+                    self.logger.info("TaskClient started successfully")
+                    return
+
+                delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                self.logger.error(
+                    f"TaskClient failed to start (registration/connection error). "
+                    f"Retrying in {delay} seconds..."
+                )
+                attempt += 1
+                time.sleep(delay)
+
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Delayed client start error: {e}")
