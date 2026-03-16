@@ -19,8 +19,10 @@ def fix_service_path():
         str: The project root directory path
     """
     # Get the directory where this service.py file is located
+    # service.py lives at <repo_root>/client/service/service.py
+    # so we need to go up two levels to reach <repo_root>
     service_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(service_dir)
+    project_root = os.path.dirname(os.path.dirname(service_dir))
 
     # Add project root to Python path if not already present
     if project_root not in sys.path:
