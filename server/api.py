@@ -139,7 +139,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Create Task Failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/jobs/<int:job_id>', methods=['GET'])
+    @api.route('/jobs/<int:task_id>', methods=['GET'])
     def get_task(task_id):
         """Get specified task"""
         try:
@@ -158,7 +158,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Failed to get task: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/jobs/<int:job_id>', methods=['PUT'])
+    @api.route('/jobs/<int:task_id>', methods=['PUT'])
     def update_task(task_id):
         """Update task"""
         try:
@@ -216,7 +216,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Update taskFailed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/jobs/<int:job_id>', methods=['DELETE'])
+    @api.route('/jobs/<int:task_id>', methods=['DELETE'])
     def delete_task(task_id):
         """Delete task and all related run records"""
         try:
@@ -245,7 +245,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Delete task failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/jobs/<int:job_id>/copy', methods=['POST'])
+    @api.route('/jobs/<int:task_id>/copy', methods=['POST'])
     def copy_task(task_id):
         """Copy an existing task with optional modifications"""
         try:
@@ -378,7 +378,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Copy task failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/jobs/<int:job_id>/cancel', methods=['POST'])
+    @api.route('/jobs/<int:task_id>/cancel', methods=['POST'])
     def cancel_task(task_id):
         """Cancel task run"""
         try:
@@ -1360,7 +1360,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     # Report Generation and Email Notification API
-    @api.route('/jobs/<int:job_id>/generate-report', methods=['POST'])
+    @api.route('/jobs/<int:task_id>/generate-report', methods=['POST'])
     def generate_task_report(task_id):
         """Generate HTML report for a specific task"""
         try:
@@ -1389,7 +1389,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Generate task report failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @api.route('/jobs/<int:job_id>/send-notification', methods=['POST'])
+    @api.route('/jobs/<int:task_id>/send-notification', methods=['POST'])
     def send_task_notification(task_id):
         """Send email notification for a specific task"""
         try:
