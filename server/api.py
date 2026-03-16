@@ -2023,6 +2023,83 @@ def create_api_blueprint(database, socketio, result_collector=None):
             logger.error(f"Failed to get cached result: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @api.route('/results/<int:result_id>/ai-report', methods=['POST'])
+    def generate_ai_report(result_id):
+        """Generate an AI test benchmark report using compare-results.js"""
+        try:
+            import subprocess
+            import shutil
+
+            result = database.get_cached_result_by_id(result_id)
+            if not result:
+                return jsonify({'success': False, 'error': 'Result not found'}), 404
+
+            if result.get('task_name') != 'ai_test':
+                return jsonify({'success': False, 'error': 'Not an ai_test result'}), 400
+
+            # Parse the result data to get run_id
+            result_data = result.get('result')
+            if not result_data:
+                return jsonify({'success': False, 'error': 'No result data'}), 400
+
+            parsed = json.loads(result_data) if isinstance(result_data, str) else result_data
+            run_id = parsed.get('run_id')
+            if not run_id:
+                return jsonify({'success': False, 'error': 'No run_id in result data'}), 400
+
+            # Resolve ai-test path
+            from common.tasks import get_task
+            ai_test_task = get_task('ai_test')
+            if not ai_test_task:
+                return jsonify({'success': False, 'error': 'ai_test task not registered'}), 500
+
+            # Import the path resolver from ai-test module
+            import importlib
+            ai_test_module = importlib.import_module('common.tasks.ai-test')
+            ai_test_path = ai_test_module._resolve_ai_test_path()
+
+            script_path = os.path.join(ai_test_path, 'scripts', 'compare-results.js')
+            if not os.path.isfile(script_path):
+                return jsonify({'success': False, 'error': 'compare-results.js not found'}), 500
+
+            # Find node
+            node = shutil.which('node')
+            if not node:
+                return jsonify({'success': False, 'error': 'Node.js not found'}), 500
+
+            # Generate report to a temp file
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w') as tmp:
+                output_path = tmp.name
+
+            try:
+                proc = subprocess.run(
+                    [node, script_path, run_id, '-o', output_path],
+                    cwd=ai_test_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if proc.returncode != 0:
+                    return jsonify({
+                        'success': False,
+                        'error': f'compare-results.js failed: {proc.stderr or proc.stdout}'
+                    }), 500
+
+                with open(output_path, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+
+                return jsonify({'success': True, 'html': html_content})
+
+            finally:
+                if os.path.exists(output_path):
+                    os.unlink(output_path)
+
+        except Exception as e:
+            logger.error(f"Failed to generate AI report: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @api.route('/results/client/<client_name>', methods=['GET'])
     def get_client_results(client_name):
         """Get all cached results for a specific client"""

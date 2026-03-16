@@ -152,7 +152,11 @@ function renderResults(results) {
                     <button class="btn btn-small btn-primary" onclick="viewResultDetail(${result.id})"
                             title="View Details">
                         <i class="fas fa-eye"></i>
-                    </button>
+                    </button>${result.task_name === 'ai_test' ? `
+                    <button class="btn btn-small btn-secondary" onclick="generateAiTestReport(${result.id})"
+                            title="Generate Benchmark Report">
+                        <i class="fas fa-chart-bar"></i>
+                    </button>` : ''}
                 </td>
             </tr>
         `;
@@ -444,4 +448,27 @@ function renderComparison(data) {
 function closeComparisonModal() {
     const modal = document.getElementById('comparisonModal');
     if (modal) modal.style.display = 'none';
+}
+
+// Generate AI test benchmark report using compare-results.js
+async function generateAiTestReport(resultId) {
+    try {
+        showNotification('Info', 'Generating benchmark report...', 'info');
+        const response = await apiPost(`/api/results/${resultId}/ai-report`, {});
+        if (response.success && response.html) {
+            // Open report in a new window
+            const w = window.open('', '_blank');
+            if (w) {
+                w.document.write(response.html);
+                w.document.close();
+            } else {
+                showNotification('Warning', 'Pop-up blocked. Please allow pop-ups.', 'warning');
+            }
+        } else {
+            showNotification('Error', response.error || 'Failed to generate report', 'error');
+        }
+    } catch (error) {
+        console.error('Report generation failed:', error);
+        showNotification('Error', 'Failed to generate report', 'error');
+    }
 }
