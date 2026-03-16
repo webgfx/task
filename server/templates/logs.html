@@ -15,12 +15,12 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-top: 20px;
         }
-        
+
         .logs-table table {
             width: 100%;
             border-collapse: collapse;
         }
-        
+
         .logs-table th {
             background: #007bff;
             color: white;
@@ -28,66 +28,66 @@
             text-align: left;
             font-weight: 600;
         }
-        
+
         .logs-table td {
             padding: 10px 12px;
             border-bottom: 1px solid #eee;
             vertical-align: top;
         }
-        
+
         .logs-table tr:hover {
             background: #f8f9fa;
         }
-        
+
         .log-level {
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.8em;
             font-weight: bold;
         }
-        
+
         .log-level.INFO {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .log-level.WARN {
             background: #fff3cd;
             color: #856404;
         }
-        
+
         .log-level.ERROR {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .log-action {
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 0.85em;
             font-weight: 500;
         }
-        
+
         .log-action.CONNECT {
             background: #d1ecf1;
             color: #0c5460;
         }
-        
+
         .log-action.DISCONNECT {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .log-action.CLIENT_REGISTER {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .log-action.CLIENT_UPDATE {
             background: #fff3cd;
             color: #856404;
         }
-        
+
         .log-data {
             max-width: 300px;
             word-wrap: break-word;
@@ -97,18 +97,18 @@
             padding: 5px;
             border-radius: 4px;
         }
-        
+
         .timestamp {
             font-family: monospace;
             font-size: 0.9em;
         }
-        
+
         .controls-group {
             display: flex;
             gap: 10px;
             align-items: center;
         }
-        
+
         .btn {
             padding: 8px 16px;
             border: none;
@@ -117,47 +117,47 @@
             font-size: 0.9em;
             transition: background-color 0.2s;
         }
-        
+
         .btn-primary {
             background: #007bff;
             color: white;
         }
-        
+
         .btn-primary:hover {
             background: #0056b3;
         }
-        
+
         .btn-secondary {
             background: #6c757d;
             color: white;
         }
-        
+
         .btn-secondary:hover {
             background: #545b62;
         }
-        
+
         .btn-danger {
             background: #dc3545;
             color: white;
         }
-        
+
         .btn-danger:hover {
             background: #c82333;
         }
-        
+
         .form-control {
             padding: 6px 12px;
             border: 1px solid #ced4da;
             border-radius: 4px;
             font-size: 0.9em;
         }
-        
+
         .loading {
             text-align: center;
             padding: 40px;
             color: #6c757d;
         }
-        
+
         .no-logs {
             text-align: center;
             padding: 40px;
@@ -165,21 +165,21 @@
             background: #f8f9fa;
             border-radius: 8px;
         }
-        
+
         .clear-logs-group {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-right: 20px;
         }
-        
+
         .clear-logs-group label {
             font-weight: 500;
             white-space: nowrap;
         }
-        
 
-        
+
+
         #clearDate {
             width: 150px;
         }
@@ -191,7 +191,7 @@
         <nav class="sidebar">
             <div class="sidebar-header">
                 <i class="fas fa-tasks"></i>
-                <h2>Web Graphics Service</h2>
+                <h2>Web Graphics Task</h2>
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
@@ -239,7 +239,7 @@
                     </div>
                 </div>
             </header>
-            
+
             <!-- Filters -->
             <div class="filter-bar">
                 <div class="filter-group">
@@ -262,46 +262,46 @@
             <div class="loading">Loading logs...</div>
         </div>
     </div>
-    
+
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         let socket = null;
-        
+
         // Initialize socket connection
         function initSocket() {
             socket = io();
-            
+
             socket.on('connect', function() {
                 // Don't log connection message to avoid clutter
             });
-            
+
             socket.on('client_registered', function(data) {
                 // Auto refresh when new client registers
                 loadLogs();
             });
-            
+
             // Listen for real-time log updates
             socket.on('new_log_entry', function(logEntry) {
                 addLogEntryToTable(logEntry);
             });
         }
-        
+
         // Add new log entry to existing table in real-time
         function addLogEntryToTable(logEntry) {
             const container = document.getElementById('logsContent');
             const existingTable = container.querySelector('.logs-table table tbody');
-            
+
             if (!existingTable) {
                 // If no table exists, reload all logs
                 loadLogs();
                 return;
             }
-            
+
             // Create new row
             const timestamp = new Date(logEntry.timestamp).toLocaleString();
             const clientInfo = logEntry.client_name ? `${logEntry.client_name} (${logEntry.client_ip})` : logEntry.client_ip;
             const dataText = logEntry.data ? JSON.stringify(logEntry.data, null, 2) : '';
-            
+
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
                 <td class="timestamp">${timestamp}</td>
@@ -311,16 +311,16 @@
                 <td><span class="log-level ${logEntry.level}">${escapeHtml(logEntry.level)}</span></td>
                 <td><div class="log-data">${escapeHtml(dataText)}</div></td>
             `;
-            
+
             // Add new row at the top (newest first)
             existingTable.insertBefore(newRow, existingTable.firstChild);
-            
+
             // Apply filters if active
             const clientIpFilter = document.getElementById('clientIpFilter').value.trim();
             if (clientIpFilter && !logEntry.client_ip.includes(clientIpFilter)) {
                 newRow.style.display = 'none';
             }
-            
+
             // Enforce row limit (remove excess rows)
             const limit = parseInt(document.getElementById('limitSelect').value);
             const allRows = existingTable.querySelectorAll('tr');
@@ -330,48 +330,48 @@
                 }
             }
         }
-        
+
         // Start auto-refresh (removed - now using real-time WebSocket updates)
         function startAutoRefresh() {
             // This function is no longer needed - logs update in real-time via WebSocket
         }
-        
+
         // Load logs from server
         function loadLogs() {
             const limit = document.getElementById('limitSelect').value;
             const clientIp = document.getElementById('clientIpFilter').value.trim();
-            
+
             let url = `/api/logs?limit=${limit}`;
             if (clientIp) {
                 url += `&client_ip=${encodeURIComponent(clientIp)}`;
             }
-            
+
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         displayLogs(data.data);
                     } else {
-                        document.getElementById('logsContent').innerHTML = 
+                        document.getElementById('logsContent').innerHTML =
                             '<div class="no-logs">Error loading logs: ' + data.error + '</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading logs:', error);
-                    document.getElementById('logsContent').innerHTML = 
+                    document.getElementById('logsContent').innerHTML =
                         '<div class="no-logs">Error loading logs</div>';
                 });
         }
-        
+
         // Display logs in table
         function displayLogs(logs) {
             const container = document.getElementById('logsContent');
-            
+
             if (logs.length === 0) {
                 container.innerHTML = '<div class="no-logs">No logs found</div>';
                 return;
             }
-            
+
             let html = `
                 <div class="logs-table">
                     <table>
@@ -387,12 +387,12 @@
                         </thead>
                         <tbody>
             `;
-            
+
             logs.forEach(log => {
                 const timestamp = new Date(log.timestamp).toLocaleString();
                 const clientInfo = log.client_name ? `${log.client_name} (${log.client_ip})` : log.client_ip;
                 const dataText = log.data ? JSON.stringify(log.data, null, 2) : '';
-                
+
                 html += `
                     <tr>
                         <td class="timestamp">${timestamp}</td>
@@ -404,37 +404,37 @@
                     </tr>
                 `;
             });
-            
+
             html += `
                         </tbody>
                     </table>
                 </div>
             `;
-            
+
             container.innerHTML = html;
         }
-        
+
         // Helper function to escape HTML
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
+
         // Clear logs based on selected date
         function clearLogsByDate() {
             const selectedDate = document.getElementById('clearDate').value;
-            
+
             if (!selectedDate) {
                 alert('Please select a date before which to clear logs.');
                 return;
             }
-            
+
             const confirmMessage = `Are you sure you want to clear all logs before ${selectedDate}? This action cannot be undone.`;
             if (!confirm(confirmMessage)) {
                 return;
             }
-            
+
             fetch('/api/logs/clear', {
                 method: 'POST',
                 headers: {
@@ -456,7 +456,7 @@
                 alert('Error clearing logs');
             });
         }
-        
+
         // Event listeners
         document.getElementById('clearBtn').addEventListener('click', clearLogsByDate);
         document.getElementById('limitSelect').addEventListener('change', loadLogs);
@@ -465,18 +465,18 @@
             clearTimeout(this.debounceTimer);
             this.debounceTimer = setTimeout(loadLogs, 500);
         });
-        
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             initSocket();
             loadLogs();
-            
+
             // Set default date to 30 days ago
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             document.getElementById('clearDate').value = thirtyDaysAgo.toISOString().split('T')[0];
         });
-        
+
         // Clean up when page is unloaded
         window.addEventListener('beforeunload', function() {
             // Real-time updates - no cleanup needed
@@ -486,3 +486,4 @@
     </div>
 </body>
 </html>
+

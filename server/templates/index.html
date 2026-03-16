@@ -13,7 +13,7 @@
         <nav class="sidebar">
             <div class="sidebar-header">
                 <i class="fas fa-tasks"></i>
-                <h2>Web Graphics Service</h2>
+                <h2>Web Graphics Task</h2>
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
@@ -38,6 +38,10 @@
                 <div class="header-content">
                     <h1>System Overview</h1>
                     <div class="header-actions">
+                        <button id="reloadSubtasksBtn" class="btn btn-small btn-secondary" 
+                                onclick="reloadSubtasks()" title="Reload subtask modules on server and clients">
+                            <i class="fas fa-sync-alt"></i> Reload Subtasks
+                        </button>
                         <span class="connection-status" id="connectionStatus">
                             <i class="fas fa-circle text-success"></i>
                             Connected
@@ -142,3 +146,4 @@
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
+

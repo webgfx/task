@@ -172,7 +172,7 @@ if %INSTALL_RESULT% neq 0 (
     echo ✓ Service installed successfully
     echo.
     echo Verifying installation...
-    sc query WebGraphicsService >nul 2>&1
+    sc query WebGraphicsTask >nul 2>&1
     if errorlevel 1 (
         echo ⚠️  Warning: Service installation reported success but service is not found
         echo This may indicate a partial installation failure.
@@ -232,13 +232,13 @@ goto menu
 :start_service
 echo.
 echo Starting Windows Service...
-echo Service Name: WebGraphicsService
+echo Service Name: WebGraphicsTask
 echo.
 
 REM First check if service exists
-sc query WebGraphicsService >nul 2>&1
+sc query WebGraphicsTask >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Service WebGraphicsService does not exist
+    echo ERROR: Service WebGraphicsTask does not exist
     echo.
     echo The service may not be installed properly.
     echo Please try installing the service first - option 1.
@@ -248,16 +248,16 @@ if errorlevel 1 (
 )
 
 echo Service exists, attempting to start...
-net start WebGraphicsService
+net start WebGraphicsTask
 if errorlevel 1 (
     echo Service start failed
     echo.
     echo Checking service status for more details...
-    sc query WebGraphicsService
+    sc query WebGraphicsTask
     echo.
     echo Checking Windows Event Log for service errors...
     echo Recent service-related errors:
-    wevtutil qe Application /c:5 /rd:true /f:text /q:"*[System[Provider[@Name='Python Service'] or Provider[@Name='WebGraphicsService']]]" 2>nul
+    wevtutil qe Application /c:5 /rd:true /f:text /q:"*[System[Provider[@Name='Python Service'] or Provider[@Name='WebGraphicsTask']]]" 2>nul
     if errorlevel 1 (
         echo No specific service errors found in Application log
         echo Checking System log...
@@ -281,7 +281,7 @@ goto menu
 :stop_service
 echo.
 echo Stopping Windows Service...
-net stop WebGraphicsService
+net stop WebGraphicsTask
 if errorlevel 1 (
     echo ❌ Service stop failed
 ) else (
@@ -293,9 +293,9 @@ goto menu
 :restart_service
 echo.
 echo Restarting Windows Service...
-net stop WebGraphicsService
+net stop WebGraphicsTask
 timeout /t 2 /nobreak >nul
-net start WebGraphicsService
+net start WebGraphicsTask
 if errorlevel 1 (
     echo ❌ Service restart failed
 ) else (
@@ -307,28 +307,28 @@ goto menu
 :status_service
 echo.
 echo Checking Service Status...
-echo Service Name: WebGraphicsService
+echo Service Name: WebGraphicsTask
 echo.
 
 REM Check if service exists
-sc query WebGraphicsService >nul 2>&1
+sc query WebGraphicsTask >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Service 'WebGraphicsService' does not exist
+    echo ❌ Service 'WebGraphicsTask' does not exist
     echo.
     echo The service is not installed. Use option 1 to install it.
 ) else (
     echo ✓ Service exists. Detailed status:
     echo.
-    sc query WebGraphicsService
+    sc query WebGraphicsTask
     echo.
     
     REM Check configuration directory
-    if exist "C:\WebGraphicsService\config.json" (
-        echo ✓ Configuration file exists: C:\WebGraphicsService\config.json
+    if exist "C:\WebGraphicsTask\config.json" (
+        echo ✓ Configuration file exists: C:\WebGraphicsTask\config.json
         echo Configuration:
-        type "C:\WebGraphicsService\config.json"
+        type "C:\WebGraphicsTask\config.json"
     ) else (
-        echo ⚠️  Configuration file not found: C:\WebGraphicsService\config.json
+        echo ⚠️  Configuration file not found: C:\WebGraphicsTask\config.json
     )
 )
 echo.
@@ -396,7 +396,7 @@ echo Step 3: Testing service initialization...
 echo.
 
 echo Step 4: Recent Event Log errors...
-wevtutil qe Application /c:5 /rd:true /f:text /q:"*[System[Provider[@Name='WebGraphicsService'] and TimeCreated[timediff(@SystemTime) <= 3600000]]]" 2>nul
+wevtutil qe Application /c:5 /rd:true /f:text /q:"*[System[Provider[@Name='WebGraphicsTask'] and TimeCreated[timediff(@SystemTime) <= 3600000]]]" 2>nul
 
 echo.
 echo Debug completed. Check the output above for any errors.
@@ -406,3 +406,4 @@ goto menu
 :end
 echo.
 echo Client manager completed.
+
