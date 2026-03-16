@@ -104,7 +104,7 @@ class TaskScheduler:
     def _execute_scheduled_task(self, task_id):
         """Execute scheduled task (supports tasks)"""
         try:
-            task = self.database.get_task(task_id)
+            task = self.database.get_job(task_id)
             if not task:
                 logger.warning(f"Task does not exist: {task_id}")
                 return
@@ -115,7 +115,7 @@ class TaskScheduler:
 
             # Check if this is a task-based job
             if task.tasks:
-                self._execute_TASK_task(task)
+                self._execute_job_tasks(task)
             else:
                 # Legacy single-client task
                 available_client = self._find_available_client(task.client)
@@ -128,7 +128,7 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"Failed to execute scheduled task {task_id}: {e}")
 
-    def _execute_TASK_task(self, task):
+    def _execute_job_tasks(self, task):
         """Execute a task-based job on multiple clients"""
         try:
             # Get all unique clients from tasks
@@ -153,7 +153,7 @@ class TaskScheduler:
             # Update task status
             task.status = JobStatus.RUNNING
             task.started_at = datetime.now()
-            self.database.update_task(task)
+            self.database.update_job(task)
 
             # Dispatch to each client
             for client_name, client in available_clients.items():
@@ -193,12 +193,12 @@ class TaskScheduler:
             # Reset task status
             task.status = JobStatus.PENDING
             task.started_at = None
-            self.database.update_task(task)
+            self.database.update_job(task)
 
     def _check_pending_tasks(self):
         """Check tasks pending execution"""
         try:
-            pending_tasks = self.database.get_pending_tasks()
+            pending_tasks = self.database.get_pending_jobs()
             current_time = datetime.now()
 
             logger.info(f"DEBUG: Found {len(pending_tasks)} pending tasks to check")
@@ -219,7 +219,7 @@ class TaskScheduler:
                 if should_execute:
                     if task.tasks:
                         # task-based job
-                        self._execute_TASK_task(task)
+                        self._execute_job_tasks(task)
                     else:
                         # Legacy single-client task
                         available_client = self._find_available_client(task.client)
@@ -263,7 +263,7 @@ class TaskScheduler:
             # Update task status
             task.status = JobStatus.RUNNING
             task.started_at = datetime.now()
-            self.database.update_task(task)
+            self.database.update_job(task)
 
             # Update Client Status using client name
             self.database.update_client_heartbeat_by_name(client.name, ClientStatus.BUSY)
@@ -299,7 +299,7 @@ class TaskScheduler:
             # Reset task status
             task.status = JobStatus.PENDING
             task.started_at = None
-            self.database.update_task(task)
+            self.database.update_job(task)
 
     def _cleanup_offline_clients(self):
         """Clean offline clients"""
@@ -329,7 +329,7 @@ class TaskScheduler:
     def reschedule_all_tasks(self):
         """Reschedule all tasks"""
         try:
-            tasks = self.database.get_all_tasks()
+            tasks = self.database.get_all_jobs()
             for task in tasks:
                 if task.status == JobStatus.PENDING and (task.cron_expression or task.schedule_time):
                     self.schedule_task(task)

@@ -57,7 +57,7 @@ class TaskResultCollector:
 
         # Track Job completion status
         self._completion_lock = threading.Lock()
-        self._processing_tasks = set()  # Track tasks currently being processed
+        self._processing_jobs = set()  # Track jobs currently being processed
 
     def _is_email_configured(self) -> bool:
         """Check if legacy email configuration is available (fallback)"""
@@ -65,66 +65,66 @@ class TaskResultCollector:
         # For Outlook, minimal configuration is needed
         return bool(email_config.get('default_recipient') or email_config.get('to_emails'))
 
-    def on_task_completion(self, task_id: int, client_name: str, task_name: str,
+    def on_run_completion(self, job_id: int, client_name: str, task_name: str,
                             task_status: JobStatus, result: Any = None,
                             error_message: str = None, execution_time: float = None):
         """
-        Handle Task completion event
+        Handle task run completion event
 
         Args:
-            task_id: ID of the Job
-            client_name: Name of the client that executed the Task
-            task_name: Name of the completed Task
-            task_status: Status of the Task execution
+            job_id: ID of the Job
+            client_name: Name of the client that executed the task
+            task_name: Name of the completed task
+            task_status: Status of the task execution
             result: Task execution result
-            error_message: Error message if Task failed
-            execution_time: Time taken to execute Task
+            error_message: Error message if task failed
+            execution_time: Time taken to execute task
         """
         try:
-            logger.info(f"Processing Task completion: Job {task_id}, Client {client_name}, Task {task_name}, Status {task_status.value}")
+            logger.info(f"Processing run completion: Job {job_id}, Client {client_name}, Task {task_name}, Status {task_status.value}")
 
-            # Check if all tasks for this Job are completed
-            if self._check_task_completion(task_id):
-                # Process Job completion in a separate thread to avoid blocking
+            # Check if all tasks for this job are completed
+            if self._check_job_completion(job_id):
+                # Process job completion in a separate thread to avoid blocking
                 threading.Thread(
-                    target=self._process_task_completion,
-                    args=(task_id,),
+                    target=self._process_job_completion,
+                    args=(job_id,),
                     daemon=True
                 ).start()
 
         except Exception as e:
-            logger.error(f"Error processing Task completion: {e}")
+            logger.error(f"Error processing run completion: {e}")
 
-    def _check_task_completion(self, task_id: int) -> bool:
+    def _check_job_completion(self, job_id: int) -> bool:
         """
-        Check if all tasks for a Job are completed
+        Check if all tasks for a job are completed
 
         Args:
-            task_id: ID of the Job to check
+            job_id: ID of the job to check
 
         Returns:
             bool: True if all tasks are completed, False otherwise
         """
         try:
             with self._completion_lock:
-                # Avoid processing the same Job multiple times
-                if task_id in self._processing_tasks:
+                # Avoid processing the same job multiple times
+                if job_id in self._processing_jobs:
                     return False
 
-                # Get Job information
-                job = self.database.get_task(task_id)
+                # Get job information
+                job = self.database.get_job(job_id)
                 if not job:
-                    logger.error(f"Job {task_id} not found")
+                    logger.error(f"Job {job_id} not found")
                     return False
 
-                # Check if Job already completed
+                # Check if job already completed
                 if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
                     return False
 
-                # Get all clients involved in this Job
+                # Get all clients involved in this job
                 clients = job.get_all_clients()
                 if not clients:
-                    logger.warning(f"Job {task_id} has no clients")
+                    logger.warning(f"Job {job_id} has no clients")
                     return False
 
                 # Check completion status for each client
@@ -155,51 +155,51 @@ class TaskResultCollector:
                         break
 
                 if all_completed:
-                    # Mark Job as being processed
-                    self._processing_tasks.add(task_id)
+                    # Mark job as being processed
+                    self._processing_jobs.add(job_id)
 
                 return all_completed
 
         except Exception as e:
-            logger.error(f"Error checking Job completion for Job {task_id}: {e}")
+            logger.error(f"Error checking job completion for Job {job_id}: {e}")
             return False
 
-    def _process_task_completion(self, task_id: int):
+    def _process_job_completion(self, job_id: int):
         """
-        Process completed Job - generate report and send notifications
+        Process completed job - generate report and send notifications
 
         Args:
-            task_id: ID of the completed Job
+            job_id: ID of the completed job
         """
         try:
-            logger.info(f"Processing completion for Job {task_id}")
+            logger.info(f"Processing completion for Job {job_id}")
 
-            # Get Job and update status
-            job = self.database.get_task(task_id)
+            # Get job and update status
+            job = self.database.get_job(job_id)
             if not job:
-                logger.error(f"Job {task_id} not found during completion processing")
+                logger.error(f"Job {job_id} not found during completion processing")
                 return
 
             # Collect all results
-            client_results = self._collect_task_results(job)
+            client_results = self._collect_job_results(job)
 
-            # Determine overall Job status
+            # Determine overall job status
             overall_success = self._determine_overall_success(client_results)
-            new_task_status = JobStatus.COMPLETED if overall_success else JobStatus.FAILED
+            new_status = JobStatus.COMPLETED if overall_success else JobStatus.FAILED
 
-            # Update Job status
-            self.database.update_task_status(task_id, new_task_status, completed_at=datetime.now())
+            # Update job status
+            self.database.update_job_status(job_id, new_status, completed_at=datetime.now())
 
             # Generate HTML report
             report_file_path = None
             try:
                 html_content = self.report_generator.generate_task_report(job, client_results)
                 report_file_path = self.report_generator.save_report_to_file(html_content, job)
-                logger.info(f"Report generated for Job {task_id}: {report_file_path}")
+                logger.info(f"Report generated for Job {job_id}: {report_file_path}")
             except Exception as e:
-                logger.error(f"Failed to generate report for Job {task_id}: {e}")
+                logger.error(f"Failed to generate report for Job {job_id}: {e}")
 
-            # Send email notification if configured and Job requests it
+            # Send email notification if configured and job requests it
             if self.email_notifier and job.should_send_email():
                 try:
                     # Get custom recipients from Job, or use default
@@ -217,46 +217,46 @@ class TaskResultCollector:
                                     to_email=recipient.strip()
                                 )
                                 if result.get('success'):
-                                    logger.info(f"Email notification sent to {recipient} for Job {task_id}")
+                                    logger.info(f"Email notification sent to {recipient} for Job {job_id}")
                                 else:
-                                    logger.error(f"Failed to send email to {recipient} for Job {task_id}: {result.get('error', 'Unknown error')}")
+                                    logger.error(f"Failed to send email to {recipient} for Job {job_id}: {result.get('error', 'Unknown error')}")
                             except Exception as e:
-                                logger.error(f"Error sending email to {recipient} for Job {task_id}: {e}")
+                                logger.error(f"Error sending email to {recipient} for Job {job_id}: {e}")
                     else:
                         # Fallback to default notification method
                         success = self.email_notifier.send_task_completion_notification(job, client_results, report_file_path
                         )
                         if success:
-                            logger.info(f"Email notification sent (default) for Job {task_id}")
+                            logger.info(f"Email notification sent (default) for Job {job_id}")
                         else:
-                            logger.error(f"Failed to send email notification (default) for Job {task_id}")
+                            logger.error(f"Failed to send email notification (default) for Job {job_id}")
 
                 except Exception as e:
-                    logger.error(f"Error sending email notification for Job {task_id}: {e}")
+                    logger.error(f"Error sending email notification for Job {job_id}: {e}")
             elif job.send_email and not self.email_notifier:
-                logger.warning(f"Job {task_id} requested email notification but email notifier is not configured")
+                logger.warning(f"Job {job_id} requested email notification but email notifier is not configured")
             elif job.send_email and not job.get_email_recipients_list():
-                logger.warning(f"Job {task_id} requested email notification but no recipients specified")
+                logger.warning(f"Job {job_id} requested email notification but no recipients specified")
 
-            # Cache Job results for future reference
-            self._cache_task_results(job, client_results)
+            # Cache job results for future reference
+            self._cache_job_results(job, client_results)
 
             # Emit real-time notification
-            self._emit_task_completion_event(job, client_results, overall_success)
+            self._emit_job_completion_event(job, client_results, overall_success)
 
-            logger.info(f"Job {task_id} completion processing finished")
+            logger.info(f"Job {job_id} completion processing finished")
 
         except Exception as e:
-            logger.error(f"Error processing Job completion for Job {task_id}: {e}")
+            logger.error(f"Error processing job completion for Job {job_id}: {e}")
 
         finally:
             # Remove from processing set
             with self._completion_lock:
-                self._processing_tasks.discard(task_id)
+                self._processing_jobs.discard(job_id)
 
-    def _collect_task_results(self, job: Job) -> Dict[str, Any]:
+    def _collect_job_results(self, job: Job) -> Dict[str, Any]:
         """
-        Collect all execution results for a Job organized by client
+        Collect all execution results for a job organized by client
 
         Args:
             Job: Job object
@@ -343,10 +343,10 @@ class TaskResultCollector:
         # Job succeeds if all clients succeed
         return all(data.get('overall_success', False) for data in client_results.values())
 
-    def _emit_task_completion_event(self, job: Job, client_results: Dict[str, Any],
+    def _emit_job_completion_event(self, job: Job, client_results: Dict[str, Any],
                                   overall_success: bool):
         """
-        Emit real-time Job completion event via WebSocket
+        Emit real-time job completion event via WebSocket
 
         Args:
             Job: Completed Job
@@ -390,47 +390,47 @@ class TaskResultCollector:
         except Exception as e:
             logger.error(f"Error emitting Job completion event: {e}")
 
-    def generate_report_for_task(self, task_id: int, force: bool = False) -> Optional[str]:
+    def generate_report_for_job(self, job_id: int, force: bool = False) -> Optional[str]:
         """
-        Generate report for a specific Job (can be called manually)
+        Generate report for a specific job (can be called manually)
 
         Args:
-            task_id: ID of the Job
-            force: Force report generation even if Job is not completed
+            job_id: ID of the job
+            force: Force report generation even if job is not completed
 
         Returns:
             str: Path to generated report file, or None if failed
         """
         try:
-            job = self.database.get_task(task_id)
+            job = self.database.get_job(job_id)
             if not job:
-                logger.error(f"Job {task_id} not found")
+                logger.error(f"Job {job_id} not found")
                 return None
 
             if not force and job.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
-                logger.error(f"Job {task_id} is not completed (status: {job.status.value})")
+                logger.error(f"Job {job_id} is not completed (status: {job.status.value})")
                 return None
 
             # Collect results
-            client_results = self._collect_task_results(job)
+            client_results = self._collect_job_results(job)
 
             # Generate report
             html_content = self.report_generator.generate_task_report(job, client_results)
             report_file_path = self.report_generator.save_report_to_file(html_content, job)
 
-            logger.info(f"Manual report generated for Job {task_id}: {report_file_path}")
+            logger.info(f"Manual report generated for Job {job_id}: {report_file_path}")
             return report_file_path
 
         except Exception as e:
-            logger.error(f"Error generating manual report for Job {task_id}: {e}")
+            logger.error(f"Error generating manual report for Job {job_id}: {e}")
             return None
 
-    def send_manual_notification(self, task_id: int) -> bool:
+    def send_manual_notification(self, job_id: int) -> bool:
         """
-        Send manual email notification for a Job
+        Send manual email notification for a job
 
         Args:
-            task_id: ID of the Job
+            job_id: ID of the job
 
         Returns:
             bool: True if notification sent successfully, False otherwise
@@ -440,36 +440,36 @@ class TaskResultCollector:
                 logger.error("Email notifier not configured")
                 return False
 
-            job = self.database.get_task(task_id)
+            job = self.database.get_job(job_id)
             if not job:
-                logger.error(f"Job {task_id} not found")
+                logger.error(f"Job {job_id} not found")
                 return False
 
             # Collect results
-            client_results = self._collect_task_results(job)
+            client_results = self._collect_job_results(job)
 
             # Generate report file
-            report_file_path = self.generate_report_for_task(task_id, force=True)
+            report_file_path = self.generate_report_for_job(job_id, force=True)
 
             # Send notification
             success = self.email_notifier.send_task_completion_notification(job, client_results, report_file_path
             )
 
             if success:
-                logger.info(f"Manual email notification sent for Job {task_id}")
+                logger.info(f"Manual email notification sent for Job {job_id}")
             else:
-                logger.error(f"Failed to send manual email notification for Job {task_id}")
+                logger.error(f"Failed to send manual email notification for Job {job_id}")
 
             return success
 
         except Exception as e:
-            logger.error(f"Error sending manual notification for Job {task_id}: {e}")
+            logger.error(f"Error sending manual notification for Job {job_id}: {e}")
             return False
 
 
-    def _cache_task_results(self, job: Job, client_results: Dict[str, Any]):
+    def _cache_job_results(self, job: Job, client_results: Dict[str, Any]):
         """
-        Cache completed Job results to the task_results table for future reference.
+        Cache completed job results to the task_results table for future reference.
 
         Args:
             Job: Completed Job

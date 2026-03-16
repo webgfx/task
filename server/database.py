@@ -355,7 +355,7 @@ class Database:
             conn.close()
 
     # Job-related operations
-    def create_task(self, task: Job) -> int:
+    def create_job(self, task: Job) -> int:
         """Create new job"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -382,25 +382,25 @@ class Database:
             logger.info(f"Create Task: {task.name} (ID: {task_id})")
             return task_id
 
-    def get_task(self, task_id: int) -> Optional[Job]:
+    def get_job(self, task_id: int) -> Optional[Job]:
         """Get job by ID"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM tasks WHERE id = ?', (task_id,))
             row = cursor.fetchone()
             if row:
-                return self._row_to_task(row)
+                return self._row_to_job(row)
             return None
 
-    def get_all_tasks(self) -> List[Job]:
+    def get_all_jobs(self) -> List[Job]:
         """Get all jobs"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM tasks ORDER BY created_at DESC')
             rows = cursor.fetchall()
-            return [self._row_to_task(row) for row in rows]
+            return [self._row_to_job(row) for row in rows]
 
-    def update_task(self, task: Job):
+    def update_job(self, task: Job):
         """Update job"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -427,7 +427,7 @@ class Database:
             ))
             conn.commit()
 
-    def delete_task(self, task_id: int):
+    def delete_job(self, task_id: int):
         """Delete job and all related run records"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -461,7 +461,7 @@ class Database:
                 logger.warning(f"Task with ID {task_id} not found for deletion")
                 return False
 
-    def get_pending_tasks(self) -> List[Job]:
+    def get_pending_jobs(self) -> List[Job]:
         """Get pending tasks"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -471,7 +471,7 @@ class Database:
                 ORDER BY created_at ASC
             ''')
             rows = cursor.fetchall()
-            return [self._row_to_task(row) for row in rows]
+            return [self._row_to_job(row) for row in rows]
 
     # Client-related operations
     def register_client(self, client: Client):
@@ -710,9 +710,9 @@ class Database:
                 SET completed_at=?, status=?, result=?, error_message=?, execution_time=?
                 WHERE id=?
             ''', (
-                execution.completed_at.isoformat() if execution.completed_at else None,
-                execution.status.value, execution.result, execution.error_message,
-                execution.execution_time, execution.id
+                run.completed_at.isoformat() if run.completed_at else None,
+                run.status.value, run.result, run.error_message,
+                run.execution_time, run.id
             ))
             conn.commit()
 
@@ -754,7 +754,7 @@ class Database:
             return [self._row_to_run(row) for row in rows]
 
     # Helper methods
-    def _row_to_task(self, row) -> Job:
+    def _row_to_job(self, row) -> Job:
         """Convert database row to Job object"""
         # Parse JSON fields safely
         def safe_json_parse(field_value, default=None):
@@ -1025,21 +1025,6 @@ class Database:
             logger.error(f"Failed to update client current task: {e}")
             return False
 
-    def update_run(self, execution: Run):
-        """Update Task execution record"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE runs
-                SET completed_at=?, status=?, result=?, error_message=?, execution_time=?
-                WHERE id=?
-            ''', (
-                execution.completed_at.isoformat() if execution.completed_at else None,
-                execution.status.value, execution.result, execution.error_message,
-                execution.execution_time, execution.id
-            ))
-            conn.commit()
-
     # Client aliases for backward compatibility and cleaner terminology
     def _migrate_task_ids(self, cursor):
         """Add task_id field to executions table and current_task_id to clients table"""
@@ -1146,7 +1131,7 @@ class Database:
             rows = cursor.fetchall()
             return [self._row_to_run(row) for row in rows]
 
-    def update_task_status(self, task_id: int, status: JobStatus, completed_at: datetime = None,
+    def update_job_status(self, task_id: int, status: JobStatus, completed_at: datetime = None,
                           result: str = None, error_message: str = None):
         """
         Update task status and completion information
@@ -1413,7 +1398,7 @@ class Database:
                     INSERT OR IGNORE INTO runs
                     (id, job_id, task_name, task_order, task_id, client,
                      started_at, completed_at, status, result, error_message, execution_time)
-                    SELECT id, task_id, TASK_name, TASK_order,
+                    SELECT id, task_id, task_name, TASK_order,
                            COALESCE(TASK_id, ''), client,
                            started_at, completed_at, status, result, error_message, execution_time
                     FROM executions
@@ -1453,13 +1438,13 @@ class Database:
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         # Sanitize names for safe filesystem paths
         safe_client = "".join(c if c.isalnum() or c in '-_.' else '_' for c in client_name)
-        safe_TASK = "".join(c if c.isalnum() or c in '-_.' else '_' for c in task_name)
+        safe_task = "".join(c if c.isalnum() or c in '-_.' else '_' for c in task_name)
 
         rel_dir = os.path.join(str(task_id), safe_client)
         abs_dir = os.path.join(self.RESULTS_DIR, rel_dir)
         os.makedirs(abs_dir, exist_ok=True)
 
-        filename = f"{safe_TASK}_{timestamp}.txt"
+        filename = f"{safe_task}_{timestamp}.txt"
         rel_path = os.path.join(rel_dir, filename)
         abs_path = os.path.join(self.RESULTS_DIR, rel_path)
 
@@ -1514,7 +1499,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO task_results
-                (task_id, task_name, client_name, TASK_name, status,
+                (task_id, task_name, client_name, task_name, status,
                  result, execution_time, completed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (

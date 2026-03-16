@@ -65,7 +65,7 @@ class ReportGenerator:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Execution Report - {{ Job.name }}</title>
+    <title>Job Execution Report - {{ job.name }}</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -182,39 +182,39 @@ class ReportGenerator:
             border-top: none;
             border-radius: 0 0 8px 8px;
         }
-        .Task {
+        .task {
             padding: 15px 20px;
             border-bottom: 1px solid #dee2e6;
         }
-        .Task:last-child {
+        .task:last-child {
             border-bottom: none;
         }
-        .Task-header {
+        .task-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
         }
-        .Task-name {
+        .task-name {
             font-weight: bold;
             color: #495057;
         }
-        .Task-time {
+        .task-time {
             font-size: 0.9em;
             color: #6c757d;
         }
-        .Task-result {
+        .task-result {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 6px;
             border-left: 4px solid #007bff;
             margin-top: 10px;
         }
-        .Task-result.success {
+        .task-result.success {
             border-left-color: #28a745;
             background: #f0fff4;
         }
-        .Task-result.error {
+        .task-result.error {
             border-left-color: #dc3545;
             background: #fff5f5;
         }
@@ -225,7 +225,7 @@ class ReportGenerator:
             max-height: 200px;
             overflow-y: auto;
         }
-        .Job-info {
+        .job-info {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 8px;
@@ -274,7 +274,7 @@ class ReportGenerator:
 <body>
     <div class="container">
         <div class="header">
-            <h1>{{ Job.name }}</h1>
+            <h1>{{ job.name }}</h1>
             <div class="subtitle">Job Execution Report</div>
         </div>
 
@@ -300,11 +300,11 @@ class ReportGenerator:
                 </div>
                 {% endif %}
                 <div class="summary-card">
-                    <h3>{{ total_TASKs }}</h3>
+                    <h3>{{ total_tasks }}</h3>
                     <p>Total tasks</p>
                 </div>
                 <div class="summary-card success">
-                    <h3>{{ successful_TASKs }}</h3>
+                    <h3>{{ successful_tasks }}</h3>
                     <p>Successful tasks</p>
                 </div>
                 {% if failed_TASKs > 0 %}
@@ -322,27 +322,27 @@ class ReportGenerator:
             <!-- Job Information -->
             <div class="section">
                 <h2>Job Information</h2>
-                <div class="Job-info">
+                <div class="job-info">
                     <div class="info-grid">
                         <div class="info-item">
                             <span class="info-label">Job ID:</span>
-                            <span class="info-value">{{ Job.id }}</span>
+                            <span class="info-value">{{ job.id }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Job Name:</span>
-                            <span class="info-value">{{ Job.name }}</span>
+                            <span class="info-value">{{ job.name }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Created:</span>
-                            <span class="info-value">{{ Job.created_at or 'N/A' }}</span>
+                            <span class="info-value">{{ job.created_at or 'N/A' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Started:</span>
-                            <span class="info-value">{{ Job.started_at or 'N/A' }}</span>
+                            <span class="info-value">{{ job.started_at or 'N/A' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Completed:</span>
-                            <span class="info-value">{{ Job.completed_at or 'N/A' }}</span>
+                            <span class="info-value">{{ job.completed_at or 'N/A' }}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Report Generated:</span>
@@ -366,27 +366,27 @@ class ReportGenerator:
                         </h3>
                     </div>
                     <div class="tasks">
-                        {% for Task in client_data.tasks %}
+                        {% for task in client_data.tasks %}
                         <div class="Task">
                             <div class="Task-header">
-                                <span class="Task-name">{{ Task.task_name }}</span>
+                                <span class="Task-name">{{ task.task_name }}</span>
                                 <span class="Task-time">
-                                    {% if Task.execution_time %}{{ "%.2f"|format(Task.execution_time) }}s{% endif %}
+                                    {% if task.execution_time %}{{ "%.2f"|format(task.execution_time) }}s{% endif %}
                                 </span>
                             </div>
-                            {% if Task.status == 'completed' %}
+                            {% if task.status == 'completed' %}
                             <div class="Task-result success">
                                 <strong>Result:</strong>
-                                <div class="result-content">{{ Task.result or 'No result data' }}</div>
+                                <div class="result-content">{{ task.result or 'No result data' }}</div>
                             </div>
-                            {% elif Task.status == 'failed' %}
+                            {% elif task.status == 'failed' %}
                             <div class="Task-result error">
                                 <strong>Error:</strong>
-                                <div class="result-content">{{ Task.error_message or 'Unknown error' }}</div>
+                                <div class="result-content">{{ task.error_message or 'Unknown error' }}</div>
                             </div>
                             {% else %}
                             <div class="Task-result">
-                                <strong>Status:</strong> {{ Task.status|title }}
+                                <strong>Status:</strong> {{ task.status|title }}
                             </div>
                             {% endif %}
                         </div>
@@ -477,22 +477,22 @@ class ReportGenerator:
 <body>
     <div class="header">
         <h1>Job Completion Notification</h1>
-        <p>{{ Job.name }}</p>
+        <p>{{ job.name }}</p>
     </div>
 
     <div class="content">
         <h2>Job Summary</h2>
         <div class="summary">
-            <p><strong>Job:</strong> {{ Job.name }}</p>
+            <p><strong>Job:</strong> {{ job.name }}</p>
             <p><strong>Status:</strong>
                 <span class="{% if overall_status == 'completed' %}status-success{% elif overall_status == 'failed' %}status-failed{% else %}status-partial{% endif %}">
                     {{ overall_status|title }}
                 </span>
             </p>
             <p><strong>clients:</strong> {{ successful_clients }}/{{ total_clients }} successful</p>
-            <p><strong>tasks:</strong> {{ successful_TASKs }}/{{ total_TASKs }} successful</p>
+            <p><strong>tasks:</strong> {{ successful_tasks }}/{{ total_tasks }} successful</p>
             <p><strong>Execution Time:</strong> {{ execution_time }}</p>
-            <p><strong>Completed:</strong> {{ Job.completed_at or generation_time }}</p>
+            <p><strong>Completed:</strong> {{ job.completed_at or generation_time }}</p>
         </div>
 
         <h3>client Results</h3>
@@ -523,12 +523,12 @@ class ReportGenerator:
         except Exception as e:
             logger.error(f"Failed to create email template: {e}")
 
-    def generate_task_report(self, Job: Job, client_results: Dict[str, Any]) -> str:
+    def generate_task_report(self, job: Job, client_results: Dict[str, Any]) -> str:
         """
         Generate HTML report for a completed Job
 
         Args:
-            Job: Job object
+            job: Job object
             client_results: Dictionary containing results organized by client
 
         Returns:
@@ -540,9 +540,9 @@ class ReportGenerator:
             successful_clients = sum(1 for data in client_results.values() if data.get('overall_success', False))
             failed_clients = total_clients - successful_clients
 
-            total_TASKs = sum(data.get('total_count', 0) for data in client_results.values())
-            successful_TASKs = sum(data.get('successful_count', 0) for data in client_results.values())
-            failed_TASKs = total_TASKs - successful_TASKs
+            total_tasks = sum(data.get('total_count', 0) for data in client_results.values())
+            successful_tasks = sum(data.get('successful_count', 0) for data in client_results.values())
+            failed_TASKs = total_tasks - successful_tasks
 
             # Determine overall status
             if failed_clients == 0 and failed_TASKs == 0:
@@ -554,11 +554,11 @@ class ReportGenerator:
 
             # Calculate execution time
             execution_time = "N/A"
-            if Job.started_at and Job.completed_at:
+            if job.started_at and job.completed_at:
                 try:
                     from common.utils import parse_datetime
-                    start = parse_datetime(Job.started_at)
-                    end = parse_datetime(Job.completed_at)
+                    start = parse_datetime(job.started_at)
+                    end = parse_datetime(job.completed_at)
                     if start and end:
                         duration = (end - start).total_seconds()
                         if duration < 60:
@@ -572,14 +572,14 @@ class ReportGenerator:
 
             # Prepare template context
             context = {
-                'Job': Job,
+                'job': job,
                 'client_results': client_results,
                 'overall_status': overall_status,
                 'total_clients': total_clients,
                 'successful_clients': successful_clients,
                 'failed_clients': failed_clients,
-                'total_TASKs': total_TASKs,
-                'successful_TASKs': successful_TASKs,
+                'total_tasks': total_tasks,
+                'successful_tasks': successful_tasks,
                 'failed_TASKs': failed_TASKs,
                 'execution_time': execution_time,
                 'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -594,14 +594,14 @@ class ReportGenerator:
         except Exception as e:
             logger.error(f"Failed to generate Job report: {e}")
             # Return a simple fallback report
-            return self._generate_fallback_report(Job, client_results)
+            return self._generate_fallback_report(job, client_results)
 
-    def _generate_fallback_report(self, Job: Job, client_results: Dict[str, Any]) -> str:
+    def _generate_fallback_report(self, job: Job, client_results: Dict[str, Any]) -> str:
         """Generate a simple fallback report if template rendering fails"""
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Job Report - {Job.name}</title>
+    <title>Job Report - {job.name}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 40px; }}
         .header {{ background: #f0f0f0; padding: 20px; border-radius: 8px; }}
@@ -612,9 +612,9 @@ class ReportGenerator:
 </head>
 <body>
     <div class="header">
-        <h1>Job Report: {Job.name}</h1>
-        <p>Job ID: {Job.id}</p>
-        <p>Status: {Job.status.value if Job.status else 'Unknown'}</p>
+        <h1>Job Report: {job.name}</h1>
+        <p>Job ID: {job.id}</p>
+        <p>Status: {job.status.value if job.status else 'Unknown'}</p>
         <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
 
@@ -636,13 +636,13 @@ class ReportGenerator:
 </html>"""
         return html
 
-    def save_report_to_file(self, html_content: str, Job: Job, output_dir: Optional[str] = None) -> str:
+    def save_report_to_file(self, html_content: str, job: Job, output_dir: Optional[str] = None) -> str:
         """
         Save HTML report to file
 
         Args:
             html_content: Generated HTML content
-            Job: Job object
+            job: Job object
             output_dir: Directory to save the report (default: server/reports)
 
         Returns:
@@ -656,9 +656,9 @@ class ReportGenerator:
 
             # Generate filename with timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            clean_task_name = "".join(c for c in Job.name if c.isalnum() or c in (' ', '-', '_')).strip()
+            clean_task_name = "".join(c for c in job.name if c.isalnum() or c in (' ', '-', '_')).strip()
             clean_task_name = clean_task_name.replace(' ', '_')
-            filename = f"task_{Job.id}_{clean_task_name}_{timestamp}.html"
+            filename = f"task_{job.id}_{clean_task_name}_{timestamp}.html"
 
             file_path = os.path.join(output_dir, filename)
 
@@ -748,7 +748,7 @@ class EmailNotifier:
                 'recipient': to
             }
 
-    def send_task_completion_notification(self, Job: Job, client_results: Dict[str, Any],
+    def send_task_completion_notification(self, job: Job, client_results: Dict[str, Any],
                                         report_file_path: Optional[str] = None) -> bool:
         """
         Send email notification for Job completion
@@ -763,13 +763,13 @@ class EmailNotifier:
         """
         try:
             # Generate email content
-            email_html = self._generate_email_content(Job, client_results)
+            email_html = self._generate_email_content(job, client_results)
 
             # Determine client name for subject
-            client_name = Job.name.split('/', 1)[0] if '/' in Job.name else socket.gethostname()
+            client_name = job.name.split('/', 1)[0] if '/' in job.name else socket.gethostname()
 
             # Create email subject as requested: client_name-task_name
-            subject = f"{client_name}-{Job.name}"
+            subject = f"{client_name}-{job.name}"
 
             # Send email using Outlook
             result = self.send_email(
@@ -822,18 +822,18 @@ class EmailNotifier:
                 'recipient': to_email or 'unknown'
             }
 
-    def _generate_email_content(self, Job: Job, client_results: Dict[str, Any]) -> str:
+    def _generate_email_content(self, job: Job, client_results: Dict[str, Any]) -> str:
         """Generate email HTML content"""
         try:
             # Calculate summary statistics (same as in report generator)
             total_clients = len(client_results)
             successful_clients = sum(1 for data in client_results.values() if data.get('overall_success', False))
 
-            total_TASKs = sum(data.get('total_count', 0) for data in client_results.values())
-            successful_TASKs = sum(data.get('successful_count', 0) for data in client_results.values())
+            total_tasks = sum(data.get('total_count', 0) for data in client_results.values())
+            successful_tasks = sum(data.get('successful_count', 0) for data in client_results.values())
 
             # Determine overall status
-            if successful_clients == total_clients and successful_TASKs == total_TASKs:
+            if successful_clients == total_clients and successful_tasks == total_tasks:
                 overall_status = 'completed'
             elif successful_clients == 0:
                 overall_status = 'failed'
@@ -842,11 +842,11 @@ class EmailNotifier:
 
             # Calculate execution time
             execution_time = "N/A"
-            if Job.started_at and Job.completed_at:
+            if job.started_at and job.completed_at:
                 try:
                     from common.utils import parse_datetime
-                    start = parse_datetime(Job.started_at)
-                    end = parse_datetime(Job.completed_at)
+                    start = parse_datetime(job.started_at)
+                    end = parse_datetime(job.completed_at)
                     if start and end:
                         duration = (end - start).total_seconds()
                         if duration < 60:
@@ -860,13 +860,13 @@ class EmailNotifier:
 
             # Prepare template context
             context = {
-                'Job': Job,
+                'job': job,
                 'client_results': client_results,
                 'overall_status': overall_status,
                 'total_clients': total_clients,
                 'successful_clients': successful_clients,
-                'total_TASKs': total_TASKs,
-                'successful_TASKs': successful_TASKs,
+                'total_tasks': total_tasks,
+                'successful_tasks': successful_tasks,
                 'execution_time': execution_time,
                 'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
@@ -882,8 +882,8 @@ class EmailNotifier:
             <html>
             <body>
                 <h2>Job Completion Notification</h2>
-                <p><strong>Job:</strong> {Job.name}</p>
-                <p><strong>Status:</strong> {Job.status.value if Job.status else 'Unknown'}</p>
+                <p><strong>Job:</strong> {job.name}</p>
+                <p><strong>Status:</strong> {job.status.value if job.status else 'Unknown'}</p>
                 <p><strong>Completed:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                 <p>A detailed report has been generated.</p>
             </body>

@@ -23,7 +23,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def get_tasks():
         """Get all tasks with their run data included"""
         try:
-            tasks = database.get_all_tasks()
+            tasks = database.get_all_jobs()
             # Bulk-load all runs in one query instead of N+1
             all_execs = database.get_all_runs_grouped()
             task_dicts = []
@@ -122,7 +122,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             )
 
             # Save to database
-            job_id = database.create_task(job)
+            job_id = database.create_job(job)
             job.id = job_id
 
             job_dict = job.to_dict()
@@ -143,7 +143,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def get_job(task_id):
         """Get specified task"""
         try:
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -162,7 +162,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def update_job(task_id):
         """Update task"""
         try:
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -202,7 +202,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 task.email_recipients = data['email_recipients']
 
             # Save update
-            database.update_task(task)
+            database.update_job(task)
 
             # Broadcast task update event
             socketio.emit('subtask_updated', task.to_dict())
@@ -220,14 +220,14 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def delete_job(task_id):
         """Delete task and all related run records"""
         try:
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
                     'error': 'Task does not exist'
                 }), 404
 
-            success = database.delete_task(task_id)
+            success = database.delete_job(task_id)
 
             if success:
                 # Note: WebSocket emission is now handled in the database method
@@ -250,7 +250,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """Copy an existing task with optional modifications"""
         try:
             # Get the original task
-            original_task = database.get_task(task_id)
+            original_task = database.get_job(task_id)
             if not original_task:
                 return jsonify({
                     'success': False,
@@ -363,7 +363,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             # Save the copied task
-            task_id = database.create_task(task)
+            task_id = database.create_job(task)
             task.id = task_id
 
             logger.info(f"Task copied successfully: {original_td.name} -> {td.name} (ID: {task_id})")
@@ -382,7 +382,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
     def cancel_job(task_id):
         """Cancel task run"""
         try:
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -400,7 +400,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             task.status = JobStatus.CANCELLED
             task.completed_at = datetime.now()
             task.error_message = "Task cancelled by user"
-            database.update_task(task)
+            database.update_job(task)
 
             # Broadcast task cancellation event
             socketio.emit('task_cancelled', {
@@ -428,7 +428,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             # Get the task
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -484,7 +484,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 task.completed_at = datetime.now()
 
             # Update the task in database
-            database.update_task(task)
+            database.update_job(task)
 
             # Remove any pending Task run records for this Task
             database.delete_pending_runs(task_id, task_name, client)
@@ -596,7 +596,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 from common.models import Run
 
                 # Find the task definition to get the task_id
-                task = database.get_task(task_id)
+                task = database.get_job(task_id)
                 run_task_id = None
                 if task and task.tasks:
                     for task_def in task.tasks:
@@ -629,7 +629,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Update client's current task status
             if data['status'] == 'running':
-                task = database.get_task(task_id)
+                task = database.get_job(task_id)
                 if task and task.tasks:
                     for task_def in task.tasks:
                         if (task_def.name == data['task_name'] and
@@ -641,7 +641,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                             )
                             break
             elif data['status'] in ['completed', 'failed']:
-                task = database.get_task(task_id)
+                task = database.get_job(task_id)
                 if task and task.tasks:
                     remaining = [
                         t for t in task.tasks
@@ -666,8 +666,8 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Notify result collector about Task completion
             if result_collector and data['status'] in ['completed', 'failed']:
-                result_collector.on_task_completion(
-                    task_id=task_id,
+                result_collector.on_run_completion(
+                    job_id=task_id,
                     client_name=data['client'],
                     task_name=data['task_name'],
                     task_status=JobStatus(data['status']),
@@ -835,7 +835,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             task_ids = set(c.current_task_id for c in clients if c.current_task_id)
             task_names = {}
             if task_ids:
-                all_tasks = database.get_all_tasks()
+                all_tasks = database.get_all_jobs()
                 task_names = {t.id: t.name for t in all_tasks}
 
             enhanced_clients = []
@@ -1181,7 +1181,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             # Get task
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -1203,7 +1203,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             # Update task status to running
             task.status = JobStatus.RUNNING
             task.started_at = datetime.now()
-            database.update_task(task)
+            database.update_job(task)
 
             # Enhanced logging for task scheduling to client
             logger.info(f"TASK_SCHEDULING: Task {task_id} '{task.name}' scheduled to client '{client_name}' ({client_ip})")
@@ -1278,7 +1278,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             # Get task
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -1294,7 +1294,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 task.status = JobStatus.FAILED
                 task.error_message = error
 
-            database.update_task(task)
+            database.update_job(task)
 
             # Broadcast task completion event
             socketio.emit('task_completed', {
@@ -1336,7 +1336,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 400
 
             # Get task to verify it exists
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task:
                 return jsonify({
                     'success': False,
@@ -1371,7 +1371,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 }), 503
 
             force = request.args.get('force', 'false').lower() == 'true'
-            report_path = result_collector.generate_report_for_task(task_id, force=force)
+            report_path = result_collector.generate_report_for_job(task_id, force=force)
 
             if report_path:
                 return jsonify({
@@ -1774,7 +1774,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
         """
         try:
             # Get task and its tasks
-            task = database.get_task(task_id)
+            task = database.get_job(task_id)
             if not task or not task.tasks:
                 logger.warning(f"TASK_COMPLETION: Task {task_id} not found or has No tasks")
                 return
@@ -1822,7 +1822,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     task.result = f"All {total_tasks_count} tasks completed successfully"
                     logger.info(f"TASK_COMPLETION: Task {task_id} '{td.name}' COMPLETED successfully")
 
-                database.update_task(task)
+                database.update_job(task)
 
                 # Clear current task from all clients
                 clients = task.get_all_clients()
