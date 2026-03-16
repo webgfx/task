@@ -670,7 +670,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     task_id=task_id,
                     client_name=data['client'],
                     task_name=data['task_name'],
-                    run_status=JobStatus(data['status']),
+                    task_status=JobStatus(data['status']),
                     result=data.get('result'),
                     error_message=data.get('error_message'),
                     execution_time=data.get('execution_time')
@@ -1206,7 +1206,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
             database.update_task(task)
 
             # Enhanced logging for task scheduling to client
-            logger.info(f"TASK_SCHEDULING: Task {task_id} '{td.name}' scheduled to client '{client_name}' ({client_ip})")
+            logger.info(f"TASK_SCHEDULING: Task {task_id} '{task.name}' scheduled to client '{client_name}' ({client_ip})")
             logger.info(f"TASK_SCHEDULING: Task details - tasks: {len(task.tasks) if task.tasks else 0}, Status: {task.status.value}")
             if task.tasks:
                 for i, td in enumerate(task.tasks):
