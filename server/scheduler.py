@@ -40,6 +40,7 @@ class TaskScheduler:
     def start(self):
         """Start scheduler"""
         if not self.running:
+            self._recover_stuck_jobs()
             self.scheduler.start()
             self.running = True
             logger.info("Task scheduler started")
@@ -50,6 +51,51 @@ class TaskScheduler:
             self.scheduler.shutdown()
             self.running = False
             logger.info("Task scheduler stopped")
+
+    def _recover_stuck_jobs(self):
+        """Check for jobs stuck in 'running' status where all runs are finished"""
+        try:
+            all_jobs = self.database.get_all_jobs()
+            for job in all_jobs:
+                if job.status != JobStatus.RUNNING or not job.tasks:
+                    continue
+
+                runs = self.database.get_runs(job.id)
+                if not runs:
+                    continue
+
+                # Build map of latest run per (task_name, client)
+                run_map = {}
+                for r in runs:
+                    key = f"{r.task_name}_{r.client}"
+                    if key not in run_map or (r.id or 0) > (run_map[key].id or 0):
+                        run_map[key] = r
+
+                # Check if every task definition has a finished run
+                all_finished = True
+                failed_count = 0
+                for td in job.tasks:
+                    key = f"{td.name}_{td.client}"
+                    r = run_map.get(key)
+                    if not r or r.status not in [JobStatus.COMPLETED, JobStatus.FAILED]:
+                        all_finished = False
+                        break
+                    if r.status == JobStatus.FAILED:
+                        failed_count += 1
+
+                if all_finished:
+                    job.completed_at = datetime.now()
+                    if failed_count > 0:
+                        job.status = JobStatus.FAILED
+                        job.error_message = f"{failed_count} out of {len(job.tasks)} tasks failed"
+                    else:
+                        job.status = JobStatus.COMPLETED
+                        job.result = f"All {len(job.tasks)} tasks completed successfully"
+                    self.database.update_job(job)
+                    logger.info(f"Recovered stuck job {job.id} '{job.name}' -> {job.status.value}")
+
+        except Exception as e:
+            logger.error(f"Failed to recover stuck jobs: {e}")
 
     def schedule_task(self, task):
         """Schedule single task"""
