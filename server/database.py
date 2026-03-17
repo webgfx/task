@@ -1582,6 +1582,15 @@ class Database:
                 shutil.copy2(script_path, scripts_dir)
                 local_script = os.path.join(scripts_dir, 'compare-results.js')
 
+                # Remove the browser-open code from the copied script
+                with open(local_script, 'r', encoding='utf-8') as f:
+                    script_content = f.read()
+                script_content = script_content.replace(
+                    "require('child_process').execSync(`start", "// disabled: execSync(`start"
+                )
+                with open(local_script, 'w', encoding='utf-8') as f:
+                    f.write(script_content)
+
                 with open(os.path.join(wrapper_dir, 'config.json'), 'w', encoding='utf-8') as f:
                     json.dump({'paths': {'results': tmp_dir}}, f)
 
