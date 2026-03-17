@@ -283,9 +283,9 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         'name': td.name,
                         'client': td.client,
                         'order': td.order,
-                        'args': Task.args or [],
-                        'kwargs': Task.kwargs or {},
-                        'timeout': Task.timeout
+                        'args': td.args or [],
+                        'kwargs': td.kwargs or {},
+                        'timeout': td.timeout
                         # Note: task_id will be auto-generated for new task
                     }
                     copied_task_data['tasks'].append(copied_task)
@@ -296,7 +296,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 for td in copied_task_data['tasks']:
                     old_client = td['client']
                     if old_client in client_updates:
-                        Task['client'] = client_updates[old_client]
+                        td['client'] = client_updates[old_client]
 
             # Validate the copied task data using the same logic as create_task
             if not copied_task_data['name']:
@@ -328,7 +328,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         'error': f'Task {i+1}: "{task_data["name"]}" is not a valid Task'
                     }), 400
 
-                Task = TaskDefinition(
+                task_def = TaskDefinition(
                     name=task_data['name'],
                     client=task_data['client'],
                     order=task_data.get('order', i),
@@ -339,7 +339,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                     max_retries=3,
                     task_id=i  # New ID for copied task
                 )
-                tasks.append(Task)
+                tasks.append(task_def)
 
             # Sort tasks by order
             tasks.sort(key=lambda x: x.order)
