@@ -251,13 +251,10 @@ function addTask() {
     taskRow.className = 'Task-row';
     taskRow.innerHTML = `
         <div class="Task-header">
-            <h5>Task ${taskIndex + 1}</h5>
+            <h5>Task</h5>
             <div class="Task-id-display" style="display: none;">
                 <small class="text-muted">ID: <span class="Task-id-value">Not assigned</span></small>
             </div>
-            <button type="button" class="btn btn-small btn-danger" onclick="removeTask(this)">
-                <i class="fas fa-trash"></i> Remove
-            </button>
         </div>
         <div class="Task-content">
             <div class="form-row">
