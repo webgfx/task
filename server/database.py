@@ -1505,107 +1505,105 @@ class Database:
 
     def _generate_result_html(self, abs_dir: str, safe_task: str,
                               timestamp: str, result_data: str):
-        """Generate an HTML report from the result data's stdout field."""
+        """Generate an HTML report using compare-results.js with Chart.js visuals."""
         try:
+            import shutil
+            import subprocess
+            import tempfile
+            import re
+
             parsed = json.loads(result_data) if isinstance(result_data, str) else result_data
             if not isinstance(parsed, dict):
                 return
 
-            stdout = parsed.get('stdout', '')
-            command = parsed.get('command', '')
-            test_status = parsed.get('test_status', 'unknown')
-            errors = parsed.get('errors', [])
-            ai_test_path = parsed.get('ai_test_path', '')
-            run_id = parsed.get('run_id', '')
-            result_timestamp = parsed.get('timestamp', '')
-
-            # Build benchmark table from structured results if available
-            table_html = ''
+            # Extract structured results or find result files from stdout
             results_obj = parsed.get('results')
-            if results_obj and isinstance(results_obj, dict) and 'files' in results_obj:
-                for fname, fdata in results_obj['files'].items():
-                    if 'results' not in fdata:
-                        continue
-                    table_html += f'<h3>{fname.replace("-results.json", "").upper()}</h3>'
-                    table_html += '<table><thead><tr>'
-                    table_html += '<th>Model</th><th>Backend</th><th>Prompt Len</th>'
-                    table_html += '<th>TTFT (ms)</th><th>PP (t/s)</th><th>TG (t/s)</th>'
-                    table_html += '</tr></thead><tbody>'
-                    for r in fdata['results']:
-                        table_html += '<tr>'
-                        table_html += f'<td>{r.get("model","")}</td>'
-                        table_html += f'<td>{r.get("backend","")}</td>'
-                        table_html += f'<td>{r.get("pl","")}</td>'
-                        ttft = r.get("ttftMs", 0)
-                        pp = r.get("plTs", 0)
-                        tg = r.get("tgTs", 0)
-                        table_html += f'<td>{ttft:.2f}</td>' if ttft else '<td>-</td>'
-                        table_html += f'<td>{pp:.2f}</td>' if pp else '<td>-</td>'
-                        table_html += f'<td>{tg:.2f}</td>' if tg else '<td>-</td>'
-                        table_html += '</tr>'
-                    table_html += '</tbody></table>'
+            run_id = parsed.get('run_id')
 
-            # Escape stdout for HTML
-            import html as html_mod
-            stdout_escaped = html_mod.escape(stdout) if stdout else '<em>No output</em>'
+            # Fallback: extract run_id from stdout
+            if not run_id:
+                stdout = parsed.get('stdout', '')
+                match = re.search(r'Results:\s+\S+[/\\](\d{14})', stdout)
+                if match:
+                    run_id = match.group(1)
+            if not run_id:
+                run_id = f'report_{timestamp}'
 
-            status_color = '#22c55e' if test_status == 'pass' else '#ef4444' if test_status == 'fail' else '#f59e0b'
+            # Resolve compare-results.js script path
+            try:
+                import importlib
+                ai_test_module = importlib.import_module('common.tasks.ai-test')
+                ai_test_path = ai_test_module._resolve_ai_test_path()
+            except Exception:
+                logger.warning("Could not resolve ai-test path for report generation")
+                return
 
-            html_content = f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>AI Test Report - {safe_task} - {timestamp}</title>
-<style>
-body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f8fafc; color: #1e293b; }}
-.container {{ max-width: 1200px; margin: 0 auto; }}
-h1 {{ color: #1e293b; border-bottom: 3px solid #6366f1; padding-bottom: 10px; }}
-h2 {{ color: #334155; margin-top: 30px; }}
-h3 {{ color: #475569; }}
-.meta {{ background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }}
-.meta-row {{ display: flex; gap: 20px; margin-bottom: 8px; flex-wrap: wrap; }}
-.meta-label {{ font-weight: 600; color: #64748b; min-width: 120px; }}
-.status {{ display: inline-block; padding: 4px 12px; border-radius: 4px; color: #fff; font-weight: 600; background: {status_color}; }}
-table {{ border-collapse: collapse; width: 100%; margin: 10px 0 20px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
-th {{ background: #6366f1; color: #fff; padding: 10px 14px; text-align: left; font-size: .85rem; }}
-td {{ padding: 8px 14px; border-bottom: 1px solid #f1f5f9; font-size: .9rem; }}
-tr:hover td {{ background: #f8fafc; }}
-pre {{ background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: .85rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }}
-.errors {{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; color: #991b1b; }}
-</style>
-</head>
-<body>
-<div class="container">
-<h1>AI Test Report</h1>
-<div class="meta">
-<div class="meta-row"><span class="meta-label">Status:</span> <span class="status">{test_status.upper()}</span></div>
-<div class="meta-row"><span class="meta-label">Command:</span> <code>{html_mod.escape(command)}</code></div>
-<div class="meta-row"><span class="meta-label">Run ID:</span> {run_id or 'N/A'}</div>
-<div class="meta-row"><span class="meta-label">Timestamp:</span> {result_timestamp}</div>
-<div class="meta-row"><span class="meta-label">AI Test Path:</span> {html_mod.escape(ai_test_path)}</div>
-</div>
-'''
-            if errors:
-                html_content += '<div class="errors"><strong>Errors:</strong><ul>'
-                for e in errors:
-                    html_content += f'<li>{html_mod.escape(str(e))}</li>'
-                html_content += '</ul></div>'
+            script_path = os.path.join(ai_test_path, 'scripts', 'compare-results.js')
+            if not os.path.isfile(script_path):
+                logger.warning(f"compare-results.js not found at {script_path}")
+                return
 
-            if table_html:
-                html_content += f'<h2>Benchmark Results</h2>{table_html}'
+            node = shutil.which('node')
+            if not node:
+                logger.warning("Node.js not found, skipping HTML report generation")
+                return
 
-            html_content += f'''
-<h2>Console Output</h2>
-<pre>{stdout_escaped}</pre>
-</div>
-</body>
-</html>'''
+            # Build temp results directory from stored data
+            tmp_dir = tempfile.mkdtemp(prefix='ai_report_')
+            run_dir = os.path.join(tmp_dir, run_id)
+            os.makedirs(run_dir, exist_ok=True)
 
-            html_filename = f"{safe_task}_{timestamp}.html"
-            html_path = os.path.join(abs_dir, html_filename)
-            with open(html_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-            logger.debug(f"Generated HTML report: {html_path}")
+            try:
+                files_written = False
+
+                # Write structured result files if available
+                if results_obj and isinstance(results_obj, dict) and 'files' in results_obj:
+                    for filename, filedata in results_obj['files'].items():
+                        with open(os.path.join(run_dir, filename), 'w', encoding='utf-8') as f:
+                            json.dump(filedata, f, indent=2)
+                    files_written = True
+
+                # Fallback: try to copy unified results.json from disk
+                if not files_written:
+                    stdout = parsed.get('stdout', '')
+                    match = re.search(r'Unified results saved to:\s+(\S+)', stdout)
+                    if match and os.path.isfile(match.group(1)):
+                        shutil.copy2(match.group(1), os.path.join(run_dir, 'results.json'))
+                        files_written = True
+
+                if not files_written:
+                    logger.debug("No result data available for compare-results.js report")
+                    return
+
+                # Set up wrapper: compare-results.js reads config from __dirname/../config.json
+                wrapper_dir = os.path.join(tmp_dir, '_wrapper')
+                scripts_dir = os.path.join(wrapper_dir, 'scripts')
+                os.makedirs(scripts_dir, exist_ok=True)
+                shutil.copy2(script_path, scripts_dir)
+                local_script = os.path.join(scripts_dir, 'compare-results.js')
+
+                with open(os.path.join(wrapper_dir, 'config.json'), 'w', encoding='utf-8') as f:
+                    json.dump({'paths': {'results': tmp_dir}}, f)
+
+                html_filename = f"{safe_task}_{timestamp}.html"
+                output_path = os.path.join(abs_dir, html_filename)
+
+                proc = subprocess.run(
+                    [node, local_script, run_id, '-o', output_path],
+                    cwd=wrapper_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if proc.returncode == 0 and os.path.isfile(output_path):
+                    logger.info(f"Generated Chart.js HTML report: {output_path}")
+                else:
+                    logger.warning(f"compare-results.js failed (rc={proc.returncode}): "
+                                   f"{proc.stderr or proc.stdout}")
+
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
         except Exception as e:
             logger.warning(f"Failed to generate HTML report: {e}")
