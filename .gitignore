@@ -179,6 +179,9 @@ server/certs/
 # Result data files
 server/results/
 
+# Generated reports
+server/reports/
+
 # VS Code
 .vscode/settings.json
 .vscode/launch.json
