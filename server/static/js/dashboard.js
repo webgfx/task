@@ -29,10 +29,10 @@ async function loadDashboardData() {
             apiGet('/api/jobs'),
             apiGet('/api/clients')
         ]);
-        
+
         dashboardData.tasks = tasksResponse.data || [];
         dashboardData.clients = clientsResponse.data || [];
-        
+
     } catch (error) {
         console.error('Failed to load dashboard data:', error);
         addLogEntry(`Data loading failed: ${error.message}`, 'error');
@@ -43,13 +43,13 @@ async function loadDashboardData() {
 function updateStatistics() {
     const tasks = dashboardData.tasks;
     const clients = dashboardData.clients;
-    
+
     // Calculate statistics
     const totalTasks = tasks.length;
     const runningTasks = tasks.filter(task => task.status === 'running').length;
     const completedTasks = tasks.filter(task => task.status === 'completed').length;
     const onlineClients = clients.filter(client => client.status === 'online').length;
-    
+
     // Update page display
     updateElement('totalTasks', totalTasks);
     updateElement('runningTasks', runningTasks);
@@ -61,16 +61,16 @@ function updateStatistics() {
 function displayRecentTasks() {
     const container = document.getElementById('recentTasks');
     if (!container) return;
-    
+
     const recentTasks = dashboardData.tasks
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 5);
-    
+
     if (recentTasks.length === 0) {
         container.innerHTML = '<div style=padding: 20px; text-align: center; color: #6c757d;>No tasks</div>';
         return;
     }
-    
+
     const html = recentTasks.map(task => `
         <div class=task-item onclick=viewTaskDetail(${task.id})>
             <div class=task-info>
@@ -86,7 +86,7 @@ function displayRecentTasks() {
             </div>
         </div>
     `).join('');
-    
+
     container.innerHTML = html;
 }
 
@@ -94,12 +94,12 @@ function displayRecentTasks() {
 function displayClientStatus() {
     const container = document.getElementById('clientStatus');
     if (!container) return;
-    
+
     if (dashboardData.clients.length === 0) {
         container.innerHTML = '<div style=padding: 20px; text-align: center; color: #6c757d;>No clients</div>';
         return;
     }
-    
+
     const html = dashboardData.clients.map(client => `
         <div class=client-card onclick=viewClientDetail('${client.name}')>
             <div class=client-header>
@@ -113,7 +113,7 @@ function displayClientStatus() {
             </div>
         </div>
     `).join('');
-    
+
     container.innerHTML = html;
 }
 
@@ -121,7 +121,7 @@ function displayClientStatus() {
 function addLogEntry(message, level = 'info') {
     const container = document.getElementById('systemLogs');
     if (!container) return;
-    
+
     const timestamp = new Date().toLocaleTimeString('zh-CN');
     const logEntry = document.createElement('div');
     logEntry.className = 'log-entry';
@@ -130,10 +130,10 @@ function addLogEntry(message, level = 'info') {
         <span class=log-level log-level-${level}>[${level.toUpperCase()}]</span>
         ${escapeHtml(message)}
     `;
-    
+
     container.appendChild(logEntry);
     container.scrollTop = container.scrollHeight;
-    
+
     // keep maximum 100 logs
     const entries = container.querySelectorAll('.log-entry');
     if (entries.length > 100) {
@@ -194,7 +194,7 @@ if (typeof socket !== 'undefined') {
             displayRecentTasks();
         });
     });
-    
+
     socket.on('task_started', function(data) {
         addLogEntry(`Taskstart execute: ID ${data.task_id} [TRANSLATED]Client ${data.client_name}`, 'info');
         loadDashboardData().then(() => {
@@ -202,7 +202,7 @@ if (typeof socket !== 'undefined') {
             displayRecentTasks();
         });
     });
-    
+
     socket.on('task_completed', function(data) {
         const status = data.success ? 'Success' : 'Failed';
         addLogEntry(`Taskexecute${status}: ID ${data.task_id}`, data.success ? 'success' : 'error');
@@ -211,7 +211,7 @@ if (typeof socket !== 'undefined') {
             displayRecentTasks();
         });
     });
-    
+
     socket.on('client_registered', function(data) {
         addLogEntry(`NewClient Registered: ${data.name} (${data.ip_address})`, 'success');
         loadDashboardData().then(() => {
@@ -219,14 +219,14 @@ if (typeof socket !== 'undefined') {
             displayClientStatus();
         });
     });
-    
+
     socket.on('client_heartbeat', function(data) {
         // [TRANSLATED] [TRANSLATED]Update Client Status[TRANSLATED]day[TRANSLATED]show
         loadDashboardData().then(() => {
             displayClientStatus();
         });
     });
-    
+
     socket.on('client_offline', function(data) {
         addLogEntry(`ClientOffline: ${data.client_name}`, 'warning');
         loadDashboardData().then(() => {

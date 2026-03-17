@@ -141,7 +141,6 @@ def create_app():
         """Redirect to task management page"""
         return render_template('tasks.html')
 
-    @app.route('/tasks')
     @app.route('/jobs')
     def tasks_page():
         """Job management page"""
