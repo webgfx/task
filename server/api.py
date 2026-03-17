@@ -263,7 +263,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             # Create copied task data with defaults from original
             copied_task_data = {
-                'name': data.get('name', f"{original_td.name} (Copy)"),
+                'name': data.get('name', f"{original_task.name} (Copy)"),
                 'tasks': [],
                 'send_email': data.get('send_email', original_task.send_email),
                 'email_recipients': data.get('email_recipients', original_task.email_recipients)
@@ -367,12 +367,12 @@ def create_api_blueprint(database, socketio, result_collector=None):
             task_id = database.create_job(task)
             task.id = task_id
 
-            logger.info(f"Task copied successfully: {original_td.name} -> {td.name} (ID: {task_id})")
+            logger.info(f"Task copied successfully: {original_task.name} -> {task.name} (ID: {task_id})")
 
             return jsonify({
                 'success': True,
                 'data': task.to_dict(),
-                'message': f'Task copied successfully from "{original_td.name}"'
+                'message': f'Task copied successfully from "{original_task.name}"'
             })
 
         except Exception as e:
