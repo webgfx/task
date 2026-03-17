@@ -2044,8 +2044,18 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
             parsed = json.loads(result_data) if isinstance(result_data, str) else result_data
             run_id = parsed.get('run_id')
+
+            # Fallback: extract run_id from stdout if not set
             if not run_id:
-                return jsonify({'success': False, 'error': 'No run_id in result data'}), 400
+                import re
+                stdout = parsed.get('stdout', '')
+                # Look for "Results:     D:\...\20260317033901" pattern
+                match = re.search(r'Results:\s+\S+[/\\](\d{14})', stdout)
+                if match:
+                    run_id = match.group(1)
+
+            if not run_id:
+                return jsonify({'success': False, 'error': 'No run_id found in result data or stdout'}), 400
 
             # Resolve ai-test path
             from common.tasks import get_task
