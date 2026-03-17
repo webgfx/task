@@ -1505,114 +1505,200 @@ class Database:
 
     def _generate_result_html(self, abs_dir: str, safe_task: str,
                               timestamp: str, result_data: str):
-        """Generate an HTML report using compare-results.js with Chart.js visuals."""
+        """Generate a Chart.js HTML benchmark report from result data (pure Python)."""
         try:
-            import shutil
-            import subprocess
-            import tempfile
-            import re
+            import html as html_mod
 
             parsed = json.loads(result_data) if isinstance(result_data, str) else result_data
             if not isinstance(parsed, dict):
                 return
 
-            # Extract structured results or find result files from stdout
+            run_id = parsed.get('run_id', timestamp)
+            command = parsed.get('command', '')
+            test_status = parsed.get('test_status', 'unknown')
+            result_timestamp = parsed.get('timestamp', '')
+            stdout = parsed.get('stdout', '')
             results_obj = parsed.get('results')
-            run_id = parsed.get('run_id')
 
-            # Fallback: extract run_id from stdout
-            if not run_id:
-                stdout = parsed.get('stdout', '')
-                match = re.search(r'Results:\s+\S+[/\\](\d{14})', stdout)
-                if match:
-                    run_id = match.group(1)
-            if not run_id:
-                run_id = f'report_{timestamp}'
+            # Normalize results into series for charts
+            series = []
+            config_lines = []
 
-            # Resolve compare-results.js script path
-            try:
-                import importlib
-                ai_test_module = importlib.import_module('common.tasks.ai-test')
-                ai_test_path = ai_test_module._resolve_ai_test_path()
-            except Exception:
-                logger.warning("Could not resolve ai-test path for report generation")
-                return
+            if results_obj and isinstance(results_obj, dict) and 'files' in results_obj:
+                for fname, fdata in results_obj['files'].items():
+                    source = fname.replace('-results.json', '').replace('.json', '')
 
-            script_path = os.path.join(ai_test_path, 'scripts', 'compare-results.js')
-            if not os.path.isfile(script_path):
-                logger.warning(f"compare-results.js not found at {script_path}")
-                return
+                    # Handle unified results.json with runtimes
+                    if 'runtimes' in fdata:
+                        for rt_name, rt_data in fdata['runtimes'].items():
+                            cfg = rt_data.get('config', {})
+                            parts = [f'<strong>{run_id}</strong> ({rt_name})']
+                            if cfg.get('reps'): parts.append(f'Runs: {cfg["reps"]}')
+                            if cfg.get('warmup') is not None: parts.append(f'Warmup: {cfg["warmup"]}')
+                            if cfg.get('graphCapture') is not None: parts.append(f'Graph Capture: {"enabled" if cfg["graphCapture"] else "disabled"}')
+                            if cfg.get('genLength'): parts.append(f'Gen Length: {cfg["genLength"]}')
+                            if cfg.get('ep'): parts.append(f'EP: {cfg["ep"]}')
+                            if cfg.get('backends'): parts.append(f'Backends: {", ".join(cfg["backends"])}')
+                            config_lines.append(' &mdash; '.join(parts))
 
-            node = shutil.which('node')
-            if not node:
-                logger.warning("Node.js not found, skipping HTML report generation")
-                return
+                            for r in rt_data.get('results', []):
+                                if r.get('error'): continue
+                                if rt_name == 'llamacpp':
+                                    label = f'{r.get("model","")} / {r.get("backend","")} (llama.cpp)'
+                                elif rt_name == 'ort':
+                                    gc = ', GC on' if r.get('graphCapture') else (', GC off' if r.get('graphCapture') is not None else '')
+                                    label = f'{r.get("model","")} / {r.get("ep","")}{gc} (ORT)'
+                                else:
+                                    label = f'{r.get("model","")} / {rt_name}'
+                                key = f'{run_id}|{label}'
+                                s = next((x for x in series if x['key'] == key), None)
+                                if not s:
+                                    s = {'key': key, 'label': label, 'points': []}
+                                    series.append(s)
+                                s['points'].append({
+                                    'pl': r.get('pl') or r.get('pp', 0),
+                                    'ttftMs': r.get('ttftMs'),
+                                    'tgTs': r.get('tgTs'),
+                                    'plTs': r.get('plTs') or r.get('ppTs'),
+                                    'e2eMs': r.get('e2eMs'),
+                                })
+                    else:
+                        # Per-runtime file (e.g. llamacpp-results.json)
+                        cfg = fdata.get('config', {})
+                        if cfg:
+                            parts = [f'<strong>{run_id}</strong> ({source})']
+                            for k, v in cfg.items():
+                                if k not in ('results',): parts.append(f'{k}: {v}')
+                            config_lines.append(' &mdash; '.join(parts))
 
-            # Build temp results directory from stored data
-            tmp_dir = tempfile.mkdtemp(prefix='ai_report_')
-            run_dir = os.path.join(tmp_dir, run_id)
-            os.makedirs(run_dir, exist_ok=True)
+                        for r in fdata.get('results', []):
+                            if r.get('error'): continue
+                            if source == 'llamacpp':
+                                label = f'{r.get("model","")} / {r.get("backend","")} (llama.cpp)'
+                            elif source == 'ort':
+                                gc = ', GC on' if r.get('graphCapture') else ''
+                                label = f'{r.get("model","")} / {r.get("ep","")}{gc} (ORT)'
+                            else:
+                                label = f'{r.get("model","")} / {source}'
+                            key = f'{run_id}|{label}'
+                            s = next((x for x in series if x['key'] == key), None)
+                            if not s:
+                                s = {'key': key, 'label': label, 'points': []}
+                                series.append(s)
+                            s['points'].append({
+                                'pl': r.get('pl') or r.get('pp', 0),
+                                'ttftMs': r.get('ttftMs'),
+                                'tgTs': r.get('tgTs'),
+                                'plTs': r.get('plTs') or r.get('ppTs'),
+                                'e2eMs': r.get('e2eMs'),
+                            })
 
-            try:
-                files_written = False
+            # Sort points
+            for s in series:
+                s['points'].sort(key=lambda p: p['pl'])
 
-                # Write structured result files if available
-                if results_obj and isinstance(results_obj, dict) and 'files' in results_obj:
-                    for filename, filedata in results_obj['files'].items():
-                        with open(os.path.join(run_dir, filename), 'w', encoding='utf-8') as f:
-                            json.dump(filedata, f, indent=2)
-                    files_written = True
+            # Collect all prompt lengths
+            all_pls = sorted(set(p['pl'] for s in series for p in s['points']))
 
-                # Fallback: try to copy unified results.json from disk
-                if not files_written:
-                    stdout = parsed.get('stdout', '')
-                    match = re.search(r'Unified results saved to:\s+(\S+)', stdout)
-                    if match and os.path.isfile(match.group(1)):
-                        shutil.copy2(match.group(1), os.path.join(run_dir, 'results.json'))
-                        files_written = True
+            # Colors
+            colors = ['#4285F4', '#EA4335', '#34A853', '#FBBC05', '#8E24AA',
+                      '#00ACC1', '#FF7043', '#5C6BC0', '#43A047', '#E53935']
 
-                if not files_written:
-                    logger.debug("No result data available for compare-results.js report")
-                    return
+            # Build Chart.js datasets
+            def build_datasets(metric):
+                datasets = []
+                for i, s in enumerate(series):
+                    color = colors[i % len(colors)]
+                    data = []
+                    for pl in all_pls:
+                        pt = next((p for p in s['points'] if p['pl'] == pl), None)
+                        data.append(pt[metric] if pt and pt.get(metric) is not None else None)
+                    datasets.append({
+                        'label': s['label'],
+                        'data': data,
+                        'borderColor': color,
+                        'backgroundColor': color + '33',
+                        'pointBackgroundColor': color,
+                        'pointRadius': 5,
+                        'borderWidth': 2.5,
+                        'tension': 0.3,
+                        'fill': False,
+                    })
+                return json.dumps(datasets)
 
-                # Set up wrapper: compare-results.js reads config from __dirname/../config.json
-                wrapper_dir = os.path.join(tmp_dir, '_wrapper')
-                scripts_dir = os.path.join(wrapper_dir, 'scripts')
-                os.makedirs(scripts_dir, exist_ok=True)
-                shutil.copy2(script_path, scripts_dir)
-                local_script = os.path.join(scripts_dir, 'compare-results.js')
+            pl_labels = json.dumps([str(p) for p in all_pls])
+            ttft_ds = build_datasets('ttftMs')
+            prefill_ds = build_datasets('plTs')
+            gen_ds = build_datasets('tgTs')
 
-                # Remove the browser-open code from the copied script
-                with open(local_script, 'r', encoding='utf-8') as f:
-                    script_content = f.read()
-                script_content = script_content.replace(
-                    "require('child_process').execSync(`start", "// disabled: execSync(`start"
-                )
-                with open(local_script, 'w', encoding='utf-8') as f:
-                    f.write(script_content)
+            # Table rows
+            table_rows = ''
+            for s in series:
+                for p in s['points']:
+                    ttft = f'{p["ttftMs"]:.2f}' if p.get('ttftMs') is not None else '-'
+                    tg = f'{p["tgTs"]:.2f}' if p.get('tgTs') is not None else '-'
+                    pl_ts = f'{p["plTs"]:.2f}' if p.get('plTs') is not None else '-'
+                    e2e = f'{p["e2eMs"]:.0f}' if p.get('e2eMs') is not None else '-'
+                    table_rows += f'<tr><td>{s["label"]}</td><td>{run_id}</td><td>{p["pl"]}</td><td>{ttft}</td><td>{tg}</td><td>{pl_ts}</td><td>{e2e}</td></tr>\n'
 
-                with open(os.path.join(wrapper_dir, 'config.json'), 'w', encoding='utf-8') as f:
-                    json.dump({'paths': {'results': tmp_dir}}, f)
+            config_html = '\n'.join(f'<p class="config-line">{c}</p>' for c in config_lines)
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                html_filename = f"{safe_task}_{timestamp}.html"
-                output_path = os.path.join(abs_dir, html_filename)
+            html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Benchmark Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;padding:24px}}
+h1{{font-size:28px;font-weight:600;color:#f0f6fc;margin-bottom:8px}}
+.subtitle{{color:#8b949e;font-size:14px;margin-bottom:16px}}
+.config-section{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px 20px;margin-bottom:28px}}
+.config-section h2{{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:8px}}
+.config-line{{color:#8b949e;font-size:13px;margin:4px 0}}
+.chart-grid{{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px}}
+.chart-card{{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px}}
+.chart-card h2{{font-size:16px;font-weight:600;color:#f0f6fc;margin-bottom:16px}}
+.chart-card canvas{{max-height:360px}}
+.chart-card.full-width{{grid-column:1/-1}}
+table{{width:100%;border-collapse:collapse;font-size:13px;background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden}}
+th{{background:#21262d;color:#f0f6fc;font-weight:600;text-align:left;padding:10px 14px;border-bottom:1px solid #30363d}}
+td{{padding:8px 14px;border-bottom:1px solid #21262d}}
+tr:hover td{{background:#1c2128}}
+.table-section{{margin-top:40px}}
+.table-section h2{{font-size:18px;font-weight:600;color:#f0f6fc;margin-bottom:12px}}
+@media(max-width:900px){{.chart-grid{{grid-template-columns:1fr}}}}
+</style>
+</head>
+<body>
+<h1>Benchmark Comparison</h1>
+<p class="subtitle">Generated on {now_str} &mdash; Run {run_id}</p>
+<div class="config-section"><h2>Test Configuration</h2>{config_html}</div>
+<div class="chart-grid">
+<div class="chart-card"><h2>TTFT (Time to First Token) &mdash; Lower is Better</h2><canvas id="ttft"></canvas></div>
+<div class="chart-card"><h2>Prefill TPS (Prompt Processing Speed) &mdash; Higher is Better</h2><canvas id="prefill"></canvas></div>
+<div class="chart-card full-width"><h2>Generation TPS (Token Generation Speed) &mdash; Higher is Better</h2><canvas id="gen"></canvas></div>
+</div>
+<div class="table-section"><h2>Detailed Results</h2>
+<table><thead><tr><th>Configuration</th><th>Run</th><th>Prompt Length</th><th>TTFT (ms)</th><th>TPS (t/s)</th><th>PL (t/s)</th><th>E2E (ms)</th></tr></thead>
+<tbody>{table_rows}</tbody></table></div>
+<script>
+const L={pl_labels};const G={{color:'#21262d'}};
+Chart.defaults.color='#c9d1d9';
+function mk(id,ds,yLabel){{new Chart(document.getElementById(id),{{type:'line',data:{{labels:L,datasets:ds}},options:{{responsive:true,interaction:{{mode:'index',intersect:false}},plugins:{{legend:{{position:'bottom',labels:{{padding:16,usePointStyle:true}}}}}},scales:{{x:{{grid:G,title:{{display:true,text:'Prompt Length'}}}},y:{{grid:G,title:{{display:true,text:yLabel}},beginAtZero:true}}}}}}}})}}
+mk('ttft',{ttft_ds},'TTFT (ms)');
+mk('prefill',{prefill_ds},'Prefill TPS (tokens/s)');
+mk('gen',{gen_ds},'Generation TPS (tokens/s)');
+</script>
+</body></html>'''
 
-                proc = subprocess.run(
-                    [node, local_script, run_id, '-o', output_path],
-                    cwd=wrapper_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-
-                if proc.returncode == 0 and os.path.isfile(output_path):
-                    logger.info(f"Generated Chart.js HTML report: {output_path}")
-                else:
-                    logger.warning(f"compare-results.js failed (rc={proc.returncode}): "
-                                   f"{proc.stderr or proc.stdout}")
-
-            finally:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
+            html_filename = f"{safe_task}_{timestamp}.html"
+            html_path = os.path.join(abs_dir, html_filename)
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html)
+            logger.info(f"Generated benchmark report: {html_path}")
 
         except Exception as e:
             logger.warning(f"Failed to generate HTML report: {e}")
