@@ -2083,14 +2083,29 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         with open(os.path.join(run_dir, filename), 'w', encoding='utf-8') as f:
                             json.dump(filedata, f, indent=2)
                 else:
-                    # No structured results — try to extract from stdout
+                    # Fallback: try to extract unified results JSON from stdout
+                    # perf-test.js outputs: "Unified results saved to: .../results.json"
                     stdout = parsed.get('stdout', '')
-                    # Look for "Unified results saved to:" path and extract JSON from the
-                    # data we have. If we can't, write the stdout as a text report instead.
-                    return jsonify({
-                        'success': False,
-                        'error': 'No structured result data available for this run'
-                    }), 400
+                    # Look for the results path in stdout and try to read the
+                    # file if it exists locally on the server
+                    results_written = False
+                    match = re.search(r'Unified results saved to:\s+(\S+)', stdout)
+                    if match:
+                        unified_path = match.group(1)
+                        if os.path.isfile(unified_path):
+                            try:
+                                import shutil as shutil_copy
+                                shutil_copy.copy2(unified_path, os.path.join(run_dir, 'results.json'))
+                                results_written = True
+                            except Exception:
+                                pass
+
+                    if not results_written:
+                        return jsonify({
+                            'success': False,
+                            'error': 'No structured result data available for this run. '
+                                     'The result files may only exist on the remote client.'
+                        }), 400
 
                 # compare-results.js reads config from path.join(__dirname, '..', 'config.json')
                 # so we need __dirname to be inside our wrapper. Copy the script there.

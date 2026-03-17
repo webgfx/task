@@ -135,7 +135,8 @@ def _find_new_results(results_dir: str, before: set) -> Optional[Dict[str, Any]]
         dir_path = os.path.join(results_dir, dir_name)
         if not os.path.isdir(dir_path):
             continue
-        result_files = [f for f in os.listdir(dir_path) if f.endswith('-results.json')]
+        result_files = [f for f in os.listdir(dir_path)
+                       if f == 'results.json' or f.endswith('-results.json')]
         if result_files:
             combined = {'run_id': dir_name, 'files': {}}
             for rf in result_files:
@@ -262,6 +263,19 @@ class AiTestTask(BaseTask):
 
         # 6. Collect results
         new_results = _find_new_results(results_dir, before)
+        if not new_results:
+            # Fallback: extract results path from stdout
+            import re
+            match = re.search(r'Results:\s+(\S+)', output['stdout'])
+            if match:
+                results_path = match.group(1)
+                if os.path.isdir(results_path):
+                    run_id = os.path.basename(results_path)
+                    new_results = _find_new_results(
+                        os.path.dirname(results_path),
+                        set()  # empty snapshot so any dir matches
+                    )
+
         if new_results:
             output['results'] = new_results
             output['run_id'] = new_results.get('run_id')
