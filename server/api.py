@@ -2026,10 +2026,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
 
     @api.route('/results/<int:result_id>/ai-report', methods=['POST'])
     def generate_ai_report(result_id):
-        """Generate an AI test benchmark report using compare-results.js"""
+        """Generate an AI test benchmark report using compare-results.js.
+        Uses stored result data from the database, not files on disk."""
         try:
             import subprocess
             import shutil
+            import tempfile
+            import re
 
             result = database.get_cached_result_by_id(result_id)
             if not result:
@@ -2038,52 +2041,84 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if result.get('task_name') != 'ai_test':
                 return jsonify({'success': False, 'error': 'Not an ai_test result'}), 400
 
-            # Parse the result data to get run_id
             result_data = result.get('result')
             if not result_data:
                 return jsonify({'success': False, 'error': 'No result data'}), 400
 
             parsed = json.loads(result_data) if isinstance(result_data, str) else result_data
-            run_id = parsed.get('run_id')
 
-            # Fallback: extract run_id from stdout if not set
+            # Get run_id from result data or stdout
+            run_id = parsed.get('run_id')
             if not run_id:
-                import re
                 stdout = parsed.get('stdout', '')
-                # Look for "Results:     D:\...\20260317033901" pattern
                 match = re.search(r'Results:\s+\S+[/\\](\d{14})', stdout)
                 if match:
                     run_id = match.group(1)
-
             if not run_id:
-                return jsonify({'success': False, 'error': 'No run_id found in result data or stdout'}), 400
+                run_id = 'report'
 
-            # Use ai_test_path from the result data (where the client ran it),
-            # falling back to the local server's resolved path
-            ai_test_path = parsed.get('ai_test_path')
-            if not ai_test_path or not os.path.isdir(ai_test_path):
-                import importlib
-                ai_test_module = importlib.import_module('common.tasks.ai-test')
-                ai_test_path = ai_test_module._resolve_ai_test_path()
+            # Resolve ai-test path for the compare-results.js script
+            import importlib
+            ai_test_module = importlib.import_module('common.tasks.ai-test')
+            ai_test_path = ai_test_module._resolve_ai_test_path()
 
             script_path = os.path.join(ai_test_path, 'scripts', 'compare-results.js')
             if not os.path.isfile(script_path):
                 return jsonify({'success': False, 'error': 'compare-results.js not found'}), 500
 
-            # Find node
             node = shutil.which('node')
             if not node:
                 return jsonify({'success': False, 'error': 'Node.js not found'}), 500
 
-            # Generate report to a temp file
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w') as tmp:
-                output_path = tmp.name
+            # Build a temp results directory from stored data
+            tmp_dir = tempfile.mkdtemp(prefix='ai_report_')
+            run_dir = os.path.join(tmp_dir, run_id)
+            os.makedirs(run_dir, exist_ok=True)
 
             try:
+                # Write result JSON files from stored data
+                results_obj = parsed.get('results')
+                if results_obj and isinstance(results_obj, dict) and 'files' in results_obj:
+                    for filename, filedata in results_obj['files'].items():
+                        with open(os.path.join(run_dir, filename), 'w', encoding='utf-8') as f:
+                            json.dump(filedata, f, indent=2)
+                else:
+                    # No structured results — try to extract from stdout
+                    stdout = parsed.get('stdout', '')
+                    # Look for "Unified results saved to:" path and extract JSON from the
+                    # data we have. If we can't, write the stdout as a text report instead.
+                    return jsonify({
+                        'success': False,
+                        'error': 'No structured result data available for this run'
+                    }), 400
+
+                # Create a temp config.json pointing to tmp_dir as results path
+                config_path = os.path.join(tmp_dir, 'config.json')
+                ai_config_path = os.path.join(ai_test_path, 'config.json')
+                if os.path.isfile(ai_config_path):
+                    with open(ai_config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                else:
+                    config = {}
+                config.setdefault('paths', {})['results'] = tmp_dir
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f)
+
+                # Run compare-results.js with cwd=tmp_dir so it reads our config.json
+                output_path = os.path.join(tmp_dir, 'report.html')
+
+                # Copy the script's dependencies (it reads config.json from parent of scripts/)
+                # We need to create a wrapper dir structure
+                wrapper_dir = os.path.join(tmp_dir, '_wrapper')
+                scripts_dir = os.path.join(wrapper_dir, 'scripts')
+                os.makedirs(scripts_dir, exist_ok=True)
+                # Symlink or copy config.json to wrapper root
+                with open(os.path.join(wrapper_dir, 'config.json'), 'w', encoding='utf-8') as f:
+                    json.dump(config, f)
+
                 proc = subprocess.run(
                     [node, script_path, run_id, '-o', output_path],
-                    cwd=ai_test_path,
+                    cwd=wrapper_dir,
                     capture_output=True,
                     text=True,
                     timeout=30
@@ -2101,8 +2136,8 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 return jsonify({'success': True, 'html': html_content})
 
             finally:
-                if os.path.exists(output_path):
-                    os.unlink(output_path)
+                import shutil as shutil2
+                shutil2.rmtree(tmp_dir, ignore_errors=True)
 
         except Exception as e:
             logger.error(f"Failed to generate AI report: {e}")
