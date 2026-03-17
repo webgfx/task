@@ -450,25 +450,7 @@ function closeComparisonModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// Generate AI test benchmark report using compare-results.js
-async function generateAiTestReport(resultId) {
-    try {
-        showNotification('Info', 'Generating benchmark report...', 'info');
-        const response = await apiPost(`/api/results/${resultId}/ai-report`, {});
-        if (response.success && response.html) {
-            // Open report in a new window
-            const w = window.open('', '_blank');
-            if (w) {
-                w.document.write(response.html);
-                w.document.close();
-            } else {
-                showNotification('Warning', 'Pop-up blocked. Please allow pop-ups.', 'warning');
-            }
-        } else {
-            showNotification('Error', response.error || 'Failed to generate report', 'error');
-        }
-    } catch (error) {
-        console.error('Report generation failed:', error);
-        showNotification('Error', 'Failed to generate report', 'error');
-    }
+// Open pre-generated HTML benchmark report in a new tab
+function generateAiTestReport(resultId) {
+    window.open(`/api/results/${resultId}/ai-report`, '_blank');
 }

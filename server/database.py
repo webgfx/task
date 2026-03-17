@@ -1471,12 +1471,14 @@ class Database:
 
     # Task result caching methods
 
-    # Directory for result files
-    RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+    # Directory for result files — stored under gitignore/ to avoid committing
+    RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               'gitignore', 'server', 'results')
 
     def _save_result_file(self, task_id: int, client_name: str,
                           task_name: str, result_data: str) -> str:
-        """Save result data to a JSON file and return the relative path."""
+        """Save result data to a text file and generate an HTML report.
+        Returns the relative path to the text file."""
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         # Sanitize names for safe filesystem paths
         safe_client = "".join(c if c.isalnum() or c in '-_.' else '_' for c in client_name)
@@ -1496,7 +1498,117 @@ class Database:
             else:
                 f.write(json.dumps(result_data, indent=2))
 
+        # Generate HTML report from the result data
+        self._generate_result_html(abs_dir, safe_task, timestamp, result_data)
+
         return rel_path
+
+    def _generate_result_html(self, abs_dir: str, safe_task: str,
+                              timestamp: str, result_data: str):
+        """Generate an HTML report from the result data's stdout field."""
+        try:
+            parsed = json.loads(result_data) if isinstance(result_data, str) else result_data
+            if not isinstance(parsed, dict):
+                return
+
+            stdout = parsed.get('stdout', '')
+            command = parsed.get('command', '')
+            test_status = parsed.get('test_status', 'unknown')
+            errors = parsed.get('errors', [])
+            ai_test_path = parsed.get('ai_test_path', '')
+            run_id = parsed.get('run_id', '')
+            result_timestamp = parsed.get('timestamp', '')
+
+            # Build benchmark table from structured results if available
+            table_html = ''
+            results_obj = parsed.get('results')
+            if results_obj and isinstance(results_obj, dict) and 'files' in results_obj:
+                for fname, fdata in results_obj['files'].items():
+                    if 'results' not in fdata:
+                        continue
+                    table_html += f'<h3>{fname.replace("-results.json", "").upper()}</h3>'
+                    table_html += '<table><thead><tr>'
+                    table_html += '<th>Model</th><th>Backend</th><th>Prompt Len</th>'
+                    table_html += '<th>TTFT (ms)</th><th>PP (t/s)</th><th>TG (t/s)</th>'
+                    table_html += '</tr></thead><tbody>'
+                    for r in fdata['results']:
+                        table_html += '<tr>'
+                        table_html += f'<td>{r.get("model","")}</td>'
+                        table_html += f'<td>{r.get("backend","")}</td>'
+                        table_html += f'<td>{r.get("pl","")}</td>'
+                        ttft = r.get("ttftMs", 0)
+                        pp = r.get("plTs", 0)
+                        tg = r.get("tgTs", 0)
+                        table_html += f'<td>{ttft:.2f}</td>' if ttft else '<td>-</td>'
+                        table_html += f'<td>{pp:.2f}</td>' if pp else '<td>-</td>'
+                        table_html += f'<td>{tg:.2f}</td>' if tg else '<td>-</td>'
+                        table_html += '</tr>'
+                    table_html += '</tbody></table>'
+
+            # Escape stdout for HTML
+            import html as html_mod
+            stdout_escaped = html_mod.escape(stdout) if stdout else '<em>No output</em>'
+
+            status_color = '#22c55e' if test_status == 'pass' else '#ef4444' if test_status == 'fail' else '#f59e0b'
+
+            html_content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Test Report - {safe_task} - {timestamp}</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f8fafc; color: #1e293b; }}
+.container {{ max-width: 1200px; margin: 0 auto; }}
+h1 {{ color: #1e293b; border-bottom: 3px solid #6366f1; padding-bottom: 10px; }}
+h2 {{ color: #334155; margin-top: 30px; }}
+h3 {{ color: #475569; }}
+.meta {{ background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }}
+.meta-row {{ display: flex; gap: 20px; margin-bottom: 8px; flex-wrap: wrap; }}
+.meta-label {{ font-weight: 600; color: #64748b; min-width: 120px; }}
+.status {{ display: inline-block; padding: 4px 12px; border-radius: 4px; color: #fff; font-weight: 600; background: {status_color}; }}
+table {{ border-collapse: collapse; width: 100%; margin: 10px 0 20px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
+th {{ background: #6366f1; color: #fff; padding: 10px 14px; text-align: left; font-size: .85rem; }}
+td {{ padding: 8px 14px; border-bottom: 1px solid #f1f5f9; font-size: .9rem; }}
+tr:hover td {{ background: #f8fafc; }}
+pre {{ background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: .85rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }}
+.errors {{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; color: #991b1b; }}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>AI Test Report</h1>
+<div class="meta">
+<div class="meta-row"><span class="meta-label">Status:</span> <span class="status">{test_status.upper()}</span></div>
+<div class="meta-row"><span class="meta-label">Command:</span> <code>{html_mod.escape(command)}</code></div>
+<div class="meta-row"><span class="meta-label">Run ID:</span> {run_id or 'N/A'}</div>
+<div class="meta-row"><span class="meta-label">Timestamp:</span> {result_timestamp}</div>
+<div class="meta-row"><span class="meta-label">AI Test Path:</span> {html_mod.escape(ai_test_path)}</div>
+</div>
+'''
+            if errors:
+                html_content += '<div class="errors"><strong>Errors:</strong><ul>'
+                for e in errors:
+                    html_content += f'<li>{html_mod.escape(str(e))}</li>'
+                html_content += '</ul></div>'
+
+            if table_html:
+                html_content += f'<h2>Benchmark Results</h2>{table_html}'
+
+            html_content += f'''
+<h2>Console Output</h2>
+<pre>{stdout_escaped}</pre>
+</div>
+</body>
+</html>'''
+
+            html_filename = f"{safe_task}_{timestamp}.html"
+            html_path = os.path.join(abs_dir, html_filename)
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            logger.debug(f"Generated HTML report: {html_path}")
+
+        except Exception as e:
+            logger.warning(f"Failed to generate HTML report: {e}")
 
     def _read_result_file(self, rel_path: str) -> Optional[str]:
         """Read result data from a file given its relative path."""
@@ -1569,6 +1681,14 @@ class Database:
             else:
                 result_data = None  # Don't load full content for listings
 
+        # Check if an HTML report exists alongside the result file
+        html_file = None
+        if result_file:
+            html_path = result_file.rsplit('.', 1)[0] + '.html'
+            abs_html = os.path.join(self.RESULTS_DIR, html_path)
+            if os.path.isfile(abs_html):
+                html_file = html_path
+
         d = {
             'id': row['id'],
             'job_id': row['job_id'],
@@ -1578,6 +1698,7 @@ class Database:
             'status': row['status'],
             'result': result_data,
             'result_file': result_file,
+            'html_file': html_file,
             'execution_time': row['execution_time'],
             'completed_at': row['completed_at'],
             'created_at': row['created_at'],
