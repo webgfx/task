@@ -2092,32 +2092,24 @@ def create_api_blueprint(database, socketio, result_collector=None):
                         'error': 'No structured result data available for this run'
                     }), 400
 
-                # Create a temp config.json pointing to tmp_dir as results path
-                config_path = os.path.join(tmp_dir, 'config.json')
-                ai_config_path = os.path.join(ai_test_path, 'config.json')
-                if os.path.isfile(ai_config_path):
-                    with open(ai_config_path, 'r', encoding='utf-8') as f:
-                        config = json.load(f)
-                else:
-                    config = {}
-                config.setdefault('paths', {})['results'] = tmp_dir
-                with open(config_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f)
-
-                # Run compare-results.js with cwd=tmp_dir so it reads our config.json
+                # compare-results.js reads config from path.join(__dirname, '..', 'config.json')
+                # so we need __dirname to be inside our wrapper. Copy the script there.
                 output_path = os.path.join(tmp_dir, 'report.html')
-
-                # Copy the script's dependencies (it reads config.json from parent of scripts/)
-                # We need to create a wrapper dir structure
                 wrapper_dir = os.path.join(tmp_dir, '_wrapper')
                 scripts_dir = os.path.join(wrapper_dir, 'scripts')
                 os.makedirs(scripts_dir, exist_ok=True)
-                # Symlink or copy config.json to wrapper root
+
+                # Copy compare-results.js to our wrapper scripts/ dir
+                import shutil as shutil2
+                shutil2.copy2(script_path, scripts_dir)
+                local_script = os.path.join(scripts_dir, 'compare-results.js')
+
+                # Write config.json at wrapper root with absolute results path
                 with open(os.path.join(wrapper_dir, 'config.json'), 'w', encoding='utf-8') as f:
-                    json.dump(config, f)
+                    json.dump({'paths': {'results': tmp_dir}}, f)
 
                 proc = subprocess.run(
-                    [node, script_path, run_id, '-o', output_path],
+                    [node, local_script, run_id, '-o', output_path],
                     cwd=wrapper_dir,
                     capture_output=True,
                     text=True,
@@ -2136,8 +2128,7 @@ def create_api_blueprint(database, socketio, result_collector=None):
                 return jsonify({'success': True, 'html': html_content})
 
             finally:
-                import shutil as shutil2
-                shutil2.rmtree(tmp_dir, ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
         except Exception as e:
             logger.error(f"Failed to generate AI report: {e}")
