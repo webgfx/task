@@ -152,7 +152,7 @@ function clearLogs() {
 
 // viewTaskdetails
 function viewTaskDetail(taskId) {
-    window.location.href = `/tasks?view=${taskId}`;
+    window.location.href = `/jobs?view=${taskId}`;
 }
 
 // viewClientdetails

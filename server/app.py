@@ -142,8 +142,9 @@ def create_app():
         return render_template('tasks.html')
 
     @app.route('/tasks')
+    @app.route('/jobs')
     def tasks_page():
-        """Task management page"""
+        """Job management page"""
         return render_template('tasks.html')
 
     @app.route('/clients')
