@@ -3,6 +3,7 @@ REST API interfaces
 """
 import json
 import logging
+import os
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_socketio import emit
