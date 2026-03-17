@@ -2058,16 +2058,13 @@ def create_api_blueprint(database, socketio, result_collector=None):
             if not run_id:
                 return jsonify({'success': False, 'error': 'No run_id found in result data or stdout'}), 400
 
-            # Resolve ai-test path
-            from common.tasks import get_task
-            ai_test_task = get_task('ai_test')
-            if not ai_test_task:
-                return jsonify({'success': False, 'error': 'ai_test task not registered'}), 500
-
-            # Import the path resolver from ai-test module
-            import importlib
-            ai_test_module = importlib.import_module('common.tasks.ai-test')
-            ai_test_path = ai_test_module._resolve_ai_test_path()
+            # Use ai_test_path from the result data (where the client ran it),
+            # falling back to the local server's resolved path
+            ai_test_path = parsed.get('ai_test_path')
+            if not ai_test_path or not os.path.isdir(ai_test_path):
+                import importlib
+                ai_test_module = importlib.import_module('common.tasks.ai-test')
+                ai_test_path = ai_test_module._resolve_ai_test_path()
 
             script_path = os.path.join(ai_test_path, 'scripts', 'compare-results.js')
             if not os.path.isfile(script_path):
