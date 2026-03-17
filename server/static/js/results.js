@@ -138,7 +138,6 @@ function renderResults(results) {
             <tr>
                 <td>
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" class="result-checkbox" value="${result.id}" onclick="updateCompareButton()" style="width:18px; height:18px; cursor:pointer; accent-color:#6366f1;">
                         <span class="task-id-badge">#${result.job_id}</span>
                         <strong>${escapeHtml(result.job_name)}</strong>
                     </div>
